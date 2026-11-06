@@ -180,4 +180,4 @@ from ./.env (Bryan sets it; not in code). Tests: tests/make_cl2.py builds an SDI
 - Updates carry only the app folder; a new Python package needs a full re-download of the Windows zip.
 
 ### Open a Meet Manager file
-- Top bar **Open file…** (or "Open a Meet Manager file…" in New meet): pick a `Swmm8Bkup….zip` or `.mdb`. MeetDeck makes a meet from it - name, date, location and season from the file, host school from the teams - and goes straight to Run the meet.
+- Top bar **Open meet…** (the New meet box): **Open a Meet Manager file…** picks a `Swmm8Bkup….zip` or `.mdb` from the computer; **Open from Google Drive…** lists every backup / .mdb in the Drive meet folder (grouped by meet folder, filterable, shows which are already opened) and opens one with a click. MeetDeck makes a meet from it - name, date, location and season from the file, host school from the teams - and goes straight to Run the meet.

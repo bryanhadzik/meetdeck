@@ -313,7 +313,7 @@ function nameCell(e) {
 // A relay is not complete when a declared swimmer has been scratched, or some legs are filled and others left open
 // (scratching a swimmer from the meet takes them off the relay and leaves their leg open).
 function relayIssues(e) {
-  if (e.kind !== "R" || e.scr) return [];
+  if (e.kind !== "R" || e.scr || e.time || e.place || (e.stat || "").trim()) return [];   // already swum: nothing to fix
   const out = [];
   e.legs.forEach((x, i) => {
     if (!x) return;

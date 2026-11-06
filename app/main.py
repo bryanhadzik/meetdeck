@@ -1491,7 +1491,49 @@ async def open_meet_file(file: UploadFile = File(...)):
     """Open an existing Meet Manager meet (Swmm8Bkup....zip or .mdb) as a new MeetDeck meet:
     name, date and location come from the file; the database is ready on Run the meet."""
     data = await file.read()
-    fn = Path(file.filename or "meet").name
+    return _open_meet(Path(file.filename or "meet").name, data, f"opened {Path(file.filename or 'meet').name}")
+
+
+@app.get("/api/drive/meet-files")
+def drive_meet_files():
+    """Meet Manager backups (Swmm8Bkup....zip) and databases (.mdb) anywhere in the Drive folder."""
+    st = _drive_cfg()
+    try:
+        items = [it for it in drive_mod.walk(st["drive_folder"]) if it["kind"] != "folder"
+                 and ((it["name"].lower().startswith("swmm8bkup") and it["name"].lower().endswith(".zip")) or it["name"].lower().endswith(".mdb"))]
+    except drive_mod.NotShared as e:
+        raise HTTPException(403, f"Couldn't open the Drive folder: {e}")
+    opened = {}
+    for d in DATA.iterdir():
+        if (d / "meta.json").exists():
+            m = _meta(d)
+            if m.get("drive_file"):
+                opened[m["drive_file"]] = {"id": d.name, "name": m.get("name", "")}
+    inv = json.loads(INV_FILE.read_text()) if INV_FILE.exists() else {}
+    label = {i["id"]: i.get("meet") for i in inv.get("items", []) if i.get("meet")}
+    for it in items:
+        it["folder"] = it["path"].rsplit("/", 1)[0].lstrip("/") or "(top folder)"
+        it["meet"] = label.get(it["id"])
+        it["opened"] = opened.get(it["id"])
+    items.sort(key=lambda i: (i["folder"].lower(), i["name"].lower()), reverse=True)
+    return {"files": items}
+
+
+@app.post("/api/open-meet-drive")
+def open_meet_drive(body: dict):
+    try:
+        fn, data = drive_mod.fetch("file", body["id"], body.get("name", ""))
+    except drive_mod.NotShared as e:
+        raise HTTPException(403, f"Couldn't download it from Drive: {e}")
+    r = _open_meet(fn or body.get("name") or "meet", data, f"Google Drive: {fn}")
+    d = DATA / r["id"]
+    meta = _meta(d)
+    meta["drive_file"] = body["id"]
+    _save(d, meta)
+    return r
+
+
+def _open_meet(fn: str, data: bytes, source: str) -> dict:
     mid = secrets.token_hex(4)
     d = DATA / mid
     (d / "files").mkdir(parents=True)
@@ -1499,9 +1541,9 @@ async def open_meet_file(file: UploadFile = File(...)):
               "removed": [], "rules": DEFAULT_RULES, "opened_file": fn})
     try:
         if fn.lower().endswith(".mdb"):
-            _install_db(d, fn, data, "", f"opened {fn}")
+            _install_db(d, fn, data, "", source)
         else:
-            _import_backup(d, data, f"opened {fn}")
+            _import_backup(d, data, source)
         mm = meetdb.load(_dbfile(d))["meet"]
     except HTTPException:
         shutil.rmtree(d, ignore_errors=True)

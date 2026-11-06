@@ -40,8 +40,19 @@ def _key(v: str):
     return [int(x) for x in re.findall(r"\d+", v or "")] or [0]
 
 
+def _ctx():
+    """Windows' certificate store plus the standard CA list shipped with the app (cacert.pem):
+    in the background (pythonw) Windows' store alone can be missing GitHub's issuer."""
+    import ssl
+    ctx = ssl.create_default_context()
+    pem = APP / "cacert.pem"
+    if pem.exists():
+        ctx.load_verify_locations(cafile=str(pem))
+    return ctx
+
+
 def _get(url, timeout=30):
-    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=timeout) as r:
+    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=timeout, context=_ctx()) as r:
         return r.read()
 
 
@@ -69,7 +80,7 @@ def check(fresh=False) -> dict:
         out["error"] = "No updates published yet" if e.code == 404 else f"GitHub said {e.code}"
         return out
     except Exception as e:
-        out["error"] = f"Couldn't reach GitHub ({type(e).__name__}) - offline?"
+        out["error"] = f"Couldn't reach GitHub - offline? ({getattr(e, 'reason', e)})"
         return out
     out["latest"] = lt
     out["available"] = bool(lt["url"]) and _key(lt["version"]) > _key(cur)

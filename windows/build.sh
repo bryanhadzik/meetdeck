@@ -15,7 +15,7 @@ python3 -c "import zipfile;zipfile.ZipFile('windows/cache/python-$PY-embed-win32
 # packages: Windows 32-bit wheels for Python 3.12, unpacked straight into site-packages
 docker run --rm -v "$PWD/windows/cache:/w" python:3.12-slim sh -c \
   "pip download -q --dest /w/wheels --platform win32 --python-version 3.12 --implementation cp --abi cp312 --only-binary=:all: \
-   'fastapi==0.115.*' 'uvicorn==0.32.*' 'python-multipart==0.0.*' 'reportlab==4.2.*' tzdata 'pypdf==5.*' pyodbc pystray pillow pyserial colorama"
+   'fastapi==0.115.*' 'uvicorn==0.32.*' 'python-multipart==0.0.*' 'reportlab==4.2.*' tzdata 'pypdf==5.*' pyodbc pystray pillow pyserial colorama certifi"
 SP="$B/MeetDeck/python/Lib/site-packages"
 mkdir -p "$SP"
 for w in windows/cache/wheels/*.whl; do python3 -c "import zipfile,sys;zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$w" "$SP"; done
@@ -29,6 +29,7 @@ cp app/*.py app/mmdb_profile.json "$B/MeetDeck/app/"
 cp -r app/static "$B/MeetDeck/app/static"
 mkdir -p "$B/MeetDeck/app/timing" && cp timing/*.py timing/README.txt "$B/MeetDeck/app/timing/"
 cp windows/launcher.py "$B/MeetDeck/app/launcher.py"
+cp "$SP/certifi/cacert.pem" "$B/MeetDeck/app/cacert.pem"     # CA list for HTTPS (updates); travels with app updates
 cp windows/start.py "$B/MeetDeck/start.py"
 cp windows/start.py "$B/MeetDeck/app/start.py"      # updates carry it; the launcher refreshes the root copy
 docker run --rm -v "$PWD:/s" python:3.12-slim sh -c "pip install -q pillow && python /s/windows/make_icon.py /s/$B/MeetDeck/app/static"

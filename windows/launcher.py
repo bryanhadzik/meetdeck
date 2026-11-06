@@ -177,6 +177,8 @@ def main():
     load_env()
     os.environ["MEETDECK_DATA"] = str(DATA)
     os.environ.setdefault("FONT_DIR", fonts())
+    if (APP / "cacert.pem").exists():   # HTTPS (Gmail, Google Drive, updates) also trusts the standard CA list
+        os.environ.setdefault("SSL_CERT_FILE", str(APP / "cacert.pem"))
     os.environ.pop("TZ", None)     # Windows' C runtime misreads Olson names as UTC; the PC's own clock is right
     refresh_start()
     shortcut()

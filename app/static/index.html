@@ -80,14 +80,15 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
 .mvd{font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:0 5px;margin-left:4px}
 .hs tr.picked td{background:var(--sel);outline:2px solid var(--accent)}
 .hs tr[data-seedto]:hover td,.hs tr[data-seedpick]:hover td{background:var(--sel)}
-  #meetFields label{text-align:left;align-items:stretch}
+  #meetFields label,#ctForm label{text-align:left;align-items:stretch}
+  #ctForm input,#ctForm select{width:100%;box-sizing:border-box}
   #meetFields input,#meetFields select{width:100%;box-sizing:border-box}
 </style>
 </head>
 <body>
 <header>
   <h1>MeetDeck</h1>
-  <nav><button id="tabMeets" class="on">Meets</button><button id="tabSchools">Schools &amp; records</button><button id="tabRun">Meet checklist</button><button id="tabRules">Rules</button><button id="tabSetup">Setup</button></nav>
+  <nav><button id="tabMeets" class="on">Meets</button><button id="tabSchools">Schools &amp; records</button><button id="tabRun">Meet checklist</button><button id="tabSend">Send results</button><button id="tabContacts">Contacts</button><button id="tabRules">Rules</button><button id="tabSetup">Setup</button></nav>
   <span id="meetBar" class="row"><label class="muted" style="font-size:13px">Season <select id="seasonSel"></select></label><select id="meetSel"></select><button class="ghost" id="newBtn">New meet</button><button class="ghost" id="openBarBtn" title="Open an existing Meet Manager meet (backup .zip or .mdb) from this computer or Google Drive">Open meet…</button></span>
 </header>
 
@@ -242,6 +243,38 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   <section id="runHead"></section>
   <div id="runList"></div>
 </div>
+<div id="sendView" class="hidden">
+  <section id="sendHead"></section>
+  <div id="sendBody"></div>
+  <input type="file" id="fmrIn" accept=".pdf,.jpg,.jpeg,.png,.heic,.docx" class="hidden">
+</div>
+<div id="contactsView" class="hidden">
+  <section>
+    <div class="row" style="justify-content:space-between">
+      <h2 style="margin:0">Contacts</h2>
+      <span class="row"><button id="ctAdd">+ Add contact</button><button class="ghost" id="ctFind" title="Coaches named in your meets' entry files and Meet Manager team records">Find coaches in my meets</button></span>
+    </div>
+    <div class="muted" style="font-size:13px;margin:4px 0 8px">Swim coaches, athletic directors and meet officials. Coaches' emails here are added to "Email coaches" on the Meet checklist and Send results for the teams in that meet.</div>
+    <div id="ctForm" class="hidden" style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 12px">
+        <label class="muted" style="display:flex;flex-direction:column;gap:3px">Name <input id="ctName"></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:3px">Role <select id="ctRole"></select></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:3px">School / team <input id="ctSchool" list="ctSchools"></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:3px">Email <input id="ctEmail" type="email"></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:3px">Phone <input id="ctPhone"></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:3px;grid-column:1/-1">Notes <input id="ctNotes" placeholder="e.g. prefers text, AO certification year, assistant handles entries"></label>
+      </div>
+      <datalist id="ctSchools"></datalist>
+      <div class="row" style="margin-top:8px"><button id="ctSave">Save</button><button class="ghost" id="ctCancel">Cancel</button><span class="muted" id="ctMsg" style="font-size:13px"></span></div>
+    </div>
+    <div class="row" style="margin-bottom:6px"><input id="ctQ" type="search" placeholder="Search name, school, email, notes" size="30">
+      <select id="ctRoleF"><option value="">All roles</option></select>
+      <span class="grow"></span><span class="muted" id="ctCount" style="font-size:13px"></span>
+      <button class="ghost small" id="ctCopy" title="Copy the email addresses of the contacts shown">Copy emails</button><a class="small" id="ctMail" href="#">Email these</a></div>
+    <div id="ctList" class="scroll"></div>
+    <div id="ctSug" style="margin-top:12px"></div>
+  </section>
+</div>
 <div id="rulesView" class="hidden">
   <section>
     <h2>Search the rules</h2>
@@ -350,11 +383,13 @@ const hostName = id => (HOSTS.find(h => h.id === id) || {}).name || id;
 function tab(which) {
   if (which !== "schools" && DIRTY && !confirm("You have unsaved record changes. Leave without saving?")) return;
   if (which !== "schools") DIRTY = false;
-  $("#tabMeets").classList.toggle("on", which === "meets"); $("#tabSchools").classList.toggle("on", which === "schools"); $("#tabSetup").classList.toggle("on", which === "setup"); $("#tabRules").classList.toggle("on", which === "rules"); $("#tabRun").classList.toggle("on", which === "run");
-  $("#meetsView").classList.toggle("hidden", which !== "meets"); $("#schoolsView").classList.toggle("hidden", which !== "schools"); $("#setupView").classList.toggle("hidden", which !== "setup"); $("#rulesView").classList.toggle("hidden", which !== "rules"); $("#runView").classList.toggle("hidden", which !== "run");
+  $("#tabMeets").classList.toggle("on", which === "meets"); $("#tabSchools").classList.toggle("on", which === "schools"); $("#tabSetup").classList.toggle("on", which === "setup"); $("#tabRules").classList.toggle("on", which === "rules"); $("#tabRun").classList.toggle("on", which === "run"); $("#tabContacts").classList.toggle("on", which === "contacts"); $("#tabSend").classList.toggle("on", which === "send");
+  $("#meetsView").classList.toggle("hidden", which !== "meets"); $("#schoolsView").classList.toggle("hidden", which !== "schools"); $("#setupView").classList.toggle("hidden", which !== "setup"); $("#rulesView").classList.toggle("hidden", which !== "rules"); $("#runView").classList.toggle("hidden", which !== "run"); $("#contactsView").classList.toggle("hidden", which !== "contacts"); $("#sendView").classList.toggle("hidden", which !== "send");
   if (which === "run") runRender();
   if (which === "rules") rulesLoad();
-  $("#meetBar").classList.toggle("hidden", which !== "meets");
+  if (which === "contacts") ctLoad();
+  if (which === "send") sendRender();
+  $("#meetBar").classList.toggle("hidden", which !== "meets" && which !== "send");
   store("tab", which);
   if (which === "schools") loadSchools(); else if (which === "setup") loadSetup(); else loadMeets();
 }
@@ -390,7 +425,7 @@ async function loadMeets(select) {
   else if (meets.length) { $("#meetSel").value = meets[0].id; await open(meets[0].id); }
   else { $("#newBox").classList.remove("hidden"); $("#meet").classList.add("hidden"); }
 }
-async function open(id) { store("meet", id); M = await api(`/api/meets/${id}`); render(); }
+async function open(id) { store("meet", id); M = await api(`/api/meets/${id}`); render(); if (!$("#sendView").classList.contains("hidden")) sendRender(); }
 async function save(patch) { M = await api(`/api/meets/${M.id}/state`, J("PUT", patch)); render(); }
 const removedIds = () => M.entries.filter(e => e.removed).map(e => e.id);
 const toggle = (id, rm) => save({removed: rm ? [...removedIds(), id] : removedIds().filter(x => x !== id)});
@@ -646,6 +681,8 @@ document.addEventListener("click", async ev => {
   if (n && confirm(`Remove ${n} from the rules library?`)) { await api("/api/rules/" + encodeURIComponent(n), {method: "DELETE"}); rulesLoad(); }
 });
 $("#tabRules").onclick = () => tab("rules");
+$("#tabSend").onclick = () => tab("send");
+$("#tabContacts").onclick = () => tab("contacts");
 async function fontShow() {
   try {
     const f = await api("/api/settings/font");
@@ -1205,6 +1242,130 @@ $("#masterIn").onchange = async e => {
   e.target.value = "";
 };
 
+// ---- send results ----
+let SEND = null;
+async function sendRender() {
+  if (!M) { $("#sendHead").innerHTML = `<div class="muted">Pick a meet at the top.</div>`; $("#sendBody").innerHTML = ""; return; }
+  SEND = await api(`/api/meets/${M.id}/send`);
+  const S = SEND, ev = S.events || {}, sent = S.sent || {}, c = M.contacts || {};
+  const base = `/api/meets/${M.id}`;
+  const due = M.ended ? new Date(new Date(M.ended).getTime() + 48 * 3600 * 1000) : null;
+  const fmt = dt => dt.toLocaleString([], {weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit"});
+  $("#sendHead").innerHTML = `<h2 style="margin:0">Send results &mdash; ${esc(M.name)} <span class="muted" style="font-weight:400;font-size:14px">${esc(M.date || "")}</span></h2>
+    <div style="margin-top:6px;font-size:13.5px">${!S.has_db ? `<span class="badge no">No meet database yet</span> Results come from <a href="/db?meet=${M.id}" target="_blank">Run the meet</a>.`
+      : `${ev.done === ev.total && ev.total ? `<span class="badge ok">All ${ev.total} events have results</span>` : `<span class="badge no">${ev.done || 0} of ${ev.total || 0} events finished</span>`}
+         &middot; ${S.dqs || 0} DQ${S.dqs === 1 ? "" : "s"} &middot; ${M.ended ? `meet ended ${esc(M.ended.replace("T", " "))}` : `<span class="muted">meet end time not set (Meet checklist)</span>`}`}</div>`;
+  const file = (label, href, note = "") => `<div class="row" style="gap:8px;padding:5px 0;border-top:1px solid var(--line)"><span style="flex:1;min-width:220px">${label}${note ? `<div class="muted" style="font-size:12px">${note}</div>` : ""}</span>${href}</div>`;
+  const dis = S.has_db ? "" : "disabled";
+  const pdf = file("<b>Results</b> (PDF, laid out like Meet Manager's)", `<a class="small" href="${base}/db/report/results.pdf" target="_blank">Open</a> <button class="ghost small" ${dis} onclick="location='${base}/db/report/results.pdf?download=1'">Download</button>`);
+  const tm = file("<b>Team Manager results</b> (.hy3 + .cl2 in a zip)", `<button class="ghost small" ${dis} onclick="location='${base}/db/export/hy3'">Download</button>`, "Coaches import this into Team Manager / SwimTopia");
+  const mark = (id, label) => `<label style="font-size:13.5px"><input type="checkbox" data-sendmark="${id}" ${sent[id] ? "checked" : ""}> ${label}</label>${sent[id] ? ` <span class="muted" style="font-size:12px">${esc(sent[id])}</span>` : ""}`;
+  const card = (n, title, when, body, foot) => `<section style="${foot.includes("checked") ? "opacity:.75" : ""}"><h2><span class="n">${n}</span> ${title} <span class="muted" style="font-weight:400;font-size:13px">${when}</span></h2>${body}
+    <div class="row" style="margin-top:8px;gap:10px">${foot}</div></section>`;
+  const nCoach = (M.coach_emails || []).length;
+  const cc = [["Referee", c.referee], ["AO", c.ao], ["Host coach", c.host]];
+  const missCc = cc.filter(x => !x[1]).map(x => x[0]);
+  $("#sendBody").innerHTML =
+    card(1, "Initial results to all coaches", "before leaving the venue",
+      pdf + tm,
+      `<button ${dis} onclick="location='${base}/send/coaches.zip'">Download both (zip)</button>
+       <a href="${runMail("coaches")}">Email coaches</a><span class="muted" style="font-size:12.5px">${nCoach ? `${nCoach} coach email${nCoach === 1 ? "" : "s"} in Bcc` : "no coach emails on file &mdash; add them in Contacts"} &middot; attach the two files</span>
+       <span class="grow"></span>${mark("coaches", "Sent")}`) +
+    card(2, `Final Meet Report and results to ${esc(RESULTS_TO)}`, due ? `due ${fmt(due)}${due < new Date() && !sent.final ? ' <b style="color:var(--err)">overdue</b>' : ""}` : "within 48 hours",
+      file("<b>Final Meet Report</b>, signed by both officials and the head coaches", S.fmr ? `<a class="small" href="${base}/store/docs/${encodeURIComponent(S.fmr)}" target="_blank">${esc(S.fmr)}</a> <button class="ghost small" data-fmrup="1">Replace</button>`
+        : `<button class="small" data-fmrup="1">Add the signed report…</button>`, S.fmr ? "" : "Scan or photograph the signed form (PDF or picture)") + pdf + tm,
+      `<button ${dis} onclick="location='${base}/send/final.zip'">Download all (zip)</button>
+       <a href="${runMail("final")}">Email ${esc(RESULTS_TO)}</a><span class="muted" style="font-size:12.5px">Cc ${cc.map(x => x[1] ? esc(x[0]) : `<s>${esc(x[0])}</s>`).join(", ")}${missCc.length ? ` &mdash; add ${missCc.join(", ")} on the <a href="#" data-gorun="1">Meet checklist</a>` : ""}</span>
+       <span class="grow"></span>${mark("final", "Sent")}`) +
+    card(3, "Keep for the season", "all paperwork, for the whole season",
+      file("<b>Meet Manager backup</b> (File &rarr; Restore)", `<button class="ghost small" ${dis} onclick="location='${base}/db/backup'">Download</button>`) + pdf +
+      file("<b>Change log</b> &mdash; every time, DQ and scratch change, with when", "", "in the zip") +
+      file("<b>Timer sheets and DQ slips</b> &mdash; the paper ones", "", "File them with the Final Meet Report"),
+      `<button ${dis} onclick="location='${base}/send/keep.zip'">Download records (zip)</button><span class="grow"></span>${mark("keep", "Saved")}`);
+}
+document.addEventListener("click", async ev => {
+  const d = ev.target.dataset || {};
+  if (d.fmrup) $("#fmrIn").click();
+  if (d.gorun) { ev.preventDefault(); tab("run"); }
+});
+document.addEventListener("change", async ev => {
+  const id = ev.target.dataset && ev.target.dataset.sendmark; if (!id) return;
+  await api(`/api/meets/${M.id}/send/mark`, J("POST", {item: id, on: ev.target.checked})); sendRender();
+});
+$("#fmrIn").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  const ext = f.name.includes(".") ? f.name.slice(f.name.lastIndexOf(".")) : "";
+  const fd = new FormData(); fd.append("files", f, `Final Meet Report - ${M.name}${ext}`.replace(/[^A-Za-z0-9._ &()-]/g, "_"));
+  await api(`/api/meets/${M.id}/docs`, {method: "POST", body: fd}); sendRender();
+};
+
+// ---- contacts ----
+let CT = {contacts: [], roles: [], schools: []}, CT_EDIT = null, CT_SUG = [];
+async function ctLoad() { CT = await api("/api/contacts"); ctRender(); }
+function ctShown() {
+  const q = $("#ctQ").value.trim().toLowerCase(), r = $("#ctRoleF").value;
+  return CT.contacts.filter(c => (!r || c.role === r) && (!q || [c.name, c.school, c.email, c.phone, c.notes, c.role].join(" ").toLowerCase().includes(q)));
+}
+function ctRender() {
+  const keep = $("#ctRoleF").value;
+  $("#ctRoleF").innerHTML = `<option value="">All roles</option>` + CT.roles.map(r => `<option>${esc(r)}</option>`).join(""); $("#ctRoleF").value = keep;
+  $("#ctRole").innerHTML = CT.roles.map(r => `<option>${esc(r)}</option>`).join("");
+  $("#ctSchools").innerHTML = CT.schools.map(n => `<option value="${esc(n)}">`).join("");
+  const list = ctShown();
+  $("#ctCount").textContent = `${list.length} of ${CT.contacts.length}`;
+  const emails = [...new Set(list.map(c => c.email).filter(Boolean))];
+  $("#ctMail").href = emails.length ? `mailto:?bcc=${encodeURIComponent(emails.join(","))}` : "#";
+  let last = null;
+  $("#ctList").innerHTML = !CT.contacts.length ? `<div class="muted">No contacts yet. Add one, or use <b>Find coaches in my meets</b>.</div>` :
+    `<table><tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th><th>Notes</th><th></th></tr>` + list.map(c => {
+      const head = c.school !== last ? `<tr><td colspan="6" style="font-weight:600;padding-top:10px">${esc(c.school || "No school")}</td></tr>` : ""; last = c.school;
+      return head + `<tr><td>${esc(c.name)}</td><td class="muted">${esc(c.role)}</td>
+        <td>${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ""}</td><td>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : ""}</td>
+        <td class="muted" style="font-size:12.5px">${esc(c.notes || "")}</td>
+        <td style="white-space:nowrap"><button class="ghost small" data-ctedit="${c.id}">Edit</button> <button class="ghost small danger" data-ctdel="${c.id}">✕</button></td></tr>`;
+    }).join("") + `</table>`;
+}
+function ctOpen(c) {
+  CT_EDIT = c ? c.id : null;
+  $("#ctForm").classList.remove("hidden");
+  $("#ctName").value = c?.name || ""; $("#ctRole").value = c?.role || "Head coach"; $("#ctSchool").value = c?.school || "";
+  $("#ctEmail").value = c?.email || ""; $("#ctPhone").value = c?.phone || ""; $("#ctNotes").value = c?.notes || ""; $("#ctMsg").textContent = "";
+  $("#ctName").focus();
+}
+$("#ctAdd").onclick = () => ctOpen(null);
+$("#ctCancel").onclick = () => $("#ctForm").classList.add("hidden");
+$("#ctSave").onclick = async () => {
+  try {
+    CT = {...CT, ...(await api("/api/contacts", J("POST", {id: CT_EDIT, name: $("#ctName").value, role: $("#ctRole").value, school: $("#ctSchool").value,
+      email: $("#ctEmail").value, phone: $("#ctPhone").value, notes: $("#ctNotes").value})))};
+    $("#ctForm").classList.add("hidden"); ctRender();
+  } catch (e) { $("#ctMsg").textContent = e.message; }
+};
+$("#ctQ").addEventListener("input", ctRender); $("#ctRoleF").onchange = ctRender;
+$("#ctCopy").onclick = async () => {
+  const t = [...new Set(ctShown().map(c => c.email).filter(Boolean))].join(", ");
+  try { await navigator.clipboard.writeText(t); $("#ctCopy").textContent = "Copied"; } catch (e) { prompt("Copy these emails:", t); }
+  setTimeout(() => $("#ctCopy").textContent = "Copy emails", 1500);
+};
+$("#ctFind").onclick = async () => {
+  $("#ctSug").innerHTML = `<div class="muted">Looking through your meets…</div>`;
+  CT_SUG = (await api("/api/contacts/suggest")).suggestions;
+  $("#ctSug").innerHTML = !CT_SUG.length ? `<div class="muted">Nothing new found in your meets.</div>` :
+    `<h3>Found in your meets <button class="small" data-ctaddall="1">Add all ${CT_SUG.length}</button></h3><table><tr><th>School</th><th>Name</th><th>Email</th><th>Phone</th><th>Seen in</th><th></th></tr>` +
+    CT_SUG.map((f, i) => `<tr><td>${esc(f.school)}</td><td>${esc(f.name) || '<span class="muted">?</span>'}</td><td>${esc(f.email)}</td><td>${esc(f.phone)}</td>
+      <td class="muted" style="font-size:12px">${esc(f.seen.join(", "))}</td><td><button class="ghost small" data-ctsug="${i}">Add</button></td></tr>`).join("") + `</table>`;
+};
+document.addEventListener("click", async ev => {
+  const d = ev.target.dataset || {};
+  if (d.ctedit) ctOpen(CT.contacts.find(c => c.id === d.ctedit));
+  else if (d.ctdel) { const c = CT.contacts.find(x => x.id === d.ctdel); if (confirm(`Delete ${c.name || c.email}?`)) { CT = {...CT, ...(await api(`/api/contacts/${c.id}`, {method: "DELETE"}))}; ctRender(); } }
+  else if (d.ctsug || d.ctaddall) {
+    const pick = d.ctaddall ? CT_SUG : [CT_SUG[+d.ctsug]];
+    CT = {...CT, ...(await api("/api/contacts", J("POST", {contacts: pick.map(f => ({name: f.name, role: f.role, school: f.school, email: f.email, phone: f.phone, source: f.seen.join(", ")}))})))};
+    ctRender(); $("#ctFind").click();
+  }
+});
+
 // ---- updates (MeetDeck for Windows pulls new versions from GitHub) ----
 let UPD = null;
 function showUpdate(u) {
@@ -1250,7 +1411,7 @@ document.addEventListener("click", e => { if (e.target.id === "updBanGo") instal
 (async () => { await loadHosts();
   const qm = new URLSearchParams(location.search).get("meet");      // "← Meet setup" from the meet page lands on that meet
   if (qm) { store("meet", qm); store("tab", "meets"); history.replaceState(null, "", "/"); }
-  const h0 = location.hash.slice(1), t0 = ["schools", "setup", "meets", "rules", "run"].includes(h0) ? h0 : (recall("tab") || "meets"); tab(["schools", "setup", "rules", "run"].includes(t0) ? t0 : "meets"); })();
+  const h0 = location.hash.slice(1), t0 = ["schools", "setup", "meets", "rules", "run", "contacts", "send"].includes(h0) ? h0 : (recall("tab") || "meets"); tab(["schools", "setup", "rules", "run", "contacts", "send"].includes(t0) ? t0 : "meets"); })();
 </script>
 </body>
 </html>

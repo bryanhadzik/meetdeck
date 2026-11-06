@@ -228,6 +228,8 @@ def _state(d: Path) -> dict:
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),
             "run": meta.get("run", {}), "ended": meta.get("ended", ""), "contacts": meta.get("contacts", {}),
             "coach_emails": sorted({e.lower() for x in [t.get("email", "") for t in teams.values()] + [f.get("source", "") for f in files]
+                                    + [c.get("email", "") for c in _contacts() if c.get("role", "").endswith("coach")
+                                       and c.get("school", "").lower() in {(t.get("name") or "").lower() for t in teams.values()}]
                                     for e in re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", x or "")}),
             "drive_uploads": meta.get("drive_uploads", []),
             "has_db": (d / "db" / "meet.mdb").exists(),
@@ -1922,10 +1924,209 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'{disp}; filename="{name}"'})
 
 
+# ---- send results: every file that goes out after the meet ---------------------------------
+def _fmr(d: Path):
+    """The signed Final Meet Report the user added to the meet's documents (scan / photo / PDF)."""
+    docs = sorted((d / "docs").iterdir(), key=lambda f: -f.stat().st_mtime) if (d / "docs").exists() else []
+    return next((f for f in docs if re.search(r"final|meet.?report|fmr", f.name, re.I)), None)
+
+
+@app.get("/api/meets/{mid}/send")
+def send_status(mid: str):
+    d = _dir(mid)
+    meta = _meta(d)
+    out = {"has_db": _dbfile(d).exists(), "sent": meta.get("sent", {}), "fmr": None,
+           "docs": [f.name for f in sorted((d / "docs").iterdir())] if (d / "docs").exists() else []}
+    f = _fmr(d)
+    if f:
+        out["fmr"] = f.name
+    if out["has_db"]:
+        m = meetdb.load(_dbfile(d))
+        evs = {}
+        for e in m["entries"]:
+            if e["scr"]:
+                continue
+            v = evs.setdefault(e["event"], [0, 0])
+            v[0] += 1
+            v[1] += bool(e["time"] or (e["stat"] or "").strip())
+        out["events"] = {"total": len(evs), "done": sum(1 for a, b in evs.values() if a and b == a),
+                         "started": sum(1 for a, b in evs.values() if b)}
+        out["dqs"] = sum(1 for e in m["entries"] if (e["stat"] or "").strip() in ("Q", "F"))
+    return out
+
+
+@app.post("/api/meets/{mid}/send/mark")
+def send_mark(mid: str, body: dict):
+    d = _dir(mid)
+    meta = _meta(d)
+    sent = meta.setdefault("sent", {})
+    if body.get("on"):
+        sent[body["item"]] = time.strftime("%Y-%m-%d %H:%M")
+    else:
+        sent.pop(body["item"], None)
+    _save(d, meta)
+    return {"sent": sent}
+
+
+@app.get("/api/meets/{mid}/send/{group}.zip")
+def send_zip(mid: str, group: str):
+    """All the files for one recipient in a zip: coaches (initial results), final (48-hour email),
+    keep (season records)."""
+    d = _dir(mid)
+    if not _dbfile(d).exists():
+        raise HTTPException(400, "No meet database yet - open Run the meet first")
+    import heatsheet
+    m = meetdb.load(_dbfile(d))
+    lic = (_dbinfo(d).get("hyb") or "")[28:78].strip()
+    stem = _stem(m["meet"]["name"])
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        if group in ("coaches", "final", "keep"):
+            z.writestr(f"{stem} results.pdf", heatsheet.results_pdf(m, _dbfile(d), lic))
+        if group in ("coaches", "final"):
+            data, name = results_mod.hy3_zip(m, _dbfile(d), lic, int(_dbinfo(d).get("result_exports", 0)) or 1)
+            for n in zipfile.ZipFile(io.BytesIO(data)).namelist():
+                z.writestr(n, zipfile.ZipFile(io.BytesIO(data)).read(n))
+        if group == "final":
+            f = _fmr(d)
+            if f:
+                z.write(f, f.name)
+        if group == "keep":
+            r = db_backup(mid)
+            z.writestr(r.headers["content-disposition"].split('filename="')[1].rstrip('"'), r.body)
+            if (_dbdir(d) / "log.jsonl").exists():
+                lines = [json.loads(x) for x in (_dbdir(d) / "log.jsonl").read_text().splitlines() if x.strip()]
+                z.writestr(f"{stem} change log.txt", "\r\n".join(f"{l['when']}  {l['msg']}" for l in lines))
+            for f in (d / "docs").iterdir() if (d / "docs").exists() else []:
+                z.write(f, f"documents/{f.name}")
+    label = {"coaches": "results for coaches", "final": "final results (48-hour)", "keep": "meet records"}.get(group, group)
+    return Response(buf.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{stem} {label}.zip"'})
+
+
 TIMING = Path(__file__).parent / "timing"
 
 
 import updater
+
+
+# ---- contacts: swim coaches and meet officials ---------------------------------------------
+CONTACTS = DATA_ROOT / "contacts.json"
+ROLES = ["Head coach", "Assistant coach", "Athletic director", "Meet referee", "Administrative official", "Starter",
+         "Stroke & turn judge", "Timer", "Announcer", "Other"]
+
+
+def _contacts() -> list:
+    try:
+        return json.loads(CONTACTS.read_text()) if CONTACTS.exists() else []
+    except ValueError:
+        return []
+
+
+def _save_contacts(cs: list):
+    tmp = CONTACTS.with_suffix(".tmp")
+    tmp.write_text(json.dumps(cs, indent=1))
+    os.replace(tmp, CONTACTS)
+
+
+def _schools() -> list:
+    """Team names seen anywhere (host schools + every meet's entries), for the school picker."""
+    names = {h.get("name", "") for h in _hosts()}
+    for d in DATA.iterdir():
+        if (d / "meta.json").exists() and (d / "files").exists():
+            for p in _parsed(d):
+                names |= {t.get("name", "") for t in p["teams"].values()}
+    return sorted(n for n in names if n)
+
+
+@app.get("/api/contacts")
+def contacts_list():
+    return {"contacts": _contacts(), "roles": ROLES, "schools": _schools()}
+
+
+@app.post("/api/contacts")
+def contacts_save(body: dict):
+    """Add or change one contact ({id?, name, role, school, email, phone, notes}), or several ({contacts: [...]})."""
+    cs = _contacts()
+    items = body.get("contacts") or [body]
+    out = []
+    for c in items:
+        c = {k: (str(c.get(k) or "")).strip() for k in ("id", "name", "role", "school", "email", "phone", "notes", "source")}
+        if not (c["name"] or c["email"] or c["phone"]):
+            raise HTTPException(400, "A contact needs a name, an email or a phone number")
+        c["updated"] = time.strftime("%Y-%m-%d")
+        old = next((x for x in cs if x["id"] == c["id"]), None) if c["id"] else None
+        if old:
+            old.update({k: v for k, v in c.items() if k != "source" or v})
+            out.append(old)
+        else:
+            c["id"] = secrets.token_hex(4)
+            c["added"] = c["updated"]
+            cs.append(c)
+            out.append(c)
+    cs.sort(key=lambda x: (x.get("school", "").lower(), x.get("role", "") != "Head coach", x.get("name", "").lower()))
+    _save_contacts(cs)
+    return {"contacts": cs, "saved": out}
+
+
+@app.delete("/api/contacts/{cid}")
+def contacts_delete(cid: str):
+    cs = [c for c in _contacts() if c["id"] != cid]
+    _save_contacts(cs)
+    return {"contacts": cs}
+
+
+def _looks_like_person(s: str, school: str) -> bool:
+    w = s.split()
+    return 2 <= len(w) <= 4 and not re.search(r"\d|school|high|swim|team|club|academy|box|street|road|drive|ave\b", s, re.I) \
+        and s.lower() != (school or "").lower() and all(x[:1].isupper() for x in w if x[:1].isalpha())
+
+
+@app.get("/api/contacts/suggest")
+def contacts_suggest():
+    """Coaches found in your meets - entry files (team contact lines) and Meet Manager team records -
+    that aren't in Contacts yet."""
+    have_email = {c["email"].lower() for c in _contacts() if c.get("email")}
+    have_name = {(c.get("name", "").lower(), c.get("school", "").lower()) for c in _contacts()}
+    found = {}
+
+    def add(name, school, email, phone, where, role="Head coach"):
+        email = (email or "").strip()
+        m = re.search(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", email)
+        email = m.group(0).lower() if m else ""
+        name = (name or "").strip()
+        if not (email or name):
+            return
+        if (email and email in have_email) or (name and (name.lower(), school.lower()) in have_name):
+            return
+        key = email or f"{name.lower()}|{school.lower()}"
+        f = found.setdefault(key, {"name": "", "role": role, "school": school, "email": email, "phone": "", "seen": []})
+        f["name"] = f["name"] or name
+        f["phone"] = f["phone"] or (phone or "").strip()
+        if where not in f["seen"]:
+            f["seen"].append(where)
+
+    for d in sorted(DATA.iterdir()):
+        if not (d / "meta.json").exists():
+            continue
+        meet = _meta(d).get("name", d.name)
+        if (d / "files").exists():
+            for p in _parsed(d):
+                for t in p["teams"].values():
+                    who = t.get("addr1", "") if _looks_like_person(t.get("addr1", ""), t.get("name", "")) else ""
+                    add(who, t.get("name", ""), t.get("email"), t.get("phone"), meet)
+                    for e in re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", t.get("source", "") or ""):
+                        add("", t.get("name", ""), e, "", meet)
+        if _dbfile(d).exists():
+            try:
+                for t in meetdb.load(_dbfile(d))["teams"].values():
+                    head = t.get("head") or (t.get("addr1") if _looks_like_person(t.get("addr1", ""), t["name"]) else "")
+                    add(head, t["name"], t.get("email"), t.get("day_tel") or t.get("cell"), meet)
+                    if t.get("asst") and t.get("asst") != head:
+                        add(t["asst"], t["name"], "", "", meet, "Assistant coach")
+            except Exception:
+                pass
+    return {"suggestions": sorted(found.values(), key=lambda f: (f["school"].lower(), f["name"].lower()))}
 
 
 @app.get("/api/version")

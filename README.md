@@ -181,3 +181,15 @@ from ./.env (Bryan sets it; not in code). Tests: tests/make_cl2.py builds an SDI
 
 ### Open a Meet Manager file
 - Top bar **Open meet…** (the New meet box): **Open a Meet Manager file…** picks a `Swmm8Bkup….zip` or `.mdb` from the computer; **Open from Google Drive…** lists every backup / .mdb in the Drive meet folder (grouped by meet folder, filterable, shows which are already opened) and opens one with a click. MeetDeck makes a meet from it - name, date, location and season from the file, host school from the teams - and goes straight to Run the meet.
+
+### Send results tab
+- For the meet picked at the top: everything that has to go out after the meet, by recipient, with status (events finished, DQs, meet end time, 48-hour deadline / overdue).
+  1. **Initial results to all coaches** (before leaving): Results PDF + Team Manager results (.hy3 + .cl2); zip of both; Email coaches (Bcc from entry files + Contacts).
+  2. **Final Meet Report and results to utahtop50@yahoo.com** (48 hours): the signed Final Meet Report (add a scan/photo - saved in the meet's documents), Results PDF, Team Manager results; zip; email with referee / AO / host coach cc'd.
+  3. **Keep for the season**: Meet Manager backup, Results PDF, change log, the meet's documents (zip); reminder to file the paper timer sheets and DQ slips.
+- Each step has a Sent / Saved checkbox with the time it was ticked (`meta.sent`). Zips: `/api/meets/{mid}/send/{coaches|final|keep}.zip`.
+
+### Contacts tab
+- Swim coaches, athletic directors and officials (`contacts.json` in the data folder): name, role, school, email, phone, notes. Search, filter by role, Copy emails / Email these (Bcc).
+- **Find coaches in my meets** lists coaches named in entry files (team contact lines) and Meet Manager team records that aren't saved yet - Add one or Add all.
+- Coaches saved for a school are added to "Email coaches" (Meet checklist and Send results) for meets that school is in.

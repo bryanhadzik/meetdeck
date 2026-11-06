@@ -14,6 +14,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -64,8 +65,11 @@ def check(fresh=False) -> dict:
         if fresh or not _CACHE["val"] or time.time() - _CACHE["at"] > 1800:
             _CACHE.update(val=latest(), at=time.time())
         lt = _CACHE["val"]
+    except urllib.error.HTTPError as e:
+        out["error"] = "No updates published yet" if e.code == 404 else f"GitHub said {e.code}"
+        return out
     except Exception as e:
-        out["error"] = f"Couldn't reach GitHub ({type(e).__name__})"
+        out["error"] = f"Couldn't reach GitHub ({type(e).__name__}) - offline?"
         return out
     out["latest"] = lt
     out["available"] = bool(lt["url"]) and _key(lt["version"]) > _key(cur)

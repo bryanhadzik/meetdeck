@@ -172,3 +172,12 @@ from ./.env (Bryan sets it; not in code). Tests: tests/make_cl2.py builds an SDI
 - Gmail: `Documents\MeetDeck\meetdeck.env` (GMAIL_USER / GMAIL_APP_PASSWORD). Report font: Cambria from `C:\Windows\Fonts`.
 - Build: `windows/build.sh --with-meets` on plex (downloads Python + Windows wheels, writes `windows/dist/MeetDeck-Windows.zip` and copies it into the server's download folder).
 - Verified on Windows 10: all three Meet Manager fixture meets export identical .hy3/.cl2 through the Jet driver; edits, scratches, PDFs and the Meet Manager backup (identical to the Java builder's) all work.
+
+### Updates (Windows app)
+- Code lives at https://github.com/bryanhadzik/meetdeck (public, code only - `.gitignore` keeps meet data, swimmer names, master meets and test fixtures out).
+- Publish: `windows/release.sh "what changed"` on plex - bumps `app/VERSION` (YYYY.MM.DD.N), rebuilds the Windows zip (and the server's download), commits, pushes and creates a GitHub release carrying `meetdeck-app-<version>.zip` (the app folder only).
+- The Windows app checks GitHub (at most every 30 min; Setup -> Updates -> Check for updates forces it), shows a banner when a newer release exists, and **Install update** downloads it (SHA-256 checked) into `app.new` and restarts; `start.py` swaps it in and keeps the previous version as `app.old`. Meets and settings in `Documents\MeetDeck` are never touched.
+- Updates carry only the app folder; a new Python package needs a full re-download of the Windows zip.
+
+### Open a Meet Manager file
+- Top bar **Open file…** (or "Open a Meet Manager file…" in New meet): pick a `Swmm8Bkup….zip` or `.mdb`. MeetDeck makes a meet from it - name, date, location and season from the file, host school from the teams - and goes straight to Run the meet.

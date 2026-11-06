@@ -56,8 +56,17 @@ def _meet_season(m: dict) -> str:
     return season_of(m["date"]) if m.get("date") else (m.get("season") or season_of(ts=m.get("created")))
 
 
+def _write_settings(st: dict):
+    tmp = SETTINGS.with_suffix(".tmp")
+    tmp.write_text(json.dumps(st, indent=1))
+    os.replace(tmp, SETTINGS)        # all-or-nothing, so a crash can't leave an empty file
+
+
 def _settings() -> dict:
-    s = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
+    try:
+        s = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
+    except ValueError:          # half-written file (PC switched off mid-save): start from defaults
+        s = {}
     s.setdefault("season", season_of())
     s.setdefault("time_tolerance", 0.30)   # seconds: pad / backup / timers differing by more than this is highlighted
     return s
@@ -286,7 +295,7 @@ def put_settings(body: dict):
         if u and not re.match(r"https://script\.google\.com/(?:a/macros/[\w.-]+|macros)/s/[\w-]+/exec", u):
             raise HTTPException(400, "Paste the web app URL from Apps Script (it ends in /exec)")
         st["drive_url"] = u
-    SETTINGS.write_text(json.dumps(st, indent=1))
+    _write_settings(st)
     return get_settings()
 
 
@@ -1253,7 +1262,7 @@ def drive_script():
     st = _drive_cfg()
     if not st.get("drive_token"):
         st["drive_token"] = secrets.token_urlsafe(24)
-        SETTINGS.write_text(json.dumps(st, indent=1))
+        _write_settings(st)
     return {"script": drive_mod.script_for(st["drive_folder"], st["drive_token"])}
 
 

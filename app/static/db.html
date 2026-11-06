@@ -1,0 +1,925 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meet Database</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#17202a;--muted:#5d6b78;--line:#dde3e9;--accent:#0b6fa4;--accent-ink:#fff;--err:#b42318;--err-bg:#fdecea;--warn:#8a5a00;--warn-bg:#fff4dc;--ok:#13703a;--ok-bg:#e6f5ec;--sel:#e7f2f9}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1418;--card:#172028;--ink:#e6edf3;--muted:#93a1ae;--line:#2a3742;--accent:#3aa0d8;--accent-ink:#06121a;--err:#ff8b80;--err-bg:#3a1714;--warn:#f5c26b;--warn-bg:#352a12;--ok:#6fd49a;--ok-bg:#12301f;--sel:#16303f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+header h1{font-size:17px;margin:0}
+.grow{flex:1}
+nav{display:flex;gap:4px}
+nav button{background:transparent;color:var(--muted);border:1px solid transparent}
+nav button.on{color:var(--accent);border-color:var(--line);background:var(--bg)}
+main{max-width:1300px;margin:0 auto;padding:14px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 8px}
+button,select,input{font:inherit;color:inherit}
+button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:6px 11px;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+button.small{padding:2px 7px;font-size:12.5px}
+button.danger{color:var(--err)}
+input,select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 6px;max-width:100%}
+.muted{color:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--muted);font-weight:600;font-size:12px}
+.issue{border-radius:8px;padding:8px 12px;margin-bottom:8px;background:var(--warn-bg);color:var(--warn)}
+.okbox{background:var(--ok-bg);color:var(--ok);border-radius:8px;padding:8px 12px}
+.hidden{display:none!important}
+.split{display:grid;grid-template-columns:270px 1fr;gap:14px;align-items:start}
+@media (max-width:800px){.split{grid-template-columns:1fr}}
+.evlist{max-height:calc(100vh - 170px);overflow:auto;position:sticky;top:64px}
+.evlist button{display:flex;width:100%;text-align:left;background:transparent;color:var(--ink);border-radius:6px;padding:5px 8px;gap:6px}
+.evlist button.on{background:var(--sel)}
+.evlist .cnt{margin-left:auto;color:var(--muted);font-size:12px}
+.heat{margin-bottom:12px}
+.heat h3{font-size:13px;margin:6px 0 2px;color:var(--muted)}
+td.ln{width:26px;color:var(--muted);text-align:right}
+td input.t{width:78px;text-align:right}
+td select.hl{width:52px}
+.legs{font-size:12px;color:var(--muted)}
+tr.relaybad td{background:rgba(248,81,73,.10)} tr.relaybad td:first-child{box-shadow:inset 3px 0 0 var(--err)}
+.relaybad{font-size:12px;color:var(--err);font-weight:600;margin-top:2px}
+.scr td{opacity:.5;text-decoration:line-through}
+.scr td.act{opacity:1;text-decoration:none}
+.badge{display:inline-block;font-size:11px;border-radius:9px;padding:0 6px;background:var(--bg);border:1px solid var(--line)}
+.badge.dq{background:var(--err-bg);color:var(--err);border-color:transparent}
+.prow{display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:13px}.menu .pop .prow button{width:auto;flex:none;margin:0}.prow span{flex:1;white-space:nowrap}.prow select{font-size:12px}
+.mf{display:flex;flex-direction:column;gap:3px;font-size:13px;min-width:0}.mf span{color:var(--muted)}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-bottom:10px}
+.mgrid4{display:flex;flex-wrap:wrap;gap:10px 16px;margin-bottom:10px;align-items:flex-end}
+@media (max-width:640px){.mgrid{grid-template-columns:1fr}}
+.chip{display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:0 7px;margin:1px 3px 1px 0;font-size:12px}
+.chip.x{text-decoration:line-through;opacity:.55}
+.menu{position:relative;display:inline-block}
+.menu .pop{position:absolute;right:0;top:110%;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px;min-width:250px;box-shadow:0 6px 20px rgba(0,0,0,.15);z-index:9}
+.menu .pop button{display:block;width:100%;text-align:left;margin-bottom:4px}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+#toast.on{opacity:.95}
+.edit td{background:var(--sel)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px 12px}
+.grid2 label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
+.evlist button{flex-wrap:wrap;row-gap:2px}
+.evlist .st{display:flex;align-items:center;gap:6px;width:100%;padding-left:22px;font-size:11.5px;color:var(--muted)}
+.seg{display:inline-flex;gap:2px}.seg i{display:inline-block;width:12px;height:6px;border-radius:2px;background:var(--line)}
+.seg.many i{width:6px}.evlist .st>span:last-child{white-space:nowrap}
+.seg i.done{background:var(--ok)}.seg i.part{background:var(--warn)}
+.pill{display:inline-block;font-size:11px;font-weight:600;border-radius:9px;padding:0 7px;line-height:17px;white-space:nowrap}
+.pill.none{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.pill.prog{background:var(--warn-bg);color:var(--warn)}
+.pill.timed{background:var(--ok-bg);color:var(--ok)}
+.pill.scored{background:var(--accent);color:var(--accent-ink)}
+.pill.stale{background:var(--err-bg);color:var(--err)}
+.legend{font-size:11.5px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;padding:2px 6px 8px;border-bottom:1px solid var(--line);margin-bottom:6px}
+a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;color:#111;border-radius:2px;padding:0 1px}
+</style>
+</head>
+<body>
+<header>
+  <a id="backBtn" href="/" class="ghost small" style="text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;white-space:nowrap" title="Back to this meet's setup: entries, rule check, seeding">← Meet setup</a>
+  <h1 id="title">Meet database</h1>
+  <span class="muted" id="src" style="font-size:12.5px"></span>
+  <span class="grow"></span>
+  <nav id="tabs" class="hidden"><button data-tab="events" class="on">Events</button><button data-tab="swimmers">Swimmers</button><button data-tab="scores">Scores</button><button data-tab="teams">Teams</button><button data-tab="meet">Meet</button><button data-tab="rules">Rules</button><button data-tab="changes">Changes</button></nav>
+  <button class="small hidden" id="scoreBtn" title="Scoring settings (Utah high school / NFHS tables)">Scoring</button>
+  <button class="ghost small hidden" id="undoBtn" title="Undo the last change">Undo</button>
+  <div class="menu hidden" id="printMenu"><button class="ghost small" id="printBtn">Print ▾</button>
+    <div class="pop hidden" id="printPop">
+      <div class="prow"><span>Heat sheet</span><button class="small" data-pr="heatsheet">Print</button><button class="ghost small" data-pdf="heatsheet">PDF</button></div>
+      <div class="prow"><span>Referee program</span><button class="small" data-pr="referee">Print</button><button class="ghost small" data-pdf="referee">PDF</button></div>
+      <div class="prow"><span>Results</span><button class="small" data-pr="results">Print</button><button class="ghost small" data-pdf="results">PDF</button></div>
+      <div class="prow"><span>Timer sheets <select id="prLane" title="All lanes, or just one lane's sheets"><option value="">all lanes</option></select></span><button class="small" data-pr="timer">Print</button><button class="ghost small" data-pdf="timer">PDF</button></div>
+    </div></div>
+  <div class="menu hidden" id="exportMenu"><button class="small" id="exportBtn">Download / export ▾</button>
+    <div class="pop hidden" id="exportPop">
+      <button class="small" data-x="backup">Meet Manager backup (.zip) &mdash; restore in MM</button>
+      <button class="ghost small" data-x="hy3">Results for Team Manager (.hy3 + .cl2)</button>
+      <button class="ghost small" data-x="html">Printable results</button>
+      <button class="ghost small" data-x="csv">Results spreadsheet (.csv)</button>
+      <div class="muted" style="font-size:12px;padding:2px 4px">Backups are also filed in this meet's Google Drive folder.</div>
+    </div></div>
+</header>
+<main>
+  <section id="timing" style="margin-bottom:14px"><div class="row"><b>Timing console</b><span id="tmState" class="badge">not connected</span><span class="grow"></span>
+          <button class="ghost small" id="tmToggle">Hide</button></div>
+          <div id="tmBody" style="margin-top:8px">
+            <div class="row"><label class="muted" style="font-size:12.5px">Bridge <input id="tmUrl" size="22"></label>
+              <select id="tmPort"><option value="">COM port…</option></select>
+              <button class="small" id="tmConnect">Connect</button><button class="ghost small" id="tmSim">Simulator</button><button class="ghost small hidden" id="tmDisc">Disconnect</button>
+              <a href="/timing/bridge.zip" class="muted" style="font-size:12.5px">Download the bridge for the timing laptop</a></div>
+            <div class="row" style="margin-top:6px"><label class="muted" style="font-size:12.5px">Send events to console slot <select id="tmSlot"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option selected>9</option></select></label>
+              <button class="ghost small" id="tmSend">Send events</button>
+              <button class="ghost small hidden" id="tmPractice" title="Simulator only: fills it with made-up times for this event's heats">Load practice times</button>
+              <a href="#" id="tmLogBtn" class="muted" style="font-size:12.5px">Console log</a></div>
+            <div id="tmNoDb" class="muted hidden" style="font-size:12.5px;margin-top:6px">Build or open this meet's database below to get times into heats and send events. Connecting and the simulator work now.</div>
+            <div id="tmMsg" class="muted" style="font-size:12.5px;margin-top:6px"></div>
+            <pre id="tmLog" class="hidden" style="max-height:200px;overflow:auto;font-size:11px;background:var(--bg);padding:6px;border-radius:6px"></pre>
+          </div></section>
+  <section id="start" class="hidden">
+    <h2>Open a database for this meet</h2>
+    <div class="muted" style="margin-bottom:10px">Changes here are made in the Meet Manager database itself, so the file restores straight into Meet Manager. Every change is kept, so you can undo.</div>
+    <div class="row" style="align-items:stretch">
+      <div style="flex:1;min-width:240px;border:1px solid var(--line);border-radius:8px;padding:10px">
+        <b>Build from the team entries</b><div class="muted" style="font-size:13px;margin:4px 0 8px">Same file as step 6's download: checked entries, lanes and seeding.</div>
+        <button id="buildBtn">Build database</button></div>
+      <div style="flex:1;min-width:240px;border:1px solid var(--line);border-radius:8px;padding:10px">
+        <b>Open a Meet Manager backup</b><div class="muted" style="font-size:13px;margin:4px 0 8px">A Swmm8Bkup….zip (or .mdb) from Meet Manager &mdash; e.g. after the meet, to correct results.</div>
+        <button class="ghost" id="upBtn">Choose file…</button><input type="file" id="upIn" accept=".zip,.mdb" class="hidden"></div>
+      <div style="flex:1;min-width:240px;border:1px solid var(--line);border-radius:8px;padding:10px">
+        <b>From Google Drive</b><div class="muted" style="font-size:13px;margin:4px 0 8px">Backups in this meet's Drive folder.</div>
+        <button class="ghost" id="driveBtn">Show backups</button><div id="driveList" style="margin-top:6px;font-size:13px"></div></div>
+    </div>
+    <div id="startMsg" class="muted" style="margin-top:8px"></div>
+  </section>
+
+  <div id="app" class="hidden">
+    <div id="problems"></div>
+
+    <div id="tab-events" class="split">
+      <section class="evlist" id="evlist"></section>
+      <div>
+
+        <section id="evDetail"></section>
+      </div>
+    </div>
+
+    <section id="tab-swimmers" class="hidden">
+      <div class="row" style="margin-bottom:8px"><input id="swFind" placeholder="Find a swimmer" size="26"><select id="swTeam"><option value="">All teams</option></select>
+        <span class="grow"></span><button class="ghost small" id="addSwBtn">Add swimmer</button></div>
+      <div id="addSw" class="hidden" style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px"></div>
+      <div id="swList"></div>
+    </section>
+
+    <section id="tab-scores" class="hidden"><div id="scoreView"></div></section>
+
+    <section id="tab-teams" class="hidden"><div id="teamList"></div></section>
+
+    <section id="tab-meet" class="hidden"><div id="meetForm"></div></section>
+
+    <section id="tab-rules" class="hidden">
+      <div class="row"><input id="rq" type="search" placeholder='Search the rules: e.g. backup buttons, false start, 6-4-1, "official time"' style="flex:1;min-width:240px"><button class="small" id="rgo">Search</button></div>
+      <div class="muted" style="font-size:12px;margin-top:4px">Searches every document on the main page's Rules tab (NFHS, UHSAA). All words on the same page; "quoted phrase"; 6-4-1 or 6.4.1.</div>
+      <div id="rhits" style="margin-top:10px"></div>
+    </section>
+
+    <section id="tab-changes" class="hidden">
+      <h2>Changes</h2><div id="logList"></div>
+      <h2 style="margin-top:16px">Saved versions</h2>
+      <div class="muted" style="font-size:13px;margin-bottom:6px">A copy is kept before every change. Restoring one keeps the current database as a version too.</div>
+      <div id="verList"></div>
+    </section>
+  </div>
+</main>
+<div id="scoreDlg" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:flex;align-items:flex-start;justify-content:center;padding-top:80px">
+  <section style="max-width:560px;width:94%;margin:0">
+    <h2>Scoring</h2>
+    <div class="muted" style="font-size:13px;margin-bottom:8px">Each race is scored on its own with <b>Score event</b> once its times and DQs are final. These settings apply to every race. Utah high school (UHSAA) meets use the NFHS tables; DQs, no-shows and exhibition swims don't score; ties split the points.</div>
+    <label style="display:block;margin-bottom:8px">Scoring <select id="scMethod" style="width:100%"></select></label>
+    <div class="row"><label>Scorers per team per event: individual <input id="scInd" type="number" min="0" style="width:60px"></label>
+      <label>relay <input id="scRel" type="number" min="0" style="width:60px"></label><span class="muted" style="font-size:12px">0 = no limit</span></div>
+
+    <div id="scMsg" class="muted" style="font-size:13px;margin-top:8px"></div>
+    <div class="row" style="margin-top:10px"><button id="scSave">Save settings</button><button class="ghost" id="scAll" title="Score every race that's finished and not scored yet">Score all finished races</button><button class="ghost" id="scCancel">Close</button></div>
+  </section></div>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const MID = new URLSearchParams(location.search).get("meet");
+const API = `/api/meets/${MID}/db`;
+let S = null, M = null, EV = null, TAB = "events", EDIT_SW = null, TOL = 0.30;
+fetch("/api/settings").then(r => r.json()).then(st => { if (st.time_tolerance) TOL = st.time_tolerance; }).catch(() => {});
+try { EV = +sessionStorage.getItem("db-ev-" + MID) || null; } catch (e) {}
+
+async function api(url, opt) {
+  const r = await fetch(url, opt);
+  if (!r.ok) { let t = await r.text(); try { t = JSON.parse(t).detail || t; } catch (e) {} throw new Error(t); }
+  return r.headers.get("content-type")?.includes("json") ? r.json() : r.text();
+}
+const J = b => ({method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(b)});
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 3200); }
+const fmt = v => { if (!v) return ""; const m = Math.floor(v / 60), s = (v - m * 60).toFixed(2); return m ? `${m}:${s.padStart(5, "0")}` : s; };
+const athName = no => { const a = M.athletes[no]; return a ? `${a.first} ${a.last}` : "?"; };
+const teamAbbr = no => M.teams[no]?.abbr || "?";
+const evOf = ptr => M.events.find(e => e.ptr === ptr);
+
+async function load() {
+  S = await api(API);
+  show();
+}
+function show() {
+  document.title = `Database · ${S.meet_name || S.meet || ""}`;
+  $("#backBtn").href = `/?meet=${encodeURIComponent(MID)}`;
+  $("#title").textContent = S.meet_name || S.meet || "Meet database";
+  $("#tmNoDb").classList.toggle("hidden", !!S.exists); ["#tmSend", "#tmPractice"].forEach(x => $(x).disabled = !S.exists);
+  if (!S.exists) { $("#start").classList.remove("hidden"); $("#app").classList.add("hidden"); ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn"].forEach(s => $(s).classList.add("hidden")); return; }
+  M = S.model;
+  $("#start").classList.add("hidden"); $("#app").classList.remove("hidden");
+  ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn"].forEach(s => $(s).classList.remove("hidden"));
+  { const sel = $("#prLane"), cur = sel.value; sel.innerHTML = `<option value="">all lanes</option>` + Array.from({length: M.meet.lanes || 8}, (_, i) => `<option value="${i + 1}">lane ${i + 1}</option>`).join(""); sel.value = cur; }
+  $("#src").textContent = `${M.meet.name !== (S.meet_name) ? M.meet.name + " · " : ""}${M.meet.start}${S.info.source ? " · " + S.info.source : ""}`;
+  const last = S.log.find(l => l.kind === "change");
+  $("#undoBtn").disabled = !S.versions.length;
+  $("#undoBtn").title = S.versions.length ? "Undo: " + (S.versions[0].label || "").replace(/^before: /, "") : "Nothing to undo";
+  $("#problems").innerHTML = scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "");
+  render();
+}
+function printPdf(url) {
+  // load the PDF in a hidden frame and open the browser's print dialog for it
+  toast("Preparing to print…");
+  let f = document.getElementById("printFrame");
+  if (f) f.remove();
+  f = document.createElement("iframe");
+  f.id = "printFrame";
+  f.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0";
+  f.onload = () => setTimeout(() => {
+    try { f.contentWindow.focus(); f.contentWindow.print(); }
+    catch (e) { window.open(url, "_blank"); }       // some browsers won't print a framed PDF: open it instead
+  }, 400);
+  f.src = url;
+  document.body.appendChild(f);
+}
+async function change(op, args) {
+  try { S = await api(`${API}/op`, J({op, args})); toast(S.log[0]?.msg || "Saved"); show(); }
+  catch (e) { toast("Not changed: " + e.message); }
+}
+function render() {
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === TAB));
+  ["events", "swimmers", "scores", "teams", "meet", "rules", "changes"].forEach(t => $("#tab-" + t).classList.toggle("hidden", t !== TAB));
+  if (TAB === "events") renderEvents();
+  if (TAB === "swimmers") renderSwimmers();
+  if (TAB === "teams") renderTeams();
+  if (TAB === "meet") renderMeet();
+  if (TAB === "rules") setTimeout(() => $("#rq").focus(), 0);
+  if (TAB === "scores") renderScores();
+  if (TAB === "changes") renderChanges();
+}
+
+// ---------------- events ----------------
+function evEntries(ptr) { return M.entries.filter(e => e.event === ptr); }
+// an entry is "resolved" once it has a time, a DQ or a no-show
+const resolved = e => !!(e.time || ["Q", "F", "R"].includes((e.stat || "").trim()));
+function heatState(ents) {
+  const n = ents.length, r = ents.filter(resolved).length;
+  return {n, r, cls: !n ? "none" : r === n ? "done" : r ? "part" : "none"};
+}
+function eventState(v) {
+  const act = evEntries(v.ptr).filter(e => !e.scr && e.heat);
+  const heats = [...new Set(act.map(e => e.heat))].sort((a, b) => a - b).map(h => ({h, ...heatState(act.filter(e => e.heat === h))}));
+  const doneHeats = heats.filter(x => x.cls === "done").length;
+  const timed = heats.length && doneHeats === heats.length;
+  const pts = act.reduce((t, e) => t + (e.points || 0), 0);
+  const placed = act.filter(e => e.place).length;
+  const dq = act.filter(e => ["Q", "F"].includes((e.stat || "").trim())).length, ns = act.filter(e => (e.stat || "").trim() === "R").length;
+  const any = act.some(resolved);
+  const sc = S.scoring || {}, sig = (sc.sigs || {})[v.ptr], scoredNow = sig && sig === (S.event_sigs || {})[v.ptr];
+  const status = timed && scoredNow ? "scored" : timed && sig ? "stale" : timed ? "timed" : any ? "prog" : "none";
+  const label = {scored: "Scored", stale: "Rescore", timed: "Timed", prog: `${doneHeats} of ${heats.length} heat${heats.length > 1 ? "s" : ""}`, none: "Not started"}[status];
+  const bad = evEntries(v.ptr).filter(e => relayIssues(e).length).length;
+  return {heats, doneHeats, status, label, dq, ns, placed, pts, entered: act.length, bad};
+}
+function renderEvents() {
+  if (!EV || !evOf(EV)) EV = M.events[0]?.ptr;
+  const states = M.events.map(eventState);
+  const tally = k => states.filter(x => x.status === k).length;
+  $("#evlist").innerHTML = `<div class="legend"><span><span class="pill timed">${tally("timed") + tally("scored") + tally("stale")}</span> timed</span>
+      <span><span class="pill scored">${tally("scored")}</span> scored</span><span><span class="pill prog">${tally("prog")}</span> in progress</span>
+      <span><span class="pill none">${tally("none")}</span> not started</span>${tally("stale") ? `<span><span class="pill stale">${tally("stale")}</span> changed since scoring</span>` : ""}</div>` +
+    M.events.map((v, i) => {
+      const st = states[i];
+      const extra = [st.bad ? `<b style="color:var(--err)" title="A relay has a scratched swimmer or an open leg">&#9888; relay</b>` : "", st.dq ? `${st.dq} DQ` : "", st.ns ? `${st.ns} NS` : ""].filter(Boolean).join(" · ");
+      return `<button data-ev="${v.ptr}" class="${v.ptr === EV ? "on" : ""}" title="${esc(st.label)}${st.status === "timed" ? " - places set; points come from Meet Manager's scoring" : ""}">
+        <b>${v.no}</b> ${esc(v.label)}<span class="cnt">${st.entered}</span>
+        <span class="st"><span class="seg${st.heats.length > 7 ? " many" : ""}">${st.heats.map(x => `<i class="${x.cls}" title="Heat ${x.h}: ${x.r}/${x.n}"></i>`).join("")}</span>
+          <span class="pill ${st.status}">${st.label}</span>${extra ? `<span>${extra}</span>` : ""}</span></button>`;
+    }).join("");
+  renderEvent();
+}
+function nameCell(e) {
+  if (e.kind === "I") { const a = M.athletes[e.ath] || {}; return `${esc(a.last)}, ${esc(a.first)} <span class="muted" style="font-size:12px">${esc(a.yr || "")}</span>`; }
+  const bad = relayIssues(e);
+  const scrAth = new Set(bad.filter(b => b.ath).map(b => b.ath));
+  return `${esc(M.teams[e.team]?.name || "?")} "${esc(e.ltr)}"<div class="legs">${e.legs.map((x, i) => x ? (scrAth.has(x) ? `<s style="color:var(--err)">${esc(athName(x))}</s>` : esc(athName(x))) : `<i${bad.length ? ' style="color:var(--err)"' : ""}>leg ${i + 1} open</i>`).join(", ")}</div>` +
+    (bad.length ? `<div class="relaybad">&#9888; Relay not complete &mdash; ${bad.map(b => esc(b.msg)).join("; ")}. Fix it with <b>Swimmers</b>.</div>` : "");
+}
+// A relay is not complete when a declared swimmer has been scratched, or some legs are filled and others left open
+// (scratching a swimmer from the meet takes them off the relay and leaves their leg open).
+function relayIssues(e) {
+  if (e.kind !== "R" || e.scr) return [];
+  const out = [];
+  e.legs.forEach((x, i) => {
+    if (!x) return;
+    const ind = M.entries.filter(y => y.kind === "I" && y.ath === x);
+    const scr = ind.filter(y => y.scr);
+    if (scr.length) out.push({ath: x, msg: `${athName(x)} is scratched${scr.length === ind.length ? " from the meet" : " from " + scr.map(y => "Ev " + ((M.events.find(v => v.ptr === y.event) || {}).no || "?")).join(", ")}`});
+  });
+  const open = e.legs.map((x, i) => x ? 0 : i + 1).filter(Boolean);
+  if (open.length && open.length < e.legs.length) out.push({msg: `leg ${open.join(", ")} open`});
+  return out;
+}
+function statBadge(e) {
+  const s = (e.stat || "").trim();
+  return s === "Q" || s === "F" ? `<span class="badge dq">DQ${e.dq ? " " + esc(e.dq) : ""}</span>` : s === "R" ? `<span class="badge dq">NS</span>` : "";
+}
+// same rules as the server: 1:05.32, 65.32, or digits only (10532 = 1:05.32, 5632 = 56.32)
+function parseTime(x) {
+  x = String(x || "").trim().toUpperCase();
+  if (!x || x === "NT" || x === "0") return 0;
+  if (!x.includes(".")) {
+    let m = x.match(/^(\d+):(\d{1,2})$/);
+    if (m) return +m[2] < 60 ? +m[1] * 60 + +m[2] : NaN;
+    const d = x.replace(/\D/g, "");
+    if (!d) return NaN;
+    const h = +d.slice(-2), s = +(d.slice(-4, -2) || 0), mi = +(d.slice(0, -4) || 0);
+    if (mi && s >= 60) return NaN;
+    return Math.round((mi * 60 + s + h / 100) * 100) / 100;
+  }
+  const p = x.split(":"), v = p.length > 1 ? (+p[0]) * 60 + (+p[1]) : +p[0];
+  return isNaN(v) ? NaN : Math.round(v * 100) / 100;
+}
+function raceBox(v, h) {
+  const k = `${v.ptr}:${h}`, n = (S.races || {})[k] || "", manual = (S.race_overrides || {})[k];
+  return `<label class="muted" style="font-weight:400;font-size:12.5px" title="Console race number for this heat. Change it and the heats after it count up from here. Clear it to go back to automatic.">Race
+    <input class="t" data-race="${h}" value="${n}" style="width:46px;text-align:center${manual ? ";border-color:var(--accent);font-weight:600" : ""}" inputmode="numeric"></label>${manual ? ` <a href="#" data-raceclear="${h}" class="muted" style="font-size:12px" title="Back to automatic numbering">auto</a>` : ""}`;
+}
+// first click arms a button ("Scratch Alton?"), a second click within 4 s does it
+function armed(btn, label) {
+  if (btn.dataset.armed) return true;
+  btn.dataset.armed = "1";
+  const old = btn.innerHTML, oldStyle = btn.getAttribute("style") || "";
+  btn.innerHTML = esc(label);
+  btn.style.background = "var(--err)"; btn.style.color = "#fff"; btn.style.borderColor = "var(--err)";
+  btn.title = "Click again to confirm";
+  btn._t = setTimeout(() => { delete btn.dataset.armed; btn.innerHTML = old; btn.setAttribute("style", oldStyle); btn.title = ""; }, 4000);
+  return false;
+}
+async function rulesSearch() {
+  const q = $("#rq").value.trim();
+  if (!q) { $("#rhits").innerHTML = ""; return; }
+  const r = await api("/api/rules/search?q=" + encodeURIComponent(q));
+  const words = (q.startsWith('"') && q.endsWith('"') ? [q.slice(1, -1)] : q.split(/\s+/)).filter(Boolean)
+    .map(w => /^\d+([-.]\d+)+[a-z]?$/i.test(w) ? w.split(/[-.]/).join("[-.]") : w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const re = new RegExp("(" + words.join("|") + ")", "gi");
+  $("#rhits").innerHTML = r.hits.length ? `<div class="muted" style="font-size:13px;margin-bottom:6px">${r.hits.length} page${r.hits.length > 1 ? "s" : ""}</div>` + r.hits.map(h =>
+    `<div style="padding:7px 0;border-top:1px solid var(--line)"><a href="/api/rules/file/${encodeURIComponent(h.file)}#page=${h.page}" target="_blank"><b>${esc(h.file.replace(/\.pdf$/i, ""))}</b>${h.section ? ` · ${esc(h.section)}` : ""} · page ${h.page}</a>
+     <div style="font-size:13.5px;margin-top:2px">${esc(h.snippet).replace(re, "<mark>$1</mark>")}</div></div>`).join("") : `<div class="muted">Nothing found for “${esc(q)}”.</div>`;
+}
+$("#rgo").onclick = rulesSearch;
+$("#rq").addEventListener("keydown", e => { if (e.key === "Enter") rulesSearch(); });
+let MOVING = false;      // heat / lane editing is off unless asked for
+const TIMERS = () => (S.info && +S.info.timers) || 1;
+// which time became the official time - shown read-only next to it
+function usedSource(e) {
+  const t = +e.time || 0, same = (a, b) => a && Math.abs(a - b) < 0.005;
+  if (!t) return null;
+  const btn = [e.backup, e.back2, e.back3].filter(x => +x > 0);
+  const avg = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
+  const tm = [e.watch, e.watch2].filter(x => +x > 0);
+  const tavg = tm.length ? Math.floor(tm.reduce((a, b) => a + Math.round(b * 100), 0) / tm.length) / 100 : 0;
+  if (same(+e.pad, t)) return "Pad";
+  if (btn.some(b => same(+b, t)) || same(avg, t)) return "Button";
+  if (tm.some(w => same(+w, t)) || same(tavg, t)) return "Timers";
+  return "Manual";
+}
+function usedBadge(e) {
+  const src = usedSource(e);
+  if (!src) return "";
+  const parts = [["Pad", e.pad], ["Button", [e.backup, e.back2, e.back3].filter(x => +x > 0).map(fmt).join(" / ")], ["Timers", [e.watch, e.watch2].filter(x => +x > 0).map(fmt).join(" / ")]]
+    .map(([k, v]) => `${k}: ${typeof v === "number" ? (v ? fmt(v) : "—") : (v || "—")}`).join(" · ");
+  const col = {Pad: "var(--ok)", Button: "var(--accent)", Timers: "var(--warn)", Manual: "var(--muted)"}[src];
+  return ` <span class="used" title="${esc(parts)}${src === "Manual" ? " · typed in by hand" : ""}" style="display:inline-block;min-width:44px;font-size:11.5px;color:${col};border:1px solid currentColor;border-radius:9px;padding:0 6px;text-align:center">${src}</span>`;
+}
+function timerCells(e) {
+  if (TIMERS() === 1) return `<input class="t" data-time="${e.key}" value="${esc(fmt(e.time))}" placeholder="time" title="Finals time">${usedBadge(e)}`;
+  // two timers: keep both watch times; official = average with thousandths dropped (NFHS 6-4-1b)
+  const w1 = e.watch || (e.time && !e.watch2 ? e.time : 0), w2 = e.watch2 || 0;
+  const tol = TOL || 0.30;
+  const far = w1 && w2 && Math.abs(w1 - w2) > tol + 1e-9;
+  const off = e.time ? fmt(e.time) : "";
+  return `<input class="t" data-timer="1" data-key="${e.key}" value="${esc(fmt(w1))}" placeholder="timer 1" title="Timer 1" style="width:72px${far ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}">
+    <input class="t" data-timer="2" data-key="${e.key}" value="${esc(fmt(w2))}" placeholder="timer 2" title="Timer 2" style="width:72px${far ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}">
+    <b data-off="${e.key}" title="Official time: average of the two timers, thousandths dropped" style="display:inline-block;min-width:52px;text-align:right">${esc(off)}</b>${usedBadge(e)}${far ? ` <span title="The two timers differ by more than ${Math.round(tol * 1000)} ms - check with the timers" style="color:var(--warn)">⚠</span>` : ""}`;
+}
+function renderEvent() {
+  const v = evOf(EV); if (!v) { $("#evDetail").innerHTML = "No events."; return; }
+  try { sessionStorage.setItem("db-ev-" + MID, EV); } catch (e) {}
+  const ents = evEntries(v.ptr), act = ents.filter(e => !e.scr), scr = ents.filter(e => e.scr);
+  const heats = [...new Set(act.map(e => e.heat))].sort((a, b) => a - b);
+  const maxHeat = Math.max(1, ...heats) + 1, lanes = M.meet.lanes || 8;
+  const hsel = (e) => `<select class="hl" data-move="${e.key}" data-part="heat">${Array.from({length: maxHeat + 1}, (_, h) => `<option value="${h}" ${h === e.heat ? "selected" : ""}>${h || "–"}</option>`).join("")}</select>`;
+  const lsel = (e) => `<select class="hl" data-move="${e.key}" data-part="lane">${Array.from({length: lanes + 1}, (_, l) => `<option value="${l}" ${l === e.lane ? "selected" : ""}>${l || "–"}</option>`).join("")}</select>`;
+  const row = (e, lane) => !e ? `<tr><td class="ln">${lane}</td><td colspan="${MOVING ? 9 : 8}" class="muted">—</td></tr>` :
+    `<tr class="${e.scr ? "scr" : relayIssues(e).length ? "relaybad" : ""}"><td class="ln">${e.lane || ""}</td><td>${nameCell(e)}${e.exh ? ' <span class="badge">exh</span>' : ""}</td><td>${esc(teamAbbr(e.team))}</td>
+      <td><input class="t" data-seed="${e.key}" value="${esc(fmt(e.seed) || "NT")}" title="Seed time"></td>
+      ${MOVING ? `<td style="white-space:nowrap">${e.scr ? "" : hsel(e) + " " + lsel(e)}</td>` : ""}
+      <td style="white-space:nowrap">${e.scr ? "" : timerCells(e)}</td>
+      <td style="white-space:nowrap">${e.scr ? "" : (e.stat === "Q" || e.stat === "F") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
+        : `<select data-stat="${e.key}" title="Status"><option value="">OK</option><option value="R" ${e.stat === "R" ? "selected" : ""}>No show</option></select> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>`}
+        ${(e.stat === "Q" || e.stat === "F") && e.dq ? `<div class="legs" style="color:var(--err)">${esc(dqText(e))}</div>` : ""}</td>
+      <td data-plc="${e.key}">${e.place || ""} ${(e.stat || "").trim() === "R" ? statBadge(e) : ""}</td>
+      <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}">Swimmers</button> ` : ""}<button class="ghost small" data-scr="${e.key}" data-on="${e.scr ? 0 : 1}">${e.scr ? "Un-scratch" : "Scratch"}</button>
+        <button class="ghost small danger" data-del="${e.key}" title="Delete this entry">✕</button></td></tr>`;
+  const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th>Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>${TIMERS() === 2 ? "Timers <span class=\"muted\" style=\"font-weight:400\">(1 · 2 → official)</span>" : "Timers"}</th><th>Status</th><th>Place</th><th></th></tr>`;
+  const unseeded = act.filter(e => !e.heat || !e.lane);
+  let html = `<div class="row" style="justify-content:flex-end;margin-bottom:6px;font-size:13px"><label>Timers per lane <select id="timersSel" title="How many timers work each lane at this meet"><option value="1" ${TIMERS() === 1 ? "selected" : ""}>1 timer</option><option value="2" ${TIMERS() === 2 ? "selected" : ""}>2 timers</option></select></label></div>
+    <div class="row" style="margin-bottom:4px"><h2 style="margin:0">Event ${v.no} &nbsp;${esc(v.label)}</h2><span class="pill ${eventState(v).status}">${eventState(v).label}</span><span class="muted">${act.length} entered${scr.length ? ` · ${scr.length} scratched` : ""}${v.day > 1 ? ` · day ${v.day}` : ""}</span>
+    <span class="grow"></span>${scoreBtn(v)}<button class="ghost small${MOVING ? " on" : ""}" id="moveBtn" title="Heats and lanes are locked so they can't be changed by accident">${MOVING ? "Done moving" : "Move swimmers"}</button><button class="ghost small" id="addEntryBtn">Add entry</button></div><div id="addEntry" class="hidden"></div>`;
+  for (const h of heats.filter(h => h)) {
+    const inHeat = act.filter(e => e.heat === h);
+    const hs = heatState(act.filter(e => e.heat === h));
+    const hpill = hs.cls === "done" ? `<span class="pill timed">Timed</span>` : hs.cls === "part" ? `<span class="pill prog">${hs.r} of ${hs.n} lanes</span>` : `<span class="pill none">Waiting</span>`;
+    html += `<div class="heat"><h3>Heat ${h} of ${heats.filter(x => x).length} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button></h3><div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1)).join("")}
+      ${inHeat.filter(e => !e.lane || e.lane > lanes).map(e => row(e)).join("")}</table></div>`;
+  }
+  if (unseeded.length) html += `<div class="heat"><h3>Not in a heat yet ${MOVING ? "" : '<span class="muted" style="font-weight:400;font-size:12.5px">&middot; press Move swimmers to place them</span>'}</h3><table>${head}${unseeded.filter(e => !e.heat).map(e => row(e)).join("")}</table></div>`;
+  if (scr.length) html += `<div class="heat"><h3>Scratched</h3><table>${head}${scr.map(e => row(e)).join("")}</table></div>`;
+  $("#evDetail").innerHTML = html;
+  $("#addEntryBtn").onclick = () => addEntryForm(v);
+  $("#moveBtn").onclick = () => { MOVING = !MOVING; renderEvent(); };
+}
+function scoreBtn(v) {
+  const st = eventState(v), name = (S.scoring_methods[S.scoring_default] || {}).name || "";
+  if (st.status === "scored") return `<button class="ghost small" data-score="${v.ptr}" title="Scored. Score again (e.g. after a correction)">Rescore</button> `;
+  if (st.status === "stale") return `<button class="small" data-score="${v.ptr}" style="background:var(--err);color:#fff" title="Times, DQs or scratches changed since this race was scored">Rescore event</button> `;
+  if (st.status === "timed") return `<button class="small" data-score="${v.ptr}" title="${esc(name)}">Score event</button> `;
+  return `<button class="ghost small" disabled title="Every lane needs a time, DQ or no-show first">Score event</button> `;
+}
+function addEntryForm(v) {
+  const box = $("#addEntry"); box.classList.toggle("hidden");
+  if (box.classList.contains("hidden")) return;
+  const g = v.gender;
+  const teams = Object.values(M.teams).sort((a, b) => a.abbr.localeCompare(b.abbr));
+  if (v.ind_rel === "R") {
+    box.innerHTML = `<div class="row" style="border:1px solid var(--line);border-radius:8px;padding:8px;margin:6px 0">
+      <select id="aeTeam">${teams.map(t => `<option value="${t.no}">${esc(t.abbr)} · ${esc(t.name)}</option>`).join("")}</select>
+      <label>Relay <select id="aeLtr">${"ABCDEFGH".split("").map(l => `<option>${l}</option>`).join("")}</select></label>
+      <input id="aeSeed" placeholder="seed (NT)" size="8"><label>Heat <input id="aeHeat" size="2" value="0"></label><label>Lane <input id="aeLane" size="2" value="0"></label>
+      <button class="small" id="aeGo">Add</button></div>`;
+    $("#aeGo").onclick = () => change("add_entry", {ptr: v.ptr, team: +$("#aeTeam").value, ltr: $("#aeLtr").value, seed: $("#aeSeed").value, heat: +$("#aeHeat").value, lane: +$("#aeLane").value});
+  } else {
+    const inEv = new Set(evEntries(v.ptr).map(e => e.ath));
+    const pool = Object.values(M.athletes).filter(a => !inEv.has(a.no) && (g === "X" || a.sex === g || (g === "W" && a.sex === "F"))).sort((a, b) => a.last.localeCompare(b.last));
+    box.innerHTML = `<div class="row" style="border:1px solid var(--line);border-radius:8px;padding:8px;margin:6px 0">
+      <select id="aeAth">${pool.map(a => `<option value="${a.no}">${esc(a.last)}, ${esc(a.first)} (${esc(teamAbbr(a.team))})</option>`).join("")}</select>
+      <input id="aeSeed" placeholder="seed (NT)" size="8"><label>Heat <input id="aeHeat" size="2" value="0"></label><label>Lane <input id="aeLane" size="2" value="0"></label>
+      <button class="small" id="aeGo">Add</button><span class="muted" style="font-size:12px">Not listed? Add them on the Swimmers tab first.</span></div>`;
+    $("#aeGo").onclick = () => change("add_entry", {ptr: v.ptr, ath: +$("#aeAth").value, seed: $("#aeSeed").value, heat: +$("#aeHeat").value, lane: +$("#aeLane").value});
+  }
+}
+function legsDialog(key) {
+  const e = M.entries.find(x => x.key === key), v = evOf(e.event);
+  const pool = Object.values(M.athletes).filter(a => a.team === e.team && (v.gender === "X" || a.sex === v.gender || (v.gender === "W" && a.sex === "F"))).sort((a, b) => a.last.localeCompare(b.last));
+  const opts = sel => `<option value="">— open —</option>` + pool.map(a => `<option value="${a.no}" ${a.no === sel ? "selected" : ""}>${esc(a.last)}, ${esc(a.first)}</option>`).join("");
+  const tr = document.querySelector(`[data-legs="${key}"]`).closest("tr");
+  const ex = document.getElementById("legEditor"); if (ex) ex.remove();
+  tr.insertAdjacentHTML("afterend", `<tr id="legEditor" class="edit"><td></td><td colspan="8"><div class="row">${[0, 1, 2, 3].map(i => `<label>${i + 1} <select data-leg="${i}">${opts(e.legs[i])}</select></label>`).join("")}
+    <button class="small" id="legSave">Save swimmers</button><button class="ghost small" id="legCancel">Cancel</button></div></td></tr>`);
+  $("#legCancel").onclick = () => $("#legEditor").remove();
+  $("#legSave").onclick = () => change("legs", {key, legs: [...document.querySelectorAll("[data-leg]")].map(s => s.value ? +s.value : null)});
+}
+
+// ---------------- swimmers ----------------
+function renderSwimmers() {
+  const sel = $("#swTeam");
+  if (sel.options.length <= 1) Object.values(M.teams).sort((a, b) => a.abbr.localeCompare(b.abbr)).forEach(t => sel.insertAdjacentHTML("beforeend", `<option value="${t.no}">${esc(t.abbr)}</option>`));
+  const q = $("#swFind").value.trim().toLowerCase(), tf = +sel.value || 0;
+  const list = Object.values(M.athletes).filter(a => (!tf || a.team === tf) && (!q || `${a.first} ${a.last} ${a.pref}`.toLowerCase().includes(q))).sort((a, b) => a.last.localeCompare(b.last) || a.first.localeCompare(b.first));
+  const evs = no => M.entries.filter(e => (e.kind === "I" && e.ath === no) || (e.kind === "R" && e.legs.includes(no)));
+  $("#swList").innerHTML = `<table><tr><th>Swimmer</th><th>Team</th><th>Sex</th><th>Age</th><th>Yr</th><th>Events</th><th></th></tr>` + list.map(a => {
+    const es = evs(a.no), live = es.filter(e => !e.scr);
+    if (EDIT_SW === a.no) return `<tr class="edit"><td colspan="7"><div class="grid2">
+      <label>First<input id="eFirst" value="${esc(a.first)}"></label><label>Last<input id="eLast" value="${esc(a.last)}"></label><label>Preferred<input id="ePref" value="${esc(a.pref)}"></label>
+      <label>Team<select id="eTeam">${Object.values(M.teams).map(t => `<option value="${t.no}" ${t.no === a.team ? "selected" : ""}>${esc(t.abbr)}</option>`).join("")}</select></label>
+      <label>Sex<select id="eSex"><option value="F" ${a.sex === "F" ? "selected" : ""}>F</option><option value="M" ${a.sex === "M" ? "selected" : ""}>M</option></select></label>
+      <label>Age<input id="eAge" value="${a.age || ""}" size="3"></label><label>Year<select id="eYr">${["", "FR", "SO", "JR", "SR"].map(y => `<option ${y === a.yr ? "selected" : ""}>${y}</option>`).join("")}</select></label></div>
+      <div class="row" style="margin-top:6px"><button class="small" id="eSave">Save</button><button class="ghost small" id="eCancel">Cancel</button></div></td></tr>`;
+    return `<tr><td><b>${esc(a.last)}, ${esc(a.first)}</b>${a.pref ? ` <span class="muted">(${esc(a.pref)})</span>` : ""}</td><td>${esc(teamAbbr(a.team))}</td><td>${esc(a.sex)}</td><td>${a.age || ""}</td><td>${esc(a.yr)}</td>
+      <td>${es.map(e => `<span class="chip ${e.scr ? "x" : ""}">#${evOf(e.event)?.no}${e.kind === "R" ? " relay" : ""}</span>`).join("") || `<span class="muted">none</span>`}</td>
+      <td style="white-space:nowrap"><button class="ghost small" data-editsw="${a.no}">Edit</button>
+        ${live.length ? `<button class="ghost small danger" data-scrsw="${a.no}" data-on="1" title="Scratch from every event and take off relays">Scratch from meet</button>`
+          : es.length ? `<button class="ghost small" data-scrsw="${a.no}" data-on="0">Un-scratch</button>` : ""}</td></tr>`;
+  }).join("") + `</table>${list.length ? "" : `<div class="muted">No swimmers match.</div>`}`;
+  if (EDIT_SW && $("#eSave")) {
+    $("#eCancel").onclick = () => { EDIT_SW = null; renderSwimmers(); };
+    $("#eSave").onclick = () => {
+      const a = M.athletes[EDIT_SW], f = {first: $("#eFirst").value.trim(), last: $("#eLast").value.trim(), pref: $("#ePref").value.trim(), team: +$("#eTeam").value, sex: $("#eSex").value, age: +$("#eAge").value || 0, yr: $("#eYr").value};
+      const ch = Object.fromEntries(Object.entries(f).filter(([k, v]) => String(v) !== String(a[k] ?? "")));
+      EDIT_SW = null;
+      if (Object.keys(ch).length) change("athlete", {ath: a.no, fields: ch}); else renderSwimmers();
+    };
+  }
+}
+$("#swFind").oninput = renderSwimmers; $("#swTeam").onchange = renderSwimmers;
+$("#addSwBtn").onclick = () => {
+  const box = $("#addSw"); box.classList.toggle("hidden");
+  box.innerHTML = `<div class="grid2"><label>First<input id="nFirst"></label><label>Last<input id="nLast"></label>
+    <label>Team<select id="nTeam">${Object.values(M.teams).map(t => `<option value="${t.no}">${esc(t.abbr)}</option>`).join("")}</select></label>
+    <label>Sex<select id="nSex"><option>F</option><option>M</option></select></label><label>Age<input id="nAge" size="3"></label>
+    <label>Year<select id="nYr"><option></option><option>FR</option><option>SO</option><option>JR</option><option>SR</option></select></label></div>
+    <div class="row" style="margin-top:6px"><button class="small" id="nGo">Add swimmer</button></div>`;
+  $("#nGo").onclick = () => {
+    if (!$("#nFirst").value.trim() || !$("#nLast").value.trim()) return toast("First and last name, please");
+    change("add_athlete", {fields: {first: $("#nFirst").value.trim(), last: $("#nLast").value.trim(), team: +$("#nTeam").value, sex: $("#nSex").value, age: +$("#nAge").value || 0, yr: $("#nYr").value}});
+    box.classList.add("hidden");
+  };
+};
+
+// ---------------- teams / changes ----------------
+function renderTeams() {
+  $("#teamList").innerHTML = `<table><tr><th>Abbr</th><th>Name</th><th>Short name</th><th>Swimmers</th></tr>` + Object.values(M.teams).sort((a, b) => a.abbr.localeCompare(b.abbr)).map(t =>
+    `<tr><td><input data-team="${t.no}" data-f="abbr" value="${esc(t.abbr)}" size="6"></td><td><input data-team="${t.no}" data-f="name" value="${esc(t.name)}" size="30"></td>
+     <td><input data-team="${t.no}" data-f="short" value="${esc(t.short)}" size="16"></td><td>${Object.values(M.athletes).filter(a => a.team === t.no).length}</td></tr>`).join("") + `</table>`;
+}
+function renderMeet() {
+  const mt = M.meet;
+  const inp = (k, label, val, attrs = "") => `<label class="mf"><span>${label}</span><input data-meet="${k}" value="${esc(val ?? "")}" ${attrs}></label>`;
+  $("#meetForm").innerHTML = `
+    <div class="muted" style="font-size:13px;margin-bottom:10px">This is the meet header stored in the Meet Manager database. It prints on heat sheets and results and goes into every export. Each field saves when you leave it, and Undo puts it back.</div>
+    <h3>Meet</h3>
+    <div class="mgrid">${inp("name", "Meet name", mt.name, 'maxlength="45" style="width:100%"')}${inp("location", "Location (pool)", mt.location, 'maxlength="45" style="width:100%"')}</div>
+    <div class="mgrid">${inp("header1", "Header line 1", mt.header1, 'maxlength="75" style="width:100%"')}${inp("header2", "Header line 2", mt.header2, 'maxlength="75" style="width:100%"')}</div>
+    <h3>Dates &amp; pool</h3>
+    <div class="mgrid4">${inp("start", "Start date", mt.start, 'type="date"')}${inp("end", "End date", mt.end || mt.start, 'type="date"')}
+      ${inp("calc_date", "Age-up date", mt.calc_date, 'type="date" title="Date ages are calculated on"')}
+      <label class="mf"><span>Course</span><select data-meet="course">${[[3, "Short course yards (SCY)"], [2, "Short course meters (SCM)"], [1, "Long course meters (LCM)"]].map(([v, l]) => `<option value="${v}" ${+mt.course === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      ${inp("lanes", "Lanes", mt.lanes, 'type="number" min="1" max="10" style="width:70px"')}${inp("altitude", "Altitude (ft)", mt.altitude || "", 'type="number" min="0" max="15000" style="width:90px"')}</div>
+    <h3>Address</h3>
+    <div class="mgrid">${inp("addr1", "Address", mt.addr1, 'maxlength="30" style="width:100%"')}${inp("addr2", "Address line 2", mt.addr2, 'maxlength="30" style="width:100%"')}</div>
+    <div class="mgrid4">${inp("city", "City", mt.city, 'maxlength="30"')}${inp("state", "State", mt.state, 'maxlength="3" size="4"')}${inp("zip", "Zip", mt.zip, 'maxlength="10" size="10"')}${inp("country", "Country", mt.country, 'maxlength="3" size="4"')}</div>`;
+}
+function renderChanges() {
+  $("#logList").innerHTML = S.log.length ? `<table>${S.log.map(l => `<tr><td style="white-space:nowrap" class="muted">${esc(l.when)}</td><td>${esc(l.msg)}</td></tr>`).join("")}</table>` : `<div class="muted">No changes yet.</div>`;
+  $("#verList").innerHTML = S.versions.length ? `<table>${S.versions.map(v => `<tr><td class="muted" style="white-space:nowrap">${esc(v.when)}</td><td>${esc(v.label)}</td><td><button class="ghost small" data-ver="${esc(v.id)}">Restore</button></td></tr>`).join("")}</table>` : `<div class="muted">None yet.</div>`;
+}
+
+
+// ---------------- timing console (via the bridge on the timing laptop) ----------------
+let TM = {connected: false};
+const tmUrl = () => { try { return localStorage.getItem("bridge") || "http://localhost:8766"; } catch (e) { return "http://localhost:8766"; } };
+async function bridge(path, body) {
+  const r = await fetch(tmUrl() + path, body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `bridge said ${r.status}`);
+  return d;
+}
+function tmShow() {
+  $("#tmState").textContent = TM.connected ? `${TM.sim ? "simulator" : TM.port} · ${TM.identity || "connected"}` : (TM.err ? "bridge not running" : "not connected");
+  $("#tmState").className = "badge" + (TM.connected ? "" : "");
+  $("#tmState").style.background = TM.connected ? "var(--ok-bg)" : "";
+  $("#tmState").style.color = TM.connected ? "var(--ok)" : "";
+  $("#tmDisc").classList.toggle("hidden", !TM.connected);
+  $("#tmPractice").classList.toggle("hidden", !TM.sim);
+  if (TM.ports) { const cur = $("#tmPort").value; $("#tmPort").innerHTML = `<option value="">COM port…</option>` + TM.ports.map(p => `<option value="${esc(p.port)}">${esc(p.port)} ${esc(p.desc || "")}</option>`).join(""); $("#tmPort").value = cur || TM.port || ""; }
+}
+async function tmStatus() {
+  try { TM = await bridge("/status"); TM.err = null; } catch (e) { TM = {connected: false, err: e.message}; }
+  tmShow();
+  if (!TM.err && /bridge isn't running|Can't reach the bridge/.test($("#tmMsg").textContent)) $("#tmMsg").textContent = "Bridge found. Pick the COM port and Connect, or use Simulator.";
+  if (TM.err) $("#tmMsg").innerHTML = `The bridge isn't running on this computer. <a href="/timing/bridge.zip">Download it</a>, unzip, and double-click <b>start-simulator.bat</b> to practice (or <b>start-bridge.bat</b> with the console plugged in) &mdash; it needs Python from python.org. Then <a href="#" id="tmRetry">check again</a>.`;
+  if ($("#tmRetry")) $("#tmRetry").onclick = e => { e.preventDefault(); tmStatus(); };
+}
+const tmMsg = (t, bad) => { $("#tmMsg").innerHTML = bad ? `<span style="color:var(--err)">${esc(t)}</span>` : esc(t); };
+$("#tmUrl").value = tmUrl();
+$("#tmUrl").onchange = e => { try { localStorage.setItem("bridge", e.target.value.trim().replace(/\/$/, "")); } catch (x) {} tmStatus(); };
+$("#tmToggle").onclick = () => { const b = $("#tmBody"); b.classList.toggle("hidden"); $("#tmToggle").textContent = b.classList.contains("hidden") ? "Show" : "Hide"; if (!b.classList.contains("hidden")) tmStatus(); };
+$("#tmConnect").onclick = async () => {
+  if (!$("#tmPort").value) return tmMsg(TM.sim ? "You're on the simulator — no COM port needed. (Connect is for a real console plugged into this computer.)" : (TM.ports && !TM.ports.length ? "No COM ports found on this computer. Plug in the USB-serial adapter (and install its driver), then click Connect again." : "Pick the COM port of the USB-serial adapter first."), !TM.sim);
+  tmMsg("Connecting… (trying the usual serial settings)");
+  try { TM = await bridge("/connect", {port: $("#tmPort").value}); tmShow(); tmMsg(`Connected: ${TM.identity} · ${JSON.stringify(TM.settings)}`); } catch (e) { tmMsg(e.message, true); }
+};
+$("#tmSim").onclick = async () => {
+  try { TM = await bridge("/connect", {sim: true, lanes: (M && M.meet && M.meet.lanes) || 8}); tmShow(); tmMsg("Connected to the simulator."); }
+  catch (e) { tmMsg(e instanceof TypeError ? "Can't reach the bridge at " + tmUrl() + " — is start-bridge.bat (or start-simulator.bat) running on this computer?" : e.message, true); }
+};
+// keep checking for the bridge until it's connected, so starting it after the page loads just works
+setInterval(() => { if (!TM.connected && !document.hidden) tmStatus(); }, 4000);
+$("#tmDisc").onclick = async () => { try { TM = await bridge("/disconnect", {}); tmShow(); tmMsg("Disconnected."); } catch (e) { tmMsg(e.message, true); } };
+$("#tmLogBtn").onclick = async e => { e.preventDefault(); const p = $("#tmLog"); p.classList.toggle("hidden"); if (!p.classList.contains("hidden")) { try { p.textContent = (await bridge("/log?n=150")).lines.join("\n") || "(empty)"; p.scrollTop = 1e6; } catch (x) { p.textContent = x.message; } } };
+$("#tmSend").onclick = async () => {
+  const strokeName = v => v.ind_rel === "R" ? (v.stroke === "E" ? "Medley Relay" : "Free Relay") : ({A: "Free", B: "Back", C: "Breast", D: "Fly", E: "IM"}[v.stroke] || v.stroke);
+  const events = M.events.map(v => ({no: v.no, distance: v.dist, gender: v.gender === "W" ? "F" : v.gender, stroke: strokeName(v)}));
+  const slot = +$("#tmSlot").value;
+  if (!confirm(`Write ${events.length} events into event sequence slot ${slot} on the console? Whatever is in that slot is replaced. (Console must be in RESET with Allow Remote Setup on.)`)) return;
+  tmMsg("Sending events…");
+  try { const r = await bridge("/download", {slot, events}); tmMsg(`Sent ${r.events} events to slot ${r.slot}; it's now the active sequence. Advance heats on the console as usual.`); } catch (e) { tmMsg(e.message, true); }
+};
+async function loadPractice(v) {
+  const act = evEntries(v.ptr).filter(e => !e.scr && e.heat && e.lane);
+  const seeds = act.map(e => e.seed).filter(x => x).sort((a, b) => a - b);
+  const slow = seeds.length ? seeds[seeds.length - 1] * 1.06 : v.dist * (v.ind_rel === "R" ? 0.62 : 0.68);   // NT ~ a bit slower than the slowest seed
+  const races = [...new Set(act.map(e => e.heat))].map(h => ({event: v.no, heat: h, results: Object.fromEntries(act.filter(e => e.heat === h).map(e => [e.lane, +((e.seed || slow) * (0.97 + Math.random() * 0.06)).toFixed(2)]))}));
+  await bridge("/sim/load", {races});
+  return races.length;
+}
+$("#tmPractice").onclick = async () => {
+  const v = evOf(EV);
+  try { const n = await loadPractice(v); tmMsg(`Loaded practice times for ${n} heat(s) of event ${v.no} into the simulator.`); } catch (e) { tmMsg(e.message, true); }
+};
+async function getTimes(h) {
+  const v = evOf(EV), box = document.getElementById("tp-" + h);
+  box.innerHTML = `<div class="muted" style="font-size:12.5px">Asking the console for event ${v.no} heat ${h}…</div>`;
+  let r;
+  const noRace = e => /error code 3\b/.test(e.message);
+  const raceNo = (S.races || {})[`${v.ptr}:${h}`];
+  // a real console is asked by race number; the simulator files practice races by event and heat
+  try { r = await bridge(raceNo && !TM.sim ? `/race?race=${raceNo}` : `/race?event=${v.no}&heat=${h}`); }
+  catch (e) {
+    if (noRace(e) && TM.sim) {
+      try { await loadPractice(v); r = await bridge(`/race?event=${v.no}&heat=${h}`); tmMsg(`Simulator: made up practice times for event ${v.no}.`); }
+      catch (e2) { e = e2; }
+    }
+    if (!r) {
+      const why = noRace(e) ? `The console has no stored race for event ${v.no} heat ${h}. On the console, make sure the race was stored (Store/Print) under this event and heat, then try again.`
+        : TM.connected ? esc(e.message) : `Not connected &mdash; connect to the console (or the simulator) in the Timing console panel above.`;
+      box.innerHTML = `<div class="issue">Couldn't get times: ${why}</div>`;
+      return;
+    }
+  }
+  const inHeat = evEntries(v.ptr).filter(e => !e.scr && e.heat === h);
+  const rows = r.lanes.map(l => { const e = inHeat.find(x => x.lane === l.lane); return {l, e}; }).filter(x => x.e || x.l.final);
+  const pl = p => p === -1 ? `<span class="badge dq">DQ</span>` : p ? p : "";
+  const parseT = parseTime;
+  box.innerHTML = `<div style="border:1px solid var(--accent);border-radius:8px;padding:8px;margin:4px 0 8px">
+    ${(r.event && r.event !== v.no) || (r.heat && r.heat !== h) ? `<div class="issue" style="margin-bottom:6px">Console race ${r.race_number} is <b>event ${r.event} heat ${r.heat}</b>, not event ${v.no} heat ${h}. Check the race number before applying.</div>` : ""}
+    <div class="muted" style="font-size:12.5px;margin-bottom:4px">Console race ${r.race_number} · ${esc(r.when)} · ${r.lanes_in_pool} lanes &middot; rows turn amber when the times differ by more than ${TOL.toFixed(2)} (<a href="/#setup" target="_blank">change</a>)</div>
+    <table><tr><th>Lane</th><th>Swimmer</th><th>Now</th><th>Pad</th><th>Backup</th><th>Timers</th><th>Use</th><th>Place</th><th>Splits</th></tr>${rows.map(({l, e}) => `<tr id="tl-${h}-${l.lane}">
+      <td class="ln">${l.lane}</td><td>${e ? nameCell(e) : `<span style="color:var(--err)">no entry in this lane</span>`}</td><td>${e ? esc(fmt(e.time)) : ""}</td>
+      <td><b>${esc(fmt(l.final)) || '<span class="muted">none</span>'}</b></td><td>${esc(fmt(l.backup)) || '<span class="muted">none</span>'}</td>
+      <td><input class="t" data-watch="${h}-${l.lane}" placeholder="time" value="${e && e.watch ? esc(fmt(e.watch)) : ""}" title="Timers time - only needed when the pad or buttons had a problem. Digits are fine: 21753 = 2:17.53"></td>
+      <td><select data-use="${h}-${l.lane}"><option value="pad">Pad</option><option value="backup">Backup</option><option value="watch">Timers</option></select></td>
+      <td>${pl(l.place)}</td><td class="legs">${l.splits.map(fmt).join(" · ")}</td></tr>`).join("")}</table>
+    <div id="tpNote-${h}" class="muted" style="font-size:12.5px;margin-top:4px"></div>
+    <div class="row" style="margin-top:6px"><button class="small" id="tpApply-${h}">Apply to meet</button><button class="ghost small" id="tpCancel-${h}">Cancel</button>
+      <label class="muted" style="font-size:12.5px"><input type="checkbox" id="tpKeep-${h}"> keep results already entered</label></div></div>`;
+  const lane = n => r.lanes.find(x => x.lane === n);
+  // show the chosen time (and console place) in the heat table below right away, marked as not saved yet
+  const PEND = "Chosen in Get times - press Apply to meet to save";
+  const preview = (e, t, place) => {
+    const mark = el => { el.style.outline = "2px dashed var(--accent)"; el.style.outlineOffset = "1px"; el.title = PEND; };
+    const inp = document.querySelector(`#evDetail [data-time="${e.key}"]`);
+    if (inp) { inp.value = t ? fmt(t) : ""; mark(inp); }
+    const off = document.querySelector(`#evDetail [data-off="${e.key}"]`);
+    if (off) { off.textContent = t ? fmt(t) : ""; mark(off); }
+    const pc = document.querySelector(`#evDetail [data-plc="${e.key}"]`);
+    if (pc && place) { pc.textContent = place === -1 ? "DQ" : place; mark(pc); }
+  };
+  const check = () => {
+    let flagged = 0, missing = 0;
+    rows.forEach(({l, e}) => {
+      const tr = document.getElementById(`tl-${h}-${l.lane}`), w = parseT(box.querySelector(`[data-watch="${h}-${l.lane}"]`).value);
+      const sel = box.querySelector(`[data-use="${h}-${l.lane}"]`);
+      const avail = {pad: l.final, backup: l.backup, watch: isNaN(w) ? 0 : w};
+      [...sel.options].forEach(o => { o.disabled = !avail[o.value]; o.textContent = {pad: "Pad", backup: "Backup", watch: "Timers"}[o.value] + (avail[o.value] ? ` ${fmt(avail[o.value])}` : ""); });
+      if (!sel.dataset.touched) sel.value = avail.pad ? "pad" : avail.backup ? "backup" : avail.watch ? "watch" : "pad";
+      if (!avail[sel.value]) sel.value = avail.pad ? "pad" : avail.backup ? "backup" : avail.watch ? "watch" : "pad";
+      const ts = Object.values(avail).filter(x => x), spread = ts.length > 1 ? Math.max(...ts) - Math.min(...ts) : 0;
+      const bad = spread > TOL + 0.0001 || isNaN(w);
+      tr.style.background = bad ? "var(--warn-bg)" : "";
+      tr.title = isNaN(w) ? "Timers time isn't a time" : bad ? `Times differ by ${spread.toFixed(2)}` : "";
+      if (bad) flagged++;
+      if (e && !ts.length) missing++;
+      if (e) preview(e, avail[sel.value] || 0, l.place);
+    });
+    document.getElementById(`tpNote-${h}`).innerHTML = (flagged ? `<span style="color:var(--warn)"><b>${flagged} lane(s) disagree by more than ${TOL.toFixed(2)}</b> &mdash; check them and choose which time to use.</span> ` : "") +
+      (missing ? `${missing} entered lane(s) have no time and will be marked no-show unless you add a timers time.` : "");
+  };
+  box.addEventListener("input", ev => { if (ev.target.dataset.watch) check(); });
+  box.addEventListener("change", ev => {
+    if (ev.target.dataset.use) { ev.target.dataset.touched = 1; check(); }
+    if (ev.target.dataset.watch) {                 // show how the digits were read: 21753 -> 2:17.53
+      const w = parseT(ev.target.value);
+      if (ev.target.value.trim() && !isNaN(w)) ev.target.value = fmt(w);
+      check();
+    }
+  });
+  check();
+  document.getElementById(`tpCancel-${h}`).onclick = () => { box.innerHTML = ""; show(); };   // redraw drops the previews
+  document.getElementById(`tpApply-${h}`).onclick = () => {
+    const lanes = r.lanes.map(l => {
+      const w = parseT((box.querySelector(`[data-watch="${h}-${l.lane}"]`) || {}).value);
+      const use = (box.querySelector(`[data-use="${h}-${l.lane}"]`) || {}).value || "pad";
+      return {lane: l.lane, pad: l.final, backup: l.backup, watch: isNaN(w) ? 0 : w, use, place: l.place, splits: l.splits};
+    });
+    if (lanes.some(l => isNaN(l.watch))) return toast("Fix the timers time that isn't a time");
+    change("heat_results", {ptr: v.ptr, heat: h, overwrite: !document.getElementById(`tpKeep-${h}`).checked, lanes});
+  };
+}
+
+
+// ---------------- disqualifications ----------------
+let DQ = null;
+fetch("/api/dqcodes").then(r => r.json()).then(d => { DQ = d; DQ.by = Object.fromEntries(d.codes.map(c => [c.code, c])); }).catch(() => {});
+const STROKE_GROUP = {A: "free", B: "back", C: "breast", D: "fly", E: "IM"};
+function dqDesc(code, e) {
+  const c = DQ && DQ.by[code]; if (!c) return "";
+  const v = evOf(e.event);
+  return c.desc + ((e.kind === "R" || v.stroke === "E") && ["fly", "back", "breast", "free"].includes(c.group) ? " - " + c.group : "");
+}
+const dqText = e => [e.dq, e.dq2].filter(Boolean).map(c => `${c} ${dqDesc(c, e)}`).join(" / ");
+function dqGroupsFor(e) {
+  const v = evOf(e.event), g = STROKE_GROUP[v.stroke];
+  if (e.kind === "R") return v.stroke === "E" ? ["Relay", "back", "breast", "fly", "free", "Misc"] : ["Relay", "free", "Misc"];
+  if (g === "IM") return ["IM", "fly", "back", "breast", "free", "Misc"];
+  return [g, "Misc", ...["fly", "back", "breast", "free", "IM", "Relay"].filter(x => x !== g)];
+}
+function dqEditor(key) {
+  if (!DQ) return toast("DQ codes are still loading - try again");
+  const e = M.entries.find(x => x.key === key);
+  const tr = document.querySelector(`[data-dqedit="${key}"]`).closest("tr");
+  const ex = document.getElementById("dqEditor"); if (ex) ex.remove();
+  const groups = dqGroupsFor(e);
+  const opts = (sel, blank) => (blank ? `<option value="">${blank}</option>` : "") + groups.map(g => `<optgroup label="${esc(DQ.groups[g] || g)}">` +
+    DQ.codes.filter(c => c.group === g).map(c => `<option value="${c.code}" ${c.code === sel ? "selected" : ""}>${c.code} · ${esc(c.desc)}</option>`).join("") + `</optgroup>`).join("");
+  tr.insertAdjacentHTML("afterend", `<tr id="dqEditor" class="edit"><td></td><td colspan="8">
+    <div class="row"><b>Disqualify ${esc(e.kind === "I" ? athName(e.ath) : (M.teams[e.team]?.abbr || "") + ' "' + e.ltr + '" relay')}</b>
+      <input id="dqFind" placeholder="Search codes (e.g. kick, 15 m, false start)" size="30"></div>
+    <div class="row" style="margin-top:6px"><select id="dqCode" size="8" style="min-width:360px">${opts(e.dq)}</select>
+      <div>${e.kind === "R" ? `<label class="muted" style="font-size:12.5px;display:block;margin-bottom:6px">Second infraction (optional)<br><select id="dqCode2">${opts(e.dq2, "— none —")}</select></label>` : ""}
+        <label style="font-size:13px;display:block"><input type="checkbox" id="dqKeep" ${e.time ? "checked" : "disabled"}> Keep the time on record${e.time ? ` (${fmt(e.time)})` : " (no time entered)"}</label>
+        <div class="muted" style="font-size:12px;max-width:280px;margin-top:4px">Normal DQs keep the swimmer's time; it just doesn't place or score. A declared false start or did-not-finish has no time.</div>
+        <div class="row" style="margin-top:8px"><button class="small" id="dqSave">Disqualify</button><button class="ghost small" id="dqCancel">Cancel</button></div></div></div>
+    <div id="dqDesc" class="muted" style="font-size:12.5px;margin-top:4px"></div></td></tr>`);
+  const sel = $("#dqCode");
+  const sync = () => { const c = sel.value; $("#dqDesc").textContent = c ? `${c}: ${dqDesc(c, e)}` : "Pick the infraction."; if (DQ.no_time.includes(c)) $("#dqKeep").checked = false; };
+  sel.onchange = sync; sync();
+  $("#dqFind").oninput = () => {
+    const q = $("#dqFind").value.trim().toLowerCase();
+    [...sel.options].forEach(o => o.hidden = q && !o.textContent.toLowerCase().includes(q));
+    const first = [...sel.options].find(o => !o.hidden); if (first && (!sel.value || sel.selectedOptions[0]?.hidden)) { sel.value = first.value; sync(); }
+  };
+  $("#dqFind").focus();
+  $("#dqCancel").onclick = () => $("#dqEditor").remove();
+  $("#dqSave").onclick = () => {
+    if (!sel.value) return toast("Pick a DQ code");
+    change("dq", {key, code: sel.value, code2: $("#dqCode2") ? $("#dqCode2").value : "", keep_time: $("#dqKeep").checked});
+  };
+}
+
+// ---------------- scoring ----------------
+$("#scoreBtn").onclick = () => {
+  const sel = $("#scMethod");
+  sel.innerHTML = Object.entries(S.scoring_methods).map(([k, c]) => `<option value="${k}">${esc(c.name)}</option>`).join("");
+  sel.value = S.scoring_default;
+  const fill = () => { const c = S.scoring_methods[sel.value]; const prev = (S.scoring || {}).method === sel.value ? S.scoring : null;
+    $("#scInd").value = prev ? prev.ind_max : c.ind_max; $("#scRel").value = prev ? prev.rel_max : c.rel_max; };
+  sel.onchange = fill; fill();
+  const states = M.events.map(eventState), ready = states.filter(x => x.status === "timed" || x.status === "stale").length;
+  const n = ((S.scoring || {}).events || []).length;
+  $("#scMsg").textContent = `${n} race(s) scored so far · ${ready} finished race(s) waiting to be scored.` + (n ? " Changing the settings rescores the races already scored." : "");
+  $("#scoreDlg").classList.remove("hidden");
+};
+$("#scCancel").onclick = () => $("#scoreDlg").classList.add("hidden");
+async function scoreReq(body, after) {
+  try { S = await api(`${API}/score`, J(body)); toast(S.log[0]?.msg || "Scored"); show(); if (after) after(); return true; }
+  catch (e) { toast(e.message); return false; }
+}
+const scSettings = () => ({method: $("#scMethod").value, ind_max: +$("#scInd").value || 0, rel_max: +$("#scRel").value || 0});
+$("#scSave").onclick = () => scoreReq({...scSettings(), settings_only: true}, () => $("#scoreDlg").classList.add("hidden"));
+$("#scAll").onclick = () => scoreReq({...scSettings(), all: true}, () => { $("#scoreDlg").classList.add("hidden"); TAB = "scores"; render(); });
+function scoreStrip() {
+  const sc = S.scoring || {};
+  if (!sc.events || !sc.events.length) return "";
+  const tn = no => (M.teams[no] || {}).abbr || "?";
+  let txt;
+  if (sc.pairs && sc.pairs.length) txt = sc.pairs.map(p => `${tn(p.a)} ${p.a_pts.F + p.a_pts.M} – ${p.b_pts.F + p.b_pts.M} ${tn(p.b)}`).join(" &nbsp;·&nbsp; ");
+  else txt = Object.entries(sc.teams || {}).sort((a, b) => b[1].total - a[1].total).map(([t, v]) => `<b>${esc(tn(+t))}</b> ${v.total}`).join(" &nbsp;·&nbsp; ");
+  return `<a href="#" data-tab="scores" style="text-decoration:none;color:inherit"><div class="okbox" style="margin-bottom:10px;font-size:13.5px">Team scores after ${sc.events.length} race(s): ${txt}</div></a>`;
+}
+function renderScores() {
+  const sc = S.scoring || {};
+  if (!sc.when) { $("#scoreView").innerHTML = `<div class="muted">No races scored yet. When a race's times and DQs are final, press <b>Score event</b> on it (or <b>Scoring</b> &rarr; Score all finished races).</div>`; return; }
+  const states = M.events.map(eventState), stale = states.filter(x => x.status === "stale").length;
+  const tn = no => M.teams[no] || {abbr: "?", name: "?"};
+  let html = `<div class="row" style="margin-bottom:6px"><h2 style="margin:0">Team scores</h2><span class="muted">${esc(sc.method_name)} · ${sc.events.length} of ${M.events.length} race(s) scored · last ${esc(sc.when)}</span></div>`;
+  if (stale) html += `<div class="issue">${stale} race(s) changed since they were scored (times, DQs or scratches) &mdash; press <b>Rescore event</b> on them.</div>`;
+  if (sc.skipped && sc.skipped.length) html += `<div class="muted" style="font-size:13px;margin-bottom:6px">Not scored (not fully timed): ${sc.skipped.map(esc).join(", ")}</div>`;
+  if (sc.pairs && sc.pairs.length) {
+    html += `<table style="max-width:640px"><tr><th>Dual</th><th>Girls</th><th>Boys</th><th>Combined</th></tr>` + sc.pairs.map(p => {
+      const a = tn(p.a), b = tn(p.b), r = (x, y) => `${x} – ${y}`;
+      const ac = p.a_pts.F + p.a_pts.M, bc = p.b_pts.F + p.b_pts.M;
+      return `<tr><td><b>${esc(a.abbr)}</b> vs <b>${esc(b.abbr)}</b></td><td>${r(p.a_pts.F, p.b_pts.F)}</td><td>${r(p.a_pts.M, p.b_pts.M)}</td><td><b>${r(ac, bc)}</b> ${ac === bc ? "tie" : esc((ac > bc ? a : b).abbr) + " wins"}</td></tr>`;
+    }).join("") + `</table>`;
+  } else {
+    const rows = Object.entries(sc.teams || {}).map(([t, v]) => ({t: +t, ...v}));
+    const block = (key, title) => { const r = rows.filter(x => x[key]).sort((a, b) => b[key] - a[key]);
+      return `<div><h3>${title}</h3>${r.length ? `<table><tr><th></th><th>Team</th><th style="text-align:right">Points</th></tr>${r.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(tn(x.t).name)} <span class="muted">${esc(tn(x.t).abbr)}</span></td><td style="text-align:right"><b>${x[key]}</b></td></tr>`).join("")}</table>` : `<div class="muted">—</div>`}</div>`; };
+    html += `<div class="grid2" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${block("F", "Girls")}${block("M", "Boys")}${block("total", "Combined")}</div>`;
+    // per-event breakdown
+    const teams = rows.map(x => x.t).sort((a, b) => tn(a).abbr.localeCompare(tn(b).abbr));
+    html += `<h3 style="margin-top:14px">By event</h3><div class="scroll"><table style="font-size:13px"><tr><th>Event</th>${teams.map(t => `<th style="text-align:right">${esc(tn(t).abbr)}</th>`).join("")}</tr>` +
+      M.events.filter(v => sc.events.includes(v.ptr)).map(v => `<tr><td>#${v.no} ${esc(v.label)}</td>${teams.map(t => { const p = evEntries(v.ptr).filter(e => e.team === t).reduce((a, e) => a + (e.points || 0), 0); return `<td style="text-align:right">${p ? Math.round(p * 100) / 100 : ""}</td>`; }).join("")}</tr>`).join("") + `</table></div>`;
+  }
+  $("#scoreView").innerHTML = html;
+}
+// ---------------- events wiring ----------------
+document.addEventListener("click", async ev => {
+  const d = ev.target.dataset || {};
+  if (ev.target.closest("#evlist") && ev.target.closest("button")) { EV = +ev.target.closest("button").dataset.ev; MOVING = false; renderEvents(); window.scrollTo({top: 0}); return; }
+  if (d.tab || (ev.target.closest("[data-tab]") && ev.target.closest("#problems"))) { ev.preventDefault(); TAB = d.tab || ev.target.closest("[data-tab]").dataset.tab; render(); return; }
+  if (d.scr) {
+    const e = M.entries.find(x => x.key === d.scr), btn = ev.target.closest("button");
+    if (d.on === "1" && !armed(btn, `Scratch ${e.kind === "R" ? "relay" : (M.athletes[e.ath] || {}).first || ""}?`)) return;   // two clicks to scratch
+    change("scratch", {key: d.scr, on: d.on === "1"}); return;
+  }
+  if (d.del) { const e = M.entries.find(x => x.key === d.del); if (confirm(`Delete this entry completely? (Scratch keeps it on record.)`)) change("delete", {key: d.del}); return; }
+  if (d.legs) { legsDialog(d.legs); return; }
+  if (d.gettimes) { getTimes(+d.gettimes); return; }
+  if (d.raceclear) { ev.preventDefault(); try { S = await api(`${API}/race`, J({ptr: EV, heat: +d.raceclear, race: null})); toast(S.log[0]?.msg || "Saved"); show(); } catch (x) { toast(x.message); } return; }
+  if (d.dqedit) { dqEditor(d.dqedit); return; }
+  if (d.score) { ev.preventDefault(); scoreReq({events: [+d.score]}); return; }
+  if (d.undq) { change("undq", {key: d.undq}); return; }
+  if (d.editsw) { EDIT_SW = +d.editsw; renderSwimmers(); return; }
+  if (d.scrsw) {
+    const a = M.athletes[d.scrsw];
+    if (d.on === "1" && !confirm(`Scratch ${a.first} ${a.last} from every event and take them off their relays?`)) return;
+    change("scratch_athlete", {ath: +d.scrsw, on: d.on === "1"}); return;
+  }
+  if (d.ver) { if (confirm("Go back to this version? (The current database is kept as a version too.)")) { S = await api(`${API}/undo`, J({id: d.ver})); toast(S.log[0]?.msg || "Restored"); show(); } return; }
+  if (d.x) {
+    $("#exportPop").classList.add("hidden");
+    if (d.x === "backup") location = `${API}/backup`;
+    else if (d.x === "html") window.open(`${API}/export/html`, "_blank");
+    else location = `${API}/export/${d.x}`;
+    if (d.x === "backup") setTimeout(load, 1500);
+    return;
+  }
+  if (ev.target.id === "exportBtn") { $("#exportPop").classList.toggle("hidden"); $("#printPop").classList.add("hidden"); return; }
+  if (ev.target.id === "printBtn") { $("#printPop").classList.toggle("hidden"); $("#exportPop").classList.add("hidden"); return; }
+  if (d.pr || d.pdf) {
+    const kind = d.pr || d.pdf, lane = kind === "timer" && $("#prLane").value ? `?lane=${$("#prLane").value}` : "";
+    const url = `${API}/report/${kind}.pdf${lane}`;
+    $("#printPop").classList.add("hidden");
+    if (d.pdf) { window.open(url, "_blank"); return; }
+    printPdf(url);
+    return;
+  }
+  if (!ev.target.closest(".menu")) { $("#exportPop").classList.add("hidden"); $("#printPop").classList.add("hidden"); }
+});
+document.addEventListener("change", async ev => {
+  const d = ev.target.dataset || {};
+  if (d.seed) change("seed", {key: d.seed, seed: ev.target.value});
+  else if (ev.target.id === "timersSel") {
+    try { S = await api(`${API}/timers`, J({timers: +ev.target.value})); toast(`${S.info.timers} timer${S.info.timers > 1 ? "s" : ""} per lane`); show(); } catch (x) { toast(x.message); }
+  }
+  else if (d.race !== undefined && ev.target.matches("input[data-race]")) {
+    try { S = await api(`${API}/race`, J({ptr: EV, heat: +d.race, race: ev.target.value.trim()})); toast(S.log[0]?.msg || "Saved"); show(); } catch (x) { toast(x.message); show(); }
+  }
+  else if (d.timer) {
+    const e = M.entries.find(x => x.key === d.key);
+    const box = ev.target.closest("td");
+    const t1 = box.querySelector('[data-timer="1"]').value.trim(), t2 = box.querySelector('[data-timer="2"]').value.trim();
+    change("result", {key: d.key, t1_s: t1, t2_s: t2, stat: e.stat === "R" && (t1 || t2) ? "" : e.stat === "F" && (t1 || t2) ? "Q" : e.stat, dq: e.dq});
+  }
+  else if (d.time) { const e = M.entries.find(x => x.key === d.time); change("result", {key: d.time, time_s: ev.target.value, stat: e.stat === "R" ? "" : e.stat === "F" && ev.target.value ? "Q" : e.stat, dq: e.dq}); }
+  else if (d.stat) { const e = M.entries.find(x => x.key === d.stat); change("result", {key: d.stat, time_s: fmt(e.time), stat: ev.target.value, dq: ""}); }
+  else if (d.move) {
+    const e = M.entries.find(x => x.key === d.move);
+    const heat = d.part === "heat" ? +ev.target.value : e.heat, lane = d.part === "lane" ? +ev.target.value : e.lane;
+    change("move", {key: d.move, heat, lane});
+  }
+  else if (d.team) change("team", {team: +d.team, fields: {[d.f]: ev.target.value.trim()}});
+  else if (d.meet) {
+    const v = ev.target.value.trim();
+    if (d.meet === "name" && !v) { ev.target.value = M.meet.name; return toast("The meet needs a name"); }
+    if (d.meet === "lanes" && M.entries.some(e => !e.scr && e.lane > +v) && !confirm(`Some swimmers are in lanes above ${v}. Change the lane count anyway? (They'll show up under Check.)`)) { ev.target.value = M.meet.lanes; return; }
+    change("meet", {fields: {[d.meet]: v}});
+  }
+});
+document.addEventListener("keydown", ev => { if (ev.key === "Enter" && ev.target.matches("input.t")) ev.target.blur(); });
+$("#undoBtn").onclick = async () => { try { S = await api(`${API}/undo`, J({})); toast(S.log[0]?.msg || "Undone"); show(); } catch (e) { toast(e.message); } };
+$("#buildBtn").onclick = async () => {
+  $("#startMsg").textContent = "Building…";
+  try { S = await api(`${API}/create`, {method: "POST"}); show(); } catch (e) { $("#startMsg").textContent = e.message; }
+};
+$("#upBtn").onclick = () => $("#upIn").click();
+$("#upIn").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const fd = new FormData(); fd.append("file", f); $("#startMsg").textContent = "Opening…";
+  try { S = await api(`${API}/import`, {method: "POST", body: fd}); show(); } catch (err) { $("#startMsg").textContent = err.message; }
+};
+$("#driveBtn").onclick = async () => {
+  $("#driveList").textContent = "Looking…";
+  try {
+    const r = await api(`${API}/drive-backups`);
+    $("#driveList").innerHTML = r.files.length ? r.files.slice(0, 25).map((f, i) => `<div class="row" style="margin-bottom:3px;${f.mine ? "" : "opacity:.7"}"><button class="ghost small" data-dfile="${i}">Open</button> ${esc(f.name)} <span class="muted">${esc(f.path.replace(/\/[^/]*$/, ""))}</span></div>`).join("") : "No backups found in Drive.";
+    window._dfiles = r.files;
+  } catch (e) { $("#driveList").textContent = e.message; }
+};
+document.addEventListener("click", async ev => {
+  const i = ev.target.dataset?.dfile; if (i === undefined) return;
+  const f = window._dfiles[+i]; $("#startMsg").textContent = `Opening ${f.name} from Drive…`;
+  try { S = await api(`${API}/import-drive`, J({id: f.id, name: f.name})); show(); } catch (e) { $("#startMsg").textContent = e.message; }
+});
+tmStatus();
+if (!MID) document.body.innerHTML = "<main><section>Open this from a meet's page.</section></main>"; else load().catch(e => { document.querySelector("main").innerHTML = `<section>${esc(e.message)}</section>`; });
+</script>
+</body>
+</html>

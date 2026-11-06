@@ -1,0 +1,1221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MeetDeck</title>
+<style>
+.fm h3{margin:14px 0 4px;font-size:14px}.fm table{font-size:13px}.fm td{vertical-align:top}.fm .act{white-space:nowrap}.fm .act button{margin:0 2px 2px 0}
+
+.hs{max-height:640px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.hs .ev{margin:0 0 14px}.hs .ev h4{margin:0 0 4px;font-size:14px}.hs .heats{display:flex;flex-wrap:wrap;gap:8px}
+.hs table{font-size:12.5px;border-collapse:collapse;min-width:260px;width:auto;max-width:420px}.hs td,.hs th{padding:2px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.hs .ln{width:22px;color:var(--muted);text-align:right}.hs .empty td{opacity:.4}.hs .hit td{background:rgba(255,200,0,.25)}.hs .legs{font-size:11.5px;color:var(--muted)}
+
+:root{--bg:#f4f6f8;--card:#fff;--ink:#17202a;--muted:#5d6b78;--line:#dde3e9;--accent:#0b6fa4;--accent-ink:#fff;--err:#b42318;--err-bg:#fdecea;--warn:#8a5a00;--warn-bg:#fff4dc;--ok:#13703a;--ok-bg:#e6f5ec;--sel:#e7f2f9}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1418;--card:#172028;--ink:#e6edf3;--muted:#93a1ae;--line:#2a3742;--accent:#3aa0d8;--accent-ink:#06121a;--err:#ff8b80;--err-bg:#3a1714;--warn:#f5c26b;--warn-bg:#352a12;--ok:#6fd49a;--ok-bg:#12301f;--sel:#16303f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+header h1{font-size:18px;margin:0}
+nav{display:flex;gap:4px;margin-right:auto}
+nav button{background:transparent;color:var(--muted);border:1px solid transparent}
+nav button.on{color:var(--accent);border-color:var(--line);background:var(--bg)}
+main{max-width:1100px;margin:0 auto;padding:16px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+h2{font-size:16px;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+h3{font-size:15px;margin:14px 0 6px}
+h2 .n{background:var(--accent);color:var(--accent-ink);border-radius:50%;width:22px;height:22px;display:inline-grid;place-items:center;font-size:12px}
+button,select,input{font:inherit;color:inherit}
+button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:7px 12px;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+button.small{padding:3px 8px;font-size:13px}
+input,select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;max-width:100%}
+label{display:inline-flex;gap:6px;align-items:center}
+.muted{color:var(--muted)}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;cursor:pointer}
+.drop.over{border-color:var(--accent)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.issue{border-radius:8px;padding:10px 12px;margin-bottom:8px}
+.issue.error{background:var(--err-bg);color:var(--err)}
+.issue.warn{background:var(--warn-bg);color:var(--warn)}
+.issue .ents{margin-top:6px;display:flex;flex-direction:column;gap:4px;color:var(--ink)}
+.ent{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.okbox{background:var(--ok-bg);color:var(--ok);border-radius:8px;padding:10px 12px}
+.removed{text-decoration:line-through;opacity:.55}
+.chip{display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:1px 8px;margin:2px 4px 2px 0;font-size:13px}
+.chip.x{text-decoration:line-through;opacity:.5}
+.chip.new{border-color:var(--ok, #2e7d32);border-style:dashed}
+a.chip.addc{text-decoration:none;color:var(--accent);cursor:pointer}
+.addform{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0;font-size:13px}
+.addform select,.addform input[type=text]{font-size:13px;padding:2px 4px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.lanes{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.lane{border:1px solid var(--line);border-radius:8px;padding:6px 10px;text-align:center;min-width:64px}
+.lane b{display:block;font-size:12px;color:var(--muted)}
+ol.steps{margin:6px 0 0;padding-left:20px}
+details summary{cursor:pointer;font-weight:600;padding:6px 0}
+.hidden{display:none!important}
+.schools{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:16px}
+.school{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;text-align:left;color:var(--ink)}
+.school.on{border-color:var(--accent);background:var(--sel)}
+.school b{display:block;font-size:15px}
+.badge{display:inline-block;font-size:12px;border-radius:10px;padding:1px 8px;margin-top:4px}
+.badge.ok{background:var(--ok-bg);color:var(--ok)}
+.badge.no{background:var(--warn-bg);color:var(--warn)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 14px}
+.grid2 label{flex-direction:column;align-items:stretch;gap:2px;font-size:13px;color:var(--muted)}
+.rec td{padding:3px 4px}
+.rec input{width:100%;padding:4px 6px;font-size:13px}
+.rec .t{width:80px}.rec .y{width:90px}
+.rec tr.changed td{background:var(--sel)}
+.rec td.ev{white-space:nowrap;font-size:13px;padding-top:7px}
+.sticky{position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 0;margin-top:10px}
+@media print{header,section:not(.print),button{display:none!important}body{background:#fff}}
+a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;color:#111;border-radius:2px;padding:0 1px}
+.mvd{font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:0 5px;margin-left:4px}
+.hs tr.picked td{background:var(--sel);outline:2px solid var(--accent)}
+.hs tr[data-seedto]:hover td,.hs tr[data-seedpick]:hover td{background:var(--sel)}
+  #meetFields label{text-align:left;align-items:stretch}
+  #meetFields input,#meetFields select{width:100%;box-sizing:border-box}
+</style>
+</head>
+<body>
+<header>
+  <h1>MeetDeck</h1>
+  <nav><button id="tabMeets" class="on">Meets</button><button id="tabSchools">Schools &amp; records</button><button id="tabRun">Meet checklist</button><button id="tabRules">Rules</button><button id="tabSetup">Setup</button></nav>
+  <span id="meetBar" class="row"><label class="muted" style="font-size:13px">Season <select id="seasonSel"></select></label><select id="meetSel"></select><button class="ghost" id="newBtn">New meet</button><button class="ghost" id="openBarBtn" title="Open an existing Meet Manager meet (backup .zip or .mdb)">Open file…</button></span>
+</header>
+
+<div id="updBanner" class="hidden" style="background:var(--accent);color:var(--accent-ink);padding:8px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"></div>
+<main id="meetsView">
+  <section id="newBox" class="hidden">
+    <h2>New meet</h2>
+    <div class="row">
+      <input id="newName" placeholder="e.g. Tooele vs Stansbury" size="28">
+      <input id="newDate" type="date">
+      <label class="muted">Host <select id="newHost"></select></label>
+      <button id="createBtn">Create</button>
+      <span class="muted">or</span>
+      <button class="ghost" id="openFileBtn" title="A Meet Manager backup (Swmm8Bkup....zip) or database (.mdb)">Open a Meet Manager file…</button>
+      <input type="file" id="openFileIn" accept=".zip,.mdb" class="hidden">
+      <span class="muted" id="openFileMsg" style="font-size:13px"></span>
+    </div>
+    <div class="muted" style="margin-top:6px">The host school's master meet file supplies events, sessions, scoring and records.</div>
+  </section>
+
+  <div id="meet" class="hidden">
+    <section>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <h2 style="margin:0">Meet setup <span class="muted" id="mSaved" style="font-size:13px;font-weight:normal"></span></h2>
+        <a id="openDb" href="#" target="_blank" rel="noopener" style="background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:12px 26px;font-size:17px;font-weight:600;text-decoration:none;white-space:nowrap" title="Open the meet: timing console, times, DQs, scratches, scoring, printing and results">Run the meet ↗</a>
+      </div>
+      <div id="meetFields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 16px">
+        <label class="muted" style="display:flex;flex-direction:column;gap:4px">Meet name <input id="mName"></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:4px">Date <input id="mDate" type="date"></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:4px">Location <input id="mLoc" placeholder="from host's master file"></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:4px">Host school <select id="hostSel"></select></label>
+      </div>
+      <div class="muted" id="hostNote" style="margin-top:6px"></div>
+    </section>
+
+    <section>
+      <h2><span class="n">1</span> Team entries</h2>
+      <div id="teamBoard" class="scroll"></div>
+      <div class="row" style="margin:8px 0 12px">
+        <label class="muted">Teams expected <input id="expectTeams" placeholder="e.g. Tooele, Stansbury, Grantsville" size="38"></label>
+        <span class="muted" style="font-size:13px">so missing teams show up</span>
+      </div>
+      <div class="drop" id="drop">Drop coaches' entry files here, or click to choose.<br>
+        <span class="muted">Team Manager / SwimTopia exports (.zip, .hy3, .cl2, .sd3) or Word / text entry lists (.docx, .txt). Any number of teams; a revised file from the same team replaces the old one.</span></div>
+      <input type="file" id="fileIn" multiple accept=".zip,.hy3,.cl2,.sd3,.docx,.txt" class="hidden">
+      <div id="uploadMsg" class="muted" style="margin-top:8px"></div>
+      <details style="margin-top:10px"><summary class="muted">Paste an entry list from an email</summary>
+        <textarea id="pasteBox" rows="8" style="width:100%;margin-top:6px;font:13px ui-monospace,monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px" placeholder="Blue Team Girls&#10;Olivia McCoy - 200 free, 100 fly&#10;&#10;Blue Team Girls Relays&#10;200 Medley - A: Olivia McCoy, Katelyn Bolin, Isabelle Luke, Taegen Edvalson"></textarea>
+        <div class="row" style="margin-top:6px"><button class="small" id="pasteBtn">Add pasted entries</button><span class="muted" style="font-size:13px">Headings like "Blue Team Girls" / "Black Team Boys Relays" set team and gender.</span></div>
+      </details>
+      <details style="margin-top:6px" id="driveBox"><summary class="muted">From Google Drive</summary>
+        <div id="driveMsg" class="muted" style="margin-top:6px;font-size:13px"></div><div id="driveList"></div></details>
+      <details style="margin-top:6px" id="gmailBox"><summary class="muted">Find entries in Gmail</summary><div id="gmailBody" style="margin-top:6px"></div></details>
+      <details style="margin-top:6px"><summary class="muted">Files received</summary><div class="scroll"><table id="filesTbl" style="margin-top:6px"></table></div></details>
+    </section>
+
+    <section id="fileSec">
+      <h2><span class="n">2</span> Meet files</h2>
+      <div class="row" style="margin-bottom:8px">
+        <button class="small" id="exportBtn">Download everything (.zip)</button>
+        <button class="ghost small" id="docBtn">Add a document</button><input type="file" id="docIn" multiple class="hidden">
+        <span class="muted" style="font-size:13px">Meet invites, psych sheets, results &mdash; anything you want kept with this meet.</span>
+      </div>
+      <div id="fileMgr"></div>
+    </section>
+
+    <section>
+      <h2><span class="n">3</span> Rule check</h2>
+      <div class="row muted" style="margin-bottom:10px">
+        Max individual <input type="number" id="rInd" min="1" style="width:60px">
+        Max total (incl. relays) <input type="number" id="rTot" min="1" style="width:60px">
+        Scoring entries per team per event <input type="number" id="rCap" min="0" style="width:60px" title="0 = no cap">
+        <label>Meet type <select id="rType"><option value="regular">Regular season</option><option value="exhibition">Exhibition / intersquad</option></select></label>
+      </div>
+      <div class="muted" style="font-size:12.5px;margin:-4px 0 10px">Checked against UHSAA and NFHS rules: max 2 individual events and 4 events total per swimmer (diving counts as individual). Each event once only. Relays need 4 different swimmers, all the relay's gender, one leg each, from the same school. Exhibition / intersquad: squads of one school may mix on relays and the scoring-entry cap is off; the swimmer limits still apply. A swimmer's 14-meet season limit can't be checked from one meet. 0 = no limit.</div>
+      <div id="issues"></div>
+      <div id="coachMsgs"></div>
+    </section>
+
+    <section class="print">
+      <h2><span class="n">4</span> Entries by team</h2>
+      <div id="teams" class="scroll"></div>
+    </section>
+
+    <section>
+      <h2><span class="n">5</span> Lanes &amp; records</h2>
+      <div class="muted">8 lanes. Team order (home team first) &mdash; lanes alternate through this order.</div>
+      <div id="order" class="row" style="margin-top:6px"></div>
+      <div class="lanes" id="lanePlan"></div>
+      <h3>Combined heats</h3>
+      <div class="muted" style="font-size:13px">Girls and boys swim the same heat with one empty lane between them. Both events stay separate for results and scoring.</div>
+      <div class="row" style="margin:6px 0"><label class="muted">Girls in <select id="comboLow"><option value="F">lower lanes</option><option value="M">higher lanes</option></select></label></div>
+      <div id="combos" class="scroll"></div>
+      <div class="row" style="margin-top:10px">
+        <label class="muted">School records count for <select id="recTeamSel"></select></label>
+      </div>
+      <div class="muted" style="font-size:13px;margin-top:4px">Pool records always count for every swimmer.</div>
+    </section>
+
+    <section>
+      <h2><span class="n">6</span> Seeding</h2>
+      <div class="row">
+        <button id="seedBtn" style="padding:10px 22px;font-size:15px;font-weight:600">Seed heats</button>
+        <span id="seedState" class="muted">at least 3 swimmers in every heat</span>
+        <span class="grow"></span>
+        <button class="ghost small hidden" id="unseedBtn" title="Clear the heats here and seed in Meet Manager instead">Undo seeding</button>
+      </div>
+      <div class="muted" style="font-size:13px;margin-top:4px">Same team lanes and fastest-in-the-middle as Meet Manager's dual seeding, but every heat has at least 3 swimmers &mdash; when heat 1 would be short, the slowest swimmers of the next heat move down. Once seeded, the heats update by themselves when entries change, and go into the Meet Manager backup.</div>
+      <div id="seedInfo" class="scroll" style="margin-top:6px"></div>
+      <h3 style="margin-top:12px">Heats after seeding</h3>
+      <div class="muted" style="font-size:13px">To move a swimmer, click them, then click the lane to move to &mdash; an empty lane moves them, a filled lane swaps the two. Each event has a spare empty heat to move into. Moved lanes are marked <span class="mvd">moved</span> and go into the Meet Manager backup.</div>
+      <div class="row" style="margin:6px 0"><input id="hpFind" placeholder="Highlight a swimmer or team" size="28"><span class="muted" id="hpCount" style="font-size:13px"></span><span class="grow"></span><span id="seedPick" class="muted" style="font-size:13px"></span><button class="ghost small hidden" id="seedResetAll" title="Undo every hand move in this meet">Reset all moves</button></div>
+      <div id="heatSheet" class="hs"></div>
+    </section>
+
+    <section>
+      <h2><span class="n">7</span> Download for Meet Manager</h2>
+      <div id="dlWarn"></div>
+      <div class="row">
+        <button id="mmBtn">Download Meet Manager backup</button>
+        <span class="muted" id="mmMsg"></span>
+      </div>
+      <div id="mmReport" style="margin-top:8px"></div>
+      <ol class="steps muted">
+        <li>In Meet Manager: <b>File &rarr; Restore</b>, pick the downloaded <code>Swmm8Bkup&hellip;zip</code>. It opens with teams, athletes, entries, relays and records already in.</li>
+        <li>Check <b>Set-up &rarr; Seeding Preferences &rarr; Dual Meets</b>: teams in their lanes, <b>Use Lane Assignments Above</b> checked (only matters if you ever re-seed).</li>
+        <li id="seedStep"></li>
+      </ol>
+      <details style="margin-top:10px">
+        <summary class="muted">Prefer importing? Per-team entry files</summary>
+        <div class="row" id="dl" style="margin-top:6px"></div>
+        <div class="muted" style="margin-top:6px">Meet Manager: <b>File &rarr; Import &rarr; Entries</b>, one zip per team.</div>
+      </details>
+      
+      <div class="row" style="margin-top:12px"><button class="ghost small" id="delMeet">Delete this meet</button></div>
+    </section>
+
+  </div>
+</main>
+
+<main id="schoolsView" class="hidden">
+  <div class="schools" id="schoolCards"></div>
+  <div id="schoolDetail"></div>
+</main>
+
+<div id="runView" class="hidden">
+  <section id="runHead"></section>
+  <div id="runList"></div>
+</div>
+<div id="rulesView" class="hidden">
+  <section>
+    <h2>Search the rules</h2>
+    <div class="row"><input id="rq" type="search" placeholder='e.g. backup buttons, false start, 6-4-1, "official time"' style="flex:1;min-width:240px"><button class="small" id="rgo">Search</button></div>
+    <div class="muted" style="font-size:12px;margin-top:4px">All words must be on the same page. Put a phrase in quotes. Rule numbers match either style (6-4-1 or 6.4.1).</div>
+    <div id="rhits" style="margin-top:10px"></div>
+  </section>
+  <section>
+    <h2>Documents on file</h2>
+    <div id="rdocs"></div>
+    <div class="row" style="margin-top:8px"><label class="small">Add a PDF <input type="file" id="rIn" accept=".pdf,application/pdf" multiple></label><span class="muted" id="rMsg" style="font-size:13px"></span></div>
+    <div class="muted" style="font-size:12px;margin-top:6px">The full <b>NFHS Swimming &amp; Diving Rules Book</b> is sold by NFHS (print, or the NFHS Digital app) and isn't posted free. If you have it as a PDF, add it here and it becomes searchable with the rest.</div>
+  </section>
+</div>
+<main id="setupView" class="hidden">
+  <section>
+    <h2>Google Drive folder</h2>
+    <div class="muted" style="font-size:13px">Your swim meets folder. Coaches' entry files are picked up from here, and Meet Manager backups are filed back into it.</div>
+    <div class="row" style="margin-top:8px"><input id="sDrive" placeholder="https://drive.google.com/drive/folders/…" style="flex:1;min-width:280px"><button class="small" id="sDriveSave">Save</button></div>
+    <div id="sDriveMsg" class="muted" style="margin-top:6px;font-size:13px"></div>
+  </section>
+  <section>
+    <h2>Drive write access</h2>
+    <div id="sWriteState" style="margin-bottom:8px"></div>
+    <div class="muted" style="font-size:13px">A share link only lets the app read. To file backups and organize the folder, add a small script that runs as you and can only work inside this folder (it never deletes anything). One-time, about two minutes:</div>
+    <ol style="font-size:13.5px;margin:8px 0;padding-left:20px;line-height:1.6">
+      <li>Open <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com &rarr; New project</a>, delete what's there and paste the script below. <button class="ghost small" id="sCopy">Copy script</button> <span class="muted" id="sCopyMsg"></span></li>
+      <li>Rename it (click "Untitled project", e.g. <i>MeetDeck</i>) and press <b>Ctrl+S</b> to save.</li>
+      <li>In the toolbar pick the function <b>authorize</b> and press <b>Run</b> &rarr; <b>Review permissions</b> &rarr; choose your account &rarr; <b>Advanced</b> &rarr; <b>Go to MeetDeck (unsafe)</b> &rarr; <b>Allow</b>. The log should say "OK".</li>
+      <li>Click <b>Deploy &rarr; New deployment</b>, gear icon &rarr; <b>Web app</b>, <b>Execute as: Me</b>, <b>Who has access: Anyone</b>, then <b>Deploy</b>.</li>
+      <li>Copy the <b>Web app URL</b> (ends in <code>/exec</code>) and paste it here:</li>
+    </ol>
+    <div class="muted" style="font-size:12.5px;margin:-4px 0 8px">Seeing "Access blocked: The OAuth client was not found"? The project wasn't saved yet &mdash; save it, wait a minute, and run <b>authorize</b> again. Still blocked: try a private window signed in to only the account that owns the swim folder.</div>
+    <div class="row"><input id="sUrl" placeholder="https://script.google.com/macros/s/…/exec" style="flex:1;min-width:280px"><button class="small" id="sUrlSave">Save &amp; test</button></div>
+    <details style="margin-top:8px"><summary class="muted">Show the script</summary><textarea id="sScript" rows="12" readonly style="width:100%;margin-top:6px;font:12px ui-monospace,monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px"></textarea></details>
+  </section>
+  <section>
+    <h2>Organize the folder</h2>
+    <div class="muted" style="font-size:13px">Reads every backup and entry file in the folder to find which meet it belongs to, then sorts them into <b>season / date + meet name</b> folders, e.g. <code>2025-26/2025-12-19 THS Mel Roberts Invitational</code>.</div>
+    <div class="row" style="margin-top:8px"><button class="ghost small" id="sScan">Scan folder</button><span class="muted" id="sScanMsg" style="font-size:13px"></span></div>
+    <div id="sPlan" style="margin-top:8px"></div>
+  </section>
+  <section>
+    <h2>Timing</h2>
+    <div class="row"><label>Highlight a lane when pad, backup and timers times differ by more than
+      <input id="sTol" type="number" step="0.01" min="0.01" max="5" style="width:80px"> seconds</label>
+      <button class="small" id="sTolSave">Save</button><span class="muted" id="sTolMsg" style="font-size:13px"></span></div>
+    <div class="muted" style="font-size:13px;margin-top:4px">Used in the meet database page when you get times from the timing console. 0.30 = 300 ms.</div>
+  </section>
+  <section id="updBox" class="hidden">
+    <h2>Updates</h2>
+    <div id="updStatus" style="font-size:13.5px"></div>
+    <div class="row" style="margin-top:6px"><button class="ghost small" id="updCheck">Check for updates</button><button class="hidden" id="updGo">Install update</button><span class="muted" id="updMsg" style="font-size:13px"></span></div>
+    <div id="updNotes" class="muted" style="font-size:13px;white-space:pre-wrap;margin-top:6px"></div>
+  </section>
+  <section id="winApp">
+    <h2>MeetDeck for Windows</h2>
+    <div class="muted" style="font-size:13px">Runs all of MeetDeck on a Windows laptop, no server needed: unzip, double-click <b>MeetDeck.bat</b>. Comes with your host schools, rules library and meets.</div>
+    <div class="row" style="margin-top:6px"><button onclick="location='/download/MeetDeck-Windows.zip'">Download MeetDeck for Windows</button></div>
+  </section>
+  <section>
+    <h2>Report font</h2>
+    <div class="muted" style="font-size:13px">Meet Manager prints heat sheets, referee programs and timer sheets in <b>Cambria</b>, which comes with Windows. Add your PC's copy and printed reports use it too; without it they use Caladea, a free look-alike with the same letter widths.</div>
+    <div id="fontStatus" style="margin:6px 0;font-size:13.5px"></div>
+    <div class="row"><label class="small">Add files from <code>C:\Windows\Fonts</code>: <b>cambria.ttc</b> and <b>cambriab.ttf</b>
+      <input type="file" id="fontIn" accept=".ttc,.ttf" multiple></label><span class="muted" id="fontMsg" style="font-size:13px"></span></div>
+    <div class="muted" style="font-size:12px;margin-top:4px">Tip: in the file picker, paste <code>C:\Windows\Fonts</code> into the address bar. If the folder only shows "Cambria" tiles, copy those two files to your Desktop first.</div>
+  </section>
+  <section>
+    <h2>Gmail</h2>
+    <div id="sGmail" class="muted" style="font-size:13px">Checking…</div>
+  </section>
+</main>
+
+<input type="file" id="masterIn" accept=".zip" class="hidden">
+
+<script>
+const $ = s => document.querySelector(s);
+let M = null, HOSTS = [], S = null, SM = null, REC = null, TAGS = null, DIRTY = false;
+const api = async (url, opt = {}) => {
+  const r = await fetch(url, opt);
+  if (!r.ok) { let d = await r.text(); try { d = JSON.parse(d).detail; } catch (e) {} throw new Error(d); }
+  return r.json();
+};
+const J = (method, body) => ({method, headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const store = (k, v) => { try { v === undefined ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+const recall = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const STROKE = {A: "Free", B: "Back", C: "Breast", D: "Fly", E: "IM"};
+const evName = (g, ir, d, st) => `${g === "M" ? "Boys" : "Girls"} ${d} ${ir === "R" ? (st === "E" ? "Medley Relay" : (STROKE[st] || st) + " Relay") : (STROKE[st] || st)}`;
+const fmtT = v => { if (!v) return ""; const m = Math.floor(v / 60), s = (v - m * 60).toFixed(2); return m ? `${m}:${s.padStart(5, "0")}` : s; };
+const parseT = s => { s = String(s || "").trim().toUpperCase(); if (!s || s === "NT") return 0;
+  if (!s.includes(".")) { const m = s.match(/^(\d+):(\d{1,2})$/); if (m) return +m[2] < 60 ? +m[1] * 60 + +m[2] : NaN;
+    const d = s.replace(/\D/g, ""); if (!d) return NaN; const h = +d.slice(-2), sec = +(d.slice(-4, -2) || 0), mi = +(d.slice(0, -4) || 0);
+    return mi && sec >= 60 ? NaN : Math.round((mi * 60 + sec + h / 100) * 100) / 100; }
+  const p = s.split(":"); const v = p.length > 1 ? (+p[0]) * 60 + (+p[1]) : +p[0]; return isNaN(v) ? NaN : Math.round(v * 100) / 100; };
+const fmtD = r => !r.year ? "" : (r.month ? `${r.month}/${r.day || 1}/${r.year}` : `${r.year}`);
+const parseD = s => { s = String(s).trim(); if (!s) return {year: 0, month: 0, day: 0};
+  let m = s.match(/^(\d{4})$/); if (m) return {year: +m[1], month: 0, day: 0};
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (m) return {year: m[3].length === 2 ? 2000 + +m[3] : +m[3], month: +m[1], day: +m[2]};
+  m = s.match(/^'?(\d{2})$/); if (m) return {year: (+m[1] > 50 ? 1900 : 2000) + +m[1], month: 0, day: 0};
+  return null; };
+const hostName = id => (HOSTS.find(h => h.id === id) || {}).name || id;
+
+// ---------------- tabs ----------------
+function tab(which) {
+  if (which !== "schools" && DIRTY && !confirm("You have unsaved record changes. Leave without saving?")) return;
+  if (which !== "schools") DIRTY = false;
+  $("#tabMeets").classList.toggle("on", which === "meets"); $("#tabSchools").classList.toggle("on", which === "schools"); $("#tabSetup").classList.toggle("on", which === "setup"); $("#tabRules").classList.toggle("on", which === "rules"); $("#tabRun").classList.toggle("on", which === "run");
+  $("#meetsView").classList.toggle("hidden", which !== "meets"); $("#schoolsView").classList.toggle("hidden", which !== "schools"); $("#setupView").classList.toggle("hidden", which !== "setup"); $("#rulesView").classList.toggle("hidden", which !== "rules"); $("#runView").classList.toggle("hidden", which !== "run");
+  if (which === "run") runRender();
+  if (which === "rules") rulesLoad();
+  $("#meetBar").classList.toggle("hidden", which !== "meets");
+  store("tab", which);
+  if (which === "schools") loadSchools(); else if (which === "setup") loadSetup(); else loadMeets();
+}
+$("#tabSetup").onclick = () => tab("setup");
+$("#tabMeets").onclick = () => tab("meets");
+$("#tabSchools").onclick = () => tab("schools");
+window.addEventListener("beforeunload", e => { if (DIRTY) { e.preventDefault(); e.returnValue = ""; } });
+
+async function loadHosts() {
+  HOSTS = await api("/api/hosts");
+  const opts = HOSTS.map(h => `<option value="${h.id}">${esc(h.name)}${h.has_master ? "" : " (no master yet)"}</option>`).join("");
+  $("#newHost").innerHTML = opts; $("#hostSel").innerHTML = opts;
+  $("#newHost").value = recall("host") || "THS";
+}
+
+// ---------------- meets ----------------
+let SET = {season: "", seasons: []};
+async function loadSeasons() {
+  SET = await api("/api/settings");
+  $("#seasonSel").innerHTML = SET.seasons.map(x => `<option value="${x}">${x}${x === SET.current ? " (now)" : ""}</option>`).join("");
+  $("#seasonSel").value = SET.season;
+}
+async function loadMeets(select) {
+  if (!SET.season) await loadSeasons();
+  const all = await api("/api/meets");
+  if (select) { const m = all.find(x => x.id === select); if (m && m.season !== SET.season) { SET = await api("/api/settings", J("PUT", {season: m.season})); await loadSeasons(); } }
+  const meets = all.filter(m => m.season === SET.season);
+  $("#meetSel").innerHTML = meets.length
+    ? meets.map(m => `<option value="${m.id}">${esc(m.name)}${m.date ? " — " + m.date : ""}</option>`).join("")
+    : `<option value="">No meets in ${esc(SET.season)}</option>`;
+  const want = select || recall("meet") || (meets[0] && meets[0].id);
+  if (want && meets.some(m => m.id === want)) { $("#meetSel").value = want; await open(want); }
+  else if (meets.length) { $("#meetSel").value = meets[0].id; await open(meets[0].id); }
+  else { $("#newBox").classList.remove("hidden"); $("#meet").classList.add("hidden"); }
+}
+async function open(id) { store("meet", id); M = await api(`/api/meets/${id}`); render(); }
+async function save(patch) { M = await api(`/api/meets/${M.id}/state`, J("PUT", patch)); render(); }
+const removedIds = () => M.entries.filter(e => e.removed).map(e => e.id);
+const toggle = (id, rm) => save({removed: rm ? [...removedIds(), id] : removedIds().filter(x => x !== id)});
+
+
+const kb = n => n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+const sUrl = (area, n) => `/api/meets/${M.id}/store/${area}/${encodeURIComponent(n)}`;
+const teamList = ts => ts.map(t => esc(M.teams[t]?.name || t)).join(", ") || `<span class="muted">—</span>`;
+function renderFiles() {
+  const S = M.store || {entry: [], archived: [], backups: [], docs: []};
+  const tbl = (head, rows, empty) => rows.length ? `<table><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr>${rows.join("")}</table>` : `<div class="muted" style="font-size:13px">${empty}</div>`;
+  $("#fileMgr").innerHTML = `<div class="fm">
+    <h3>Entry files in this meet <span class="muted" style="font-weight:400">· ${S.entry.length}</span></h3>` +
+    tbl(["File", "Teams", "Format", "Received", ""], S.entry.map(f => `<tr><td>${esc(f.original)}${f.source && f.source !== "upload" ? `<div class="muted" style="font-size:12px">${esc(f.source)}</div>` : ""}</td>
+      <td>${teamList(f.teams)}</td><td>${esc(f.kind)}</td><td>${esc(f.received)}</td>
+      <td class="act">${f.original_file ? `<button class="ghost small" onclick="location='${sUrl("originals", f.original_file)}'">Original</button>` : ""}<button class="ghost small" onclick="location='/api/meets/${M.id}/download/${encodeURIComponent(f.name)}'" title="Team Manager file with removed entries taken out">Checked .hy3</button><button class="ghost small" data-delfile="${esc(f.name)}" title="Moves it to the archive below">Remove</button></td></tr>`),
+      "No entry files yet.") +
+    `<h3>Archive <span class="muted" style="font-weight:400">· replaced or removed entry files${S.archived.length ? " · " + S.archived.length : ""}</span></h3>` +
+    tbl(["File", "Teams", "Why", "Archived", ""], S.archived.map(f => `<tr><td>${esc(f.shown)}</td><td>${teamList(f.teams)}</td><td>${esc(f.why)}</td><td>${esc(f.archived)}</td>
+      <td class="act"><button class="small" data-restore="${esc(f.name)}">Restore</button><button class="ghost small" onclick="location='${sUrl("archive", f.name)}'">Download</button><button class="ghost small" data-sdel="archive|${esc(f.name)}">Delete</button></td></tr>`),
+      "Nothing archived. Replaced and removed entry files land here so you can bring them back.") +
+    `<h3>Meet Manager backups <span class="muted" style="font-weight:400">· every download is kept (newest 15)</span></h3>` +
+    tbl(["File", "Built", "Size", ""], S.backups.map(f => `<tr><td>${esc(f.name.replace(/^\S+ \d{4} /, ""))}</td><td>${esc(f.when)}</td><td>${kb(f.size)}</td>
+      <td class="act"><button class="ghost small" onclick="location='${sUrl("backups", f.name)}'">Download</button><button class="ghost small" data-sdel="backups|${esc(f.name)}">Delete</button></td></tr>`),
+      "None yet &mdash; they appear here when you download a backup in step 6.") +
+    `<h3>Documents</h3>` +
+    tbl(["File", "Added", "Size", ""], S.docs.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.when)}</td><td>${kb(f.size)}</td>
+      <td class="act"><button class="ghost small" onclick="location='${sUrl("docs", f.name)}'">Download</button><button class="ghost small" data-sdel="docs|${esc(f.name)}">Delete</button></td></tr>`),
+      "No documents.") + `</div>`;
+}
+document.addEventListener("click", async ev => {
+  const d = ev.target.dataset || {};
+  if (d.restore) { await api(`/api/meets/${M.id}/archive/${encodeURIComponent(d.restore)}/restore`, {method: "POST"}); open(M.id); }
+  else if (d.sdel) {
+    const [area, name] = d.sdel.split("|");
+    if (!confirm(`Delete "${name.replace(/^\d{8}-\d{6}__/, "")}" for good? This can't be undone.`)) return;
+    await api(`/api/meets/${M.id}/store/${area}/${encodeURIComponent(name)}`, {method: "DELETE"}); open(M.id);
+  }
+});
+$("#exportBtn").onclick = () => location = `/api/meets/${M.id}/export`;
+$("#docBtn").onclick = () => $("#docIn").click();
+$("#docIn").onchange = async e => {
+  const fd = new FormData(); [...e.target.files].forEach(f => fd.append("files", f)); e.target.value = "";
+  await api(`/api/meets/${M.id}/docs`, {method: "POST", body: fd}); open(M.id);
+};
+let DRIVE = [];
+$("#driveBox").addEventListener("toggle", () => { if ($("#driveBox").open) driveList(); });
+async function driveList() {
+  if (!SET.drive_folder) { $("#driveMsg").innerHTML = `No Drive folder set yet &mdash; add it on <a href="#" data-gosetup="1">Setup</a>.`; $("#driveList").innerHTML = ""; return; }
+  $("#driveMsg").textContent = "Looking in your Drive folder…"; $("#driveList").innerHTML = "";
+  try {
+    const r = await api(`/api/meets/${M.id}/drive-files`);
+    DRIVE = r.files;
+    const mine = r.files.filter(f => f.mine);
+    $("#driveMsg").innerHTML = r.files.length ? `${mine.length ? `${mine.length} file(s) for this meet` : `Nothing filed for this meet yet (looked for <code>${esc(r.meet_folder)}</code>)`} &middot; ${r.files.length} entry file(s) in the folder. <a href="#" id="driveRe">Refresh</a>` : `No entry files in the Drive folder. <a href="#" id="driveRe">Refresh</a>`;
+    $("#driveList").innerHTML = r.files.length ? `<table style="font-size:13px;margin-top:4px">${r.files.map((f, n) => `<tr style="${f.mine ? "" : "opacity:.75"}">
+      <td>${esc(f.name)}<div class="muted" style="font-size:12px">${esc(f.path.replace(/\/[^/]*$/, "") || "/")}</div></td>
+      <td>${f.imported ? `<span class="badge ok">imported</span>` : ""}</td>
+      <td><button class="${f.imported || !f.mine ? "ghost " : ""}small" data-dimp="${n}">${f.imported ? "Import again" : "Import"}</button></td></tr>`).join("")}</table>` : "";
+    $("#driveRe").onclick = e => { e.preventDefault(); driveList(); };
+  } catch (e) { $("#driveMsg").innerHTML = `<span style="color:var(--err)">${esc(e.message)}</span>`; }
+}
+document.addEventListener("click", async ev => {
+  const d = ev.target.dataset || {};
+  if (d.gosetup) { ev.preventDefault(); tab("setup"); return; }
+  if (d.dimp === undefined) return;
+  const f = DRIVE[+d.dimp]; ev.target.disabled = true; ev.target.textContent = "Importing…";
+  try { showResult(await api(`/api/meets/${M.id}/drive/import`, J("POST", {items: [f]}))); await open(M.id); driveList(); }
+  catch (e) { ev.target.textContent = "Failed"; $("#uploadMsg").textContent = e.message; }
+});
+
+// ---------------- setup ----------------
+let PLAN = null, scanTimer = null;
+async function loadSetup() {
+  SET = await api("/api/settings");
+  $("#sDrive").value = SET.drive_folder ? `https://drive.google.com/drive/folders/${SET.drive_folder}` : "";
+  $("#sDriveMsg").textContent = "";
+  if (SET.drive_folder) {
+    api("/api/drive/folder").then(r => $("#sDriveMsg").innerHTML = `<span class="badge ok">Connected</span> ${r.items.length} item(s) at the top: ${r.items.slice(0, 6).map(i => esc(i.name)).join(", ")}${r.items.length > 6 ? "…" : ""}`)
+      .catch(e => $("#sDriveMsg").innerHTML = `<span style="color:var(--err)">${esc(e.message)}</span>`);
+    api("/api/drive/script").then(r => $("#sScript").value = r.script);
+  }
+  $("#sUrl").value = SET.drive_url || "";
+  $("#sTol").value = (SET.time_tolerance ?? 0.30).toFixed(2);
+  $("#sWriteState").innerHTML = !SET.drive_folder ? `<span class="muted">Save the folder first.</span>` : SET.drive_write ? `<span class="badge ok">Set up</span> <span class="muted" style="font-size:13px">Backups you download are also filed into Drive.</span>` : `<span class="badge no">Not set up</span>`;
+  loadPlan();
+  const g = await api("/api/gmail/status");
+  $("#sGmail").innerHTML = g.configured ? `<span class="badge ok">Connected</span> ${esc(g.user)} &middot; read-only` : `Not connected. One-time setup:<ol style="margin:6px 0 0;padding-left:20px">
+      <li>Google Account &rarr; Security &rarr; 2-Step Verification on &rarr; <b>App passwords</b> &rarr; create one named "MeetDeck".</li>
+      <li>On the server, create <code>/home/bryan/claude/swimmeet/.env</code> with<br><code>GMAIL_USER=you@gmail.com</code><br><code>GMAIL_APP_PASSWORD=the 16 letters</code></li>
+      <li>Run <code>docker compose up -d</code> in that folder.</li></ol><div style="margin-top:6px">Access is read-only: nothing in your mailbox is marked, moved or deleted.</div>`;
+}
+async function loadPlan() {
+  if (!SET.drive_folder) { $("#sPlan").innerHTML = ""; return; }
+  PLAN = await api("/api/drive/plan");
+  const sc = PLAN.scan;
+  clearTimeout(scanTimer);
+  if (sc.running) { $("#sScanMsg").textContent = `Scanning… ${sc.done} item(s) read${sc.current ? " — " + sc.current.split("/").pop() : ""}`; scanTimer = setTimeout(loadPlan, 2500); }
+  else $("#sScanMsg").textContent = sc.error ? "Scan failed: " + sc.error : PLAN.when ? `Last scan ${PLAN.when} · ${PLAN.files} file(s)` : "Not scanned yet.";
+  if (!PLAN.when) { $("#sPlan").innerHTML = ""; return; }
+  const bySeason = {};
+  PLAN.meets.forEach(m => (bySeason[m.folder.split("/")[0]] ??= []).push(m));
+  $("#sPlan").innerHTML = `<div class="grid2">${Object.keys(bySeason).sort().reverse().map(se => `<div><b>${esc(se)}</b><ul style="margin:4px 0;padding-left:18px;font-size:13px">${bySeason[se].map(m => `<li>${esc(m.folder.split("/")[1])}</li>`).join("")}</ul></div>`).join("")}</div>` +
+    (PLAN.moves.length ? `<div class="issue warn" style="margin-top:8px"><b>${PLAN.moves.length} item(s) to move</b> into those folders.
+       <details><summary class="muted" style="font-weight:400">Show the moves</summary><table style="font-size:12.5px">${PLAN.moves.map(m => `<tr><td>${esc(m.from)}</td><td>&rarr;</td><td>${esc(m.to.join("/"))}</td></tr>`).join("")}</table></details>
+       <div class="row" style="margin-top:6px"><button class="small" id="sOrg" ${SET.drive_write ? "" : "disabled title='Set up Drive write access first'"}>Organize now</button>${SET.drive_write ? "" : `<span class="muted" style="font-size:13px">Needs write access (above).</span>`}<span class="muted" id="sOrgMsg"></span></div></div>`
+     : `<div class="okbox" style="margin-top:8px">Everything is already in its season / meet folder.</div>`) +
+    (PLAN.unsorted.length ? `<div class="muted" style="font-size:13px;margin-top:6px">Left where they are (no meet found): ${PLAN.unsorted.map(esc).join(", ")}</div>` : "");
+  if ($("#sOrg")) $("#sOrg").onclick = async () => {
+    $("#sOrg").disabled = true; $("#sOrgMsg").textContent = "Moving… (takes a minute or two)";
+    try { const r = await api("/api/drive/organize", {method: "POST"}); $("#sOrgMsg").textContent = `Moved ${r.moved}.` + (r.failed.length ? ` ${r.failed.length} failed: ${r.failed[0].error}` : ""); setTimeout(loadPlan, 1500); }
+    catch (e) { $("#sOrgMsg").textContent = e.message; $("#sOrg").disabled = false; }
+  };
+}
+$("#sDriveSave").onclick = async () => {
+  try { SET = await api("/api/settings", J("PUT", {drive_folder: $("#sDrive").value.trim()})); loadSetup(); }
+  catch (e) { $("#sDriveMsg").innerHTML = `<span style="color:var(--err)">${esc(e.message)}</span>`; }
+};
+$("#sUrlSave").onclick = async () => {
+  try {
+    SET = await api("/api/settings", J("PUT", {drive_url: $("#sUrl").value.trim()}));
+    if (SET.drive_write) { const r = await api("/api/drive/test", {method: "POST"}); $("#sWriteState").innerHTML = `<span class="badge ok">Working</span> <span class="muted" style="font-size:13px">Connected to "${esc(r.name)}". Backups you download are also filed into Drive.</span>`; loadPlan(); }
+    else loadSetup();
+  } catch (e) { $("#sWriteState").innerHTML = `<span class="badge no">Not working</span> <span style="color:var(--err);font-size:13px">${esc(e.message)}</span>`; }
+};
+// ---------------- run the meet: per-meet checklist ----------------
+const RESULTS_TO = "utahtop50@yahoo.com";
+const RUN = [
+  {phase: "Before meet day", items: [
+    {id: "entries", t: "Entries in and checked. Every team's file received, rule check clean, coach messages answered.", go: "meets"},
+    {id: "db", t: "Meet database built and seeded (heats and lanes set, no lone swimmers). Restore the backup in Meet Manager too if you're running MM.", db: true},
+    {id: "officials", t: "Two certified officials lined up (from the Utah Swim Coaches Association list), or times won't count toward state qualifying.", rule: "UHSAA Handbook, Swimming: Qualifying Meets and Times"},
+    {id: "timers", t: "Timers arranged: non-competing, 15 or older. Decide 1 or 2 timers per lane and set it in the meet database.", rule: "UHSAA Handbook, Swimming: Volunteer Timers"},
+    {id: "print", t: "Print heat sheets (coaches, announcer, officials), the referee program, and timer sheets (a set per lane).", print: true},
+    {id: "fmr", t: "Final Meet Report form on the clipboard: date, location, start time, host team, session, teams attending, plus coach and official sign-in lines."},
+  ]},
+  {phase: "Meet day, before the first race", items: [
+    {id: "console", t: "Timing console connected (or the simulator checked), events sent to the console, timers per lane set.", db: true},
+    {id: "signin", t: "Coaches sign the Final Meet Report (name, signature, team). Officials sign with their position (starter, referee, turn judge…). Write the start time."},
+    {id: "scratches", t: "Scratches from the coaches' meeting entered in the meet database.", db: true},
+  ]},
+  {phase: "During the meet", items: [
+    {id: "times", t: "After each heat: Get times, check the amber lanes (pad, buttons and timers disagree), then apply. Collect the timer sheets.", db: true},
+    {id: "dqs", t: "DQ slips from the referee entered on the event (DQ button). Keep every slip."},
+    {id: "score", t: "Score each event once its times and DQs are final.", db: true},
+  ]},
+  {phase: "Before leaving the venue", items: [
+    {id: "ended", t: "Write the time the meet ended on the Final Meet Report (and below). It goes on the result sheets.", ended: true},
+    {id: "backup", t: "Download the Meet Manager backup (it's also filed in this meet's Google Drive folder).", db: true},
+    {id: "initial", t: "Send initial results to all coaches. Export results, then email them.", mail: "coaches"},
+  ]},
+  {phase: "Within 24 hours", deadline: 24, items: [
+    {id: "review", t: "Coaches review the results for errors. Verify every change request with the AO / meet referee before changing anything in the database (every change is logged and can be undone).", db: true},
+  ]},
+  {phase: "Within 48 hours", deadline: 48, items: [
+    {id: "final", t: `48-hour rule: email the Final Meet Report and the meet results to ${RESULTS_TO}, with the referee, AO and host coach cc'd. Results must be signed by both officials and the head coaches.`, mail: "final"},
+  ]},
+  {phase: "All season", items: [
+    {id: "keep", t: "Keep all paperwork for the entire season: the signed Final Meet Report, timer sheets, DQ slips and information. Scan them into this meet's files.", go: "meets"},
+  ]},
+];
+function runWhen(stamp) { return stamp ? new Date(stamp.replace(" ", "T")) : null; }
+function runRender() {
+  if (!M) { $("#runHead").innerHTML = `<h2>Meet checklist</h2><div class="muted">Pick a meet on the Meets tab first.</div>`; $("#runList").innerHTML = ""; return; }
+  const run = M.run || {}, c = M.contacts || {}, all = RUN.flatMap(p => p.items), done = all.filter(i => run[i.id]).length;
+  const ended = runWhen(M.ended);
+  const due = h => ended ? new Date(ended.getTime() + h * 3600e3) : null;
+  const fmtDue = d => d ? d.toLocaleString([], {weekday: "short", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit"}) : "";
+  $("#runHead").innerHTML = `<h2>Meet checklist &mdash; ${esc(M.name)}</h2>
+    <div class="muted" style="font-size:13px">${done} of ${all.length} done. Checks are saved with this meet.</div>
+    <div class="row" style="margin-top:8px;font-size:13px;flex-wrap:wrap;gap:10px">
+      <label>Meet ended <input type="datetime-local" id="runEnded" value="${esc((M.ended || "").replace(" ", "T"))}"></label>
+      <label>Referee email <input id="runRef" type="email" value="${esc(c.referee || "")}" size="22"></label>
+      <label>AO email <input id="runAO" type="email" value="${esc(c.ao || "")}" size="22"></label>
+      <label>Host coach email <input id="runHost" type="email" value="${esc(c.host || "")}" size="22"></label></div>`;
+  const link = i => [
+    i.db ? `<a href="/db?meet=${M.id}" target="_blank">Meet database ↗</a>` : "",
+    i.print ? ["heatsheet:Heat sheet", "referee:Referee program", "timer:Timer sheets"].map(x => { const [k, l] = x.split(":"); return `<a href="/api/meets/${M.id}/db/report/${k}.pdf" target="_blank">${l} PDF</a>`; }).join(" · ") : "",
+    i.go ? `<a href="#" data-gotab="${i.go}">Meets tab</a>` : "",
+    i.mail === "coaches" ? `<a href="${runMail("coaches")}">Email coaches</a>${(M.coach_emails || []).length ? "" : ' <span class="muted">(no coach emails on file. Add them in the email)</span>'}` : "",
+    i.mail === "final" ? `<a href="${runMail("final")}">Email ${RESULTS_TO}</a>${c.referee && c.ao && c.host ? "" : ' <span class="muted">(add the referee, AO and host coach emails above to cc them)</span>'}` : "",
+    i.rule ? `<span class="muted">${esc(i.rule)}</span>` : "",
+  ].filter(Boolean).join(" &nbsp;·&nbsp; ");
+  $("#runList").innerHTML = RUN.map(p => {
+    const d = p.deadline ? due(p.deadline) : null, late = d && new Date() > d, open = p.items.some(i => !run[i.id]);
+    return `<section><h3 style="margin:0 0 6px">${esc(p.phase)}${p.deadline ? ` <span class="badge ${late && open ? "no" : "ok"}" style="font-weight:400">${d ? (late && open ? "overdue · was due " : "due ") + fmtDue(d) : "set the meet end time"}</span>` : ""}</h3>` +
+      p.items.map(i => `<label style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)">
+        <input type="checkbox" data-run="${i.id}" ${run[i.id] ? "checked" : ""} style="margin-top:3px">
+        <span style="flex:1"><span style="${run[i.id] ? "text-decoration:line-through;opacity:.6" : ""}">${esc(i.t)}</span>
+          ${link(i) ? `<div style="font-size:12.5px;margin-top:2px">${link(i)}</div>` : ""}
+          ${run[i.id] ? `<div class="muted" style="font-size:11.5px">done ${esc(run[i.id])}</div>` : ""}</span></label>`).join("") + `</section>`;
+  }).join("");
+}
+function runMail(kind) {
+  const c = M.contacts || {}, date = M.date || "";
+  const subj = encodeURIComponent(kind === "final" ? `Final Meet Report and results - ${M.name} ${date}` : `Initial results - ${M.name} ${date}`);
+  const ended = M.ended ? `Meet ended: ${M.ended.replace("T", " ")}\n` : "";
+  if (kind === "final") {
+    const cc = [c.referee, c.ao, c.host].filter(Boolean).join(",");
+    const body = encodeURIComponent(`Attached are the Final Meet Report and the meet results for ${M.name} (${date}${M.location ? ", " + M.location : ""}).\n${ended}`);
+    return `mailto:${RESULTS_TO}?${cc ? "cc=" + encodeURIComponent(cc) + "&" : ""}subject=${subj}&body=${body}`;
+  }
+  const body = encodeURIComponent(`Initial results for ${M.name} (${date}) are attached. Please review them and send any corrections within 24 hours. Change requests will be verified with the meet referee.\n${ended}`);
+  return `mailto:?bcc=${encodeURIComponent((M.coach_emails || []).join(","))}&subject=${subj}&body=${body}`;
+}
+function runStamp() { const n = new Date(), p = x => String(x).padStart(2, "0"); return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())} ${p(n.getHours())}:${p(n.getMinutes())}`; }
+document.addEventListener("change", async ev => {
+  const t = ev.target;
+  if (t.dataset && t.dataset.run) {
+    const run = {...(M.run || {})};
+    if (t.checked) run[t.dataset.run] = runStamp(); else delete run[t.dataset.run];
+    const patch = {run};
+    if (t.dataset.run === "ended" && t.checked && !M.ended) patch.ended = runStamp();
+    M = await api(`/api/meets/${M.id}/state`, J("PUT", patch)); runRender();
+  } else if (t.id === "runEnded") {
+    M = await api(`/api/meets/${M.id}/state`, J("PUT", {ended: t.value.replace("T", " ")})); runRender();
+  } else if (["runRef", "runAO", "runHost"].includes(t.id)) {
+    const contacts = {...(M.contacts || {}), referee: $("#runRef").value.trim(), ao: $("#runAO").value.trim(), host: $("#runHost").value.trim()};
+    M = await api(`/api/meets/${M.id}/state`, J("PUT", {contacts})); runRender();
+  }
+});
+document.addEventListener("click", ev => { const g = ev.target.dataset && ev.target.dataset.gotab; if (g) { ev.preventDefault(); tab(g); } });
+$("#tabRun").onclick = () => tab("run");
+async function rulesLoad() {
+  try {
+    const r = await api("/api/rules");
+    $("#rdocs").innerHTML = r.docs.length ? `<table><tr><th>Document</th><th>Pages</th><th></th></tr>` + r.docs.map(d => `<tr><td><a href="/api/rules/file/${encodeURIComponent(d.name)}" target="_blank">${esc(d.name.replace(/\.pdf$/i, ""))}</a>${d.searchable ? "" : ' <span class="badge no" title="No text layer - it\'s a scan">not searchable</span>'}
+      ${d.sections && d.sections.length ? `<details style="margin-top:2px"><summary class="muted" style="font-weight:400;font-size:12.5px">Contents · ${d.sections.length} sections</summary><div style="columns:2;column-gap:24px;font-size:13px;padding:4px 0">${d.sections.map(x => `<div><a href="/api/rules/file/${encodeURIComponent(d.name)}#page=${x.page}" target="_blank">${esc(x.title)}</a> <span class="muted">p.${x.page}</span></div>`).join("")}</div></details>` : ""}</td><td>${d.pages}</td><td><button class="ghost small" data-rdel="${esc(d.name)}">Remove</button></td></tr>`).join("") + `</table>` : `<div class="muted">No documents yet.</div>`;
+  } catch (e) { $("#rdocs").textContent = e.message; }
+}
+async function rulesSearch() {
+  const q = $("#rq").value.trim();
+  if (!q) { $("#rhits").innerHTML = ""; return; }
+  const r = await api("/api/rules/search?q=" + encodeURIComponent(q));
+  const words = (q.startsWith('"') && q.endsWith('"') ? [q.slice(1, -1)] : q.split(/\s+/)).filter(Boolean)
+    .map(w => /^\d+([-.]\d+)+[a-z]?$/i.test(w) ? w.split(/[-.]/).join("[-.]") : w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const re = new RegExp("(" + words.join("|") + ")", "gi");
+  $("#rhits").innerHTML = r.hits.length ? `<div class="muted" style="font-size:13px;margin-bottom:6px">${r.hits.length} page${r.hits.length > 1 ? "s" : ""}</div>` + r.hits.map(h =>
+    `<div style="padding:7px 0;border-top:1px solid var(--line)"><a href="/api/rules/file/${encodeURIComponent(h.file)}#page=${h.page}" target="_blank"><b>${esc(h.file.replace(/\.pdf$/i, ""))}</b>${h.section ? ` · ${esc(h.section)}` : ""} · page ${h.page}</a>
+     <div style="font-size:13.5px;margin-top:2px">${esc(h.snippet).replace(re, "<mark>$1</mark>")}</div></div>`).join("") : `<div class="muted">Nothing found for “${esc(q)}”.</div>`;
+}
+$("#rgo").onclick = rulesSearch;
+$("#rq").addEventListener("keydown", e => { if (e.key === "Enter") rulesSearch(); });
+$("#rIn").onchange = async e => {
+  for (const file of e.target.files) {
+    const fd = new FormData(); fd.append("file", file);
+    try { await api("/api/rules", {method: "POST", body: fd}); $("#rMsg").textContent = `Added ${file.name}`; } catch (x) { $("#rMsg").textContent = `${file.name}: ${x.message}`; }
+  }
+  e.target.value = ""; rulesLoad();
+};
+document.addEventListener("click", async ev => {
+  const n = ev.target.dataset && ev.target.dataset.rdel;
+  if (n && confirm(`Remove ${n} from the rules library?`)) { await api("/api/rules/" + encodeURIComponent(n), {method: "DELETE"}); rulesLoad(); }
+});
+$("#tabRules").onclick = () => tab("rules");
+async function fontShow() {
+  try {
+    const f = await api("/api/settings/font");
+    $("#fontStatus").innerHTML = f.cambria ? `<span class="badge ok">Cambria installed</span> Reports print in Meet Manager's font.`
+      : `<span class="badge no">Using Caladea</span> ${f.files["cambria.ttc"] ? "Regular added; still need <b>cambriab.ttf</b> (bold)." : f.files["cambriab.ttf"] ? "Bold added; still need <b>cambria.ttc</b> (regular)." : ""}`;
+  } catch (e) { $("#fontStatus").textContent = e.message; }
+}
+$("#fontIn").onchange = async e => {
+  for (const file of e.target.files) {
+    const fd = new FormData(); fd.append("file", file);
+    try { await api("/api/settings/font", {method: "POST", body: fd}); $("#fontMsg").textContent = `Added ${file.name}`; }
+    catch (x) { $("#fontMsg").textContent = `${file.name}: ${x.message}`; }
+  }
+  e.target.value = ""; fontShow();
+};
+fontShow();
+$("#sTolSave").onclick = async () => {
+  try { SET = await api("/api/settings", J("PUT", {time_tolerance: +$("#sTol").value})); $("#sTol").value = SET.time_tolerance.toFixed(2); $("#sTolMsg").textContent = `Saved: ${Math.round(SET.time_tolerance * 1000)} ms`; }
+  catch (e) { $("#sTolMsg").textContent = e.message; }
+};
+$("#sScan").onclick = async () => { await api("/api/drive/inventory", {method: "POST"}); loadPlan(); };
+$("#sCopy").onclick = async () => {
+  const ta = $("#sScript"); let ok = false;
+  try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(ta.value); ok = true; } } catch (e) {}
+  if (!ok) { $("#sScript").closest("details").open = true; ta.focus(); ta.select(); try { ok = document.execCommand("copy"); } catch (e) {} }
+  $("#sCopyMsg").textContent = ok ? "Copied." : "Select the script below and press Ctrl+C.";
+};
+
+let SEED_PICK = null;      // entry id picked to move
+function renderHeatSheet() {
+  const box = $("#heatSheet"); if (!box) return;
+  if (!M.preseed) { box.innerHTML = `<div class="muted" style="font-size:13px">Click <b>Seed heats</b> above to see and adjust the heats.</div>`; $("#hpCount").textContent = ""; $("#seedResetAll").classList.add("hidden"); return; }
+  const pos = {...(M.seed_lanes || {}), ...(M.combo_lanes || {})};
+  const moved = new Set(M.seed_moved || []);
+  const act = M.entries.filter(e => !e.removed && pos[e.id]);
+  $("#seedResetAll").classList.toggle("hidden", !moved.size);
+  if (!act.length) { box.innerHTML = `<div class="muted" style="font-size:13px">No seeded entries yet.</div>`; return; }
+  const comboWith = {};
+  (M.combos || []).filter(c => c.selected && c.fits).forEach(c => { comboWith[c.girls_event] = c.boys_event; comboWith[c.boys_event] = c.girls_event; });
+  const evs = {};
+  act.forEach(e => (evs[e.event_no] ??= {name: e.event, heats: {}}).heats[pos[e.id][0]] ??= {});
+  act.forEach(e => evs[e.event_no].heats[pos[e.id][0]][pos[e.id][1]] = e);
+  const pick = SEED_PICK && M.entries.find(e => e.id === SEED_PICK);
+  $("#seedPick").innerHTML = pick ? `Moving <b>${esc(pick.kind === "relay" ? (M.teams[pick.team]?.name || pick.team) + ' "' + pick.relay + '"' : swName(pick.swimmers[0]))}</b> (#${esc(pick.event_no)}) &mdash; click a lane, or <a href="#" data-seedcancel="1">cancel</a>` : "";
+  const q = ($("#hpFind").value || "").trim().toLowerCase(); let hits = 0;
+  const tn = c => M.teams[c]?.name || c;
+  box.innerHTML = Object.keys(evs).sort((a, b) => a - b).map(n => {
+    const ev = evs[n], hn = Object.keys(ev.heats).map(Number).sort((a, b) => a - b);
+    const nh = hn.length, spare = Math.max(...hn) + 1, evMoved = act.some(e => e.event_no === n && moved.has(e.id));
+    const showSpare = pick && pick.event_no === n;
+    const heats = showSpare ? [...hn, spare] : hn;
+    return `<div class="ev"><h4>#${esc(n)} ${esc(ev.name)} <span class="muted" style="font-weight:400">· ${nh} heat${nh > 1 ? "s" : ""}${comboWith[n] ? ` · swims with Ev ${esc(comboWith[n])}` : ""}</span>${evMoved ? ` <a href="#" data-seedreset="${esc(n)}" style="font-weight:400;font-size:12px">reset this event</a>` : ""}</h4><div class="heats">` +
+      heats.map(h => `<table${h === spare && showSpare ? ' style="opacity:.8;border-style:dashed"' : ""}><tr><th colspan="4">${h === spare && showSpare ? "New heat " + h : `Heat ${h} of ${nh}`}</th></tr>` + [1,2,3,4,5,6,7,8].map(l => {
+        const e = (ev.heats[h] || {})[l];
+        const target = pick && pick.event_no === n && !(e && e.id === pick.id) ? ` data-seedto="${esc(pick.id)}|${h}|${l}" style="cursor:pointer" title="Move here${e ? " (swap)" : ""}"` : "";
+        if (!e) return `<tr class="empty"${target}><td class="ln">${l}</td><td colspan="3">${target ? '<span class="muted">move here</span>' : "&mdash;"}</td></tr>`;
+        const who = e.kind === "relay" ? `${esc(tn(e.team))} "${esc(e.relay)}"<div class="legs">${esc(e.swimmers.map(swName).join(", ") || "swimmers not declared")}</div>` : esc(swName(e.swimmers[0]));
+        const txt = (e.swimmers.map(swName).join(" ") + " " + tn(e.team) + " " + e.team).toLowerCase();
+        const hit = q && txt.includes(q); if (hit) hits++;
+        const picked = pick && e.id === pick.id;
+        const attrs = target || (!pick ? ` data-seedpick="${esc(e.id)}" style="cursor:pointer" title="Click to move"` : (picked ? ` data-seedcancel="1" style="cursor:pointer" title="Click again to cancel"` : ""));
+        return `<tr class="${hit ? "hit" : ""}${picked ? " picked" : ""}"${attrs}><td class="ln">${l}</td><td>${who}${e.exhibition ? ' <span class="muted">exh</span>' : ""}${moved.has(e.id) ? ' <span class="mvd">moved</span>' : ""}</td><td>${esc(e.team)}</td><td>${esc(e.seed_fmt || "NT")}</td></tr>`;
+      }).join("") + `</table>`).join("") + `</div></div>`;
+  }).join("");
+  $("#hpCount").textContent = q ? `${hits} match${hits === 1 ? "" : "es"}` : `${Object.keys(evs).length} events · ${act.length} entries${moved.size ? ` · ${moved.size} moved by hand` : ""}`;
+}
+document.addEventListener("click", async ev => {
+  const row = ev.target.closest("[data-seedpick],[data-seedto],[data-seedcancel],[data-seedreset]");
+  if (!row) return;
+  ev.preventDefault();
+  const d = row.dataset;
+  if (d.seedcancel) { SEED_PICK = null; renderHeatSheet(); return; }
+  if (d.seedpick) { SEED_PICK = d.seedpick; renderHeatSheet(); return; }
+  if (d.seedreset) { M = await api(`/api/meets/${M.id}/seed-move`, J("POST", {reset_event: d.seedreset})); SEED_PICK = null; render(); return; }
+  if (d.seedto) {
+    const [id, h, l] = d.seedto.split("|");
+    try { M = await api(`/api/meets/${M.id}/seed-move`, J("POST", {id, heat: +h, lane: +l})); } catch (x) { alert(x.message); }
+    SEED_PICK = null; render(); return;
+  }
+});
+$("#seedResetAll").onclick = async () => { if (!confirm("Undo every hand move and go back to the automatic seeding?")) return; M = await api(`/api/meets/${M.id}/seed-move`, J("POST", {reset: true})); SEED_PICK = null; render(); };
+const swName = k => { const s = M.swimmers[k]; return s ? `${s.first} ${s.last}` : k; };
+const entLabel = e => `#${e.event_no} ${e.event}` + (e.kind === "relay" ? ` (${e.relay})` : "") + ` · ${e.seed_fmt}` + (e.exhibition ? " · exh" : "");
+
+function chip(e) {
+  if (e.added) return `<span class="chip new" title="Added here (not in the coach's file)">${esc(entLabel(e))} <a href="#" data-rmadd="${esc(e.id)}" title="Remove this added entry">×</a></span>`;
+  return `<span class="chip ${e.removed ? "x" : ""}">${esc(entLabel(e))} <a href="#" data-${e.removed ? "rs" : "rm"}="${esc(e.id)}" title="${e.removed ? "Restore" : "Remove"}">${e.removed ? "↺" : "×"}</a></span>`;
+}
+function meetEvents(kind) {
+  const seen = {};
+  M.entries.forEach(e => { if (e.kind === kind && !seen[e.event_no]) seen[e.event_no] = {no: e.event_no, name: e.event, gender: e.gender}; });
+  return Object.values(seen).sort((a, b) => (+a.no) - (+b.no));
+}
+const gNorm = g => ({W: "F", G: "F", B: "M"}[g] || g);
+function addForm(slot, html) {
+  document.querySelectorAll(".addslot").forEach(x => x.innerHTML = "");
+  const el = document.querySelector(`.addslot[data-slot="${CSS.escape(slot)}"]`);
+  el.innerHTML = `<div class="addform">${html}<button class="small" data-addgo="${esc(slot)}">Add</button><button class="ghost small" data-addcancel="1">Cancel</button><span class="muted" data-addmsg="1"></span></div>`;
+  const sel = el.querySelector("select"); if (sel) sel.focus();
+}
+function openAddSwimmer(key) {
+  const s = M.swimmers[key];
+  const mine = new Set(M.entries.filter(e => e.kind === "ind" && !e.removed && e.swimmers.includes(key)).map(e => e.event_no));
+  const evs = meetEvents("ind").filter(v => !mine.has(v.no) && (!s.gender || gNorm(v.gender) === s.gender));
+  if (!evs.length) { alertish(key, "No other events to add for this swimmer."); return; }
+  addForm(key, `<select data-f="ev">${evs.map(v => `<option value="${esc(v.no)}">#${esc(v.no)} ${esc(v.name)}</option>`).join("")}</select>
+    <input type="text" data-f="seed" placeholder="Seed (NT)" size="8"><label><input type="checkbox" data-f="exh"> Exhibition</label>`);
+}
+function openAddRelay(team) {
+  const evs = meetEvents("relay");
+  addForm("relay:" + team, `<select data-f="ev">${evs.map(v => `<option value="${esc(v.no)}">#${esc(v.no)} ${esc(v.name)}</option>`).join("")}</select>
+    <input type="text" data-f="seed" placeholder="Seed (NT)" size="8"><span class="muted">next free letter; swimmers can be declared later</span>`);
+}
+function alertish(slot, msg) { addForm(slot, ""); document.querySelector("[data-addmsg]").textContent = msg; document.querySelector("[data-addgo]").remove(); }
+async function doAdd(slot) {
+  const box = document.querySelector(`.addslot[data-slot="${CSS.escape(slot)}"]`);
+  const f = n => box.querySelector(`[data-f="${n}"]`);
+  const body = {event_no: f("ev").value, seed: f("seed").value};
+  if (slot.startsWith("relay:")) body.team = slot.slice(6); else { body.swimmer = slot; body.exh = f("exh").checked; }
+  try { M = await api(`/api/meets/${M.id}/entries`, J("POST", body)); render(); }
+  catch (e) { box.querySelector("[data-addmsg]").textContent = e.message; }
+}
+
+// Entries by team start collapsed; teams you open stay open while you work
+const TEAM_OPEN = new Set();
+document.addEventListener("toggle", ev => {
+  const c = ev.target.dataset && ev.target.dataset.teamopen;
+  if (c) ev.target.open ? TEAM_OPEN.add(c) : TEAM_OPEN.delete(c);
+}, true);
+function render() {
+  $("#meet").classList.remove("hidden");
+  $("#newBox").classList.add("hidden");
+  $("#openDb").href = `/db?meet=${M.id}`;
+  [["#mName", M.name], ["#mDate", M.date || ""], ["#mLoc", M.location || ""]].forEach(([k, v]) => { if (document.activeElement !== $(k)) $(k).value = v; });
+  $("#hostSel").value = M.host;
+  const h = HOSTS.find(x => x.id === M.host);
+  $("#hostNote").innerHTML = h && !h.has_master ? `<span style="color:var(--err)">${esc(h.short)} has no master file yet.</span> <a href="#" data-goschool="${h.id}">Set it up</a>` : "";
+  $("#filesTbl").innerHTML = M.files.length ? `<tr><th>File</th><th>Type</th><th>Teams</th><th>Entries</th><th>Received</th><th></th></tr>` +
+    M.files.map(f => `<tr><td>${esc(f.original)}${f.bad_checksums ? ` <span style="color:var(--warn)">· ${f.bad_checksums} bad checksum line(s)</span>` : ""}
+      ${f.source && f.source !== "upload" ? `<div class="muted" style="font-size:12px">${esc(f.source)}</div>` : ""}
+      ${f.warnings.length ? `<details><summary style="font-weight:400;color:var(--warn);font-size:13px">${f.warnings.length} note(s) from reading this file</summary><ul style="margin:4px 0;padding-left:18px;font-size:13px">${f.warnings.map(w => `<li>${esc(w)}</li>`).join("")}</ul></details>` : ""}</td>
+      <td style="font-size:13px">${esc(f.kind_label)}</td>
+      <td>${f.teams.map(t => esc(M.teams[t]?.name || t) + ` (${esc(t)})`).join(", ")}</td><td>${f.entries}</td><td style="font-size:13px">${esc(f.received)}</td>
+      <td><button class="ghost small" data-delfile="${esc(f.name)}" title="Moves it to the archive in Meet files">Remove</button></td></tr>`).join("") : `<tr><td class="muted">No files yet.</td></tr>`;
+  renderFiles();
+  const missing = M.expected_teams.filter(x => !x.received);
+  $("#teamBoard").innerHTML = (!M.team_status.length && !missing.length) ? `<div class="muted">No entries received yet.</div>` :
+    `<table><tr><th>Team</th><th>Swimmers</th><th>Individual</th><th>Relays</th><th>Status</th><th>From</th></tr>` +
+    M.team_status.map(t => `<tr><td><b>${esc(t.name)}</b> <span class="muted">(${esc(t.code)})</span></td>
+      <td>${t.girls} G · ${t.boys} B</td><td>${t.individual}</td><td>${t.relays}</td>
+      <td>${t.errors ? `<span class="badge no" style="background:var(--err-bg);color:var(--err)">${t.errors} problem${t.errors > 1 ? "s" : ""}</span> ` : ""}${t.warnings ? `<span class="badge no">${t.warnings} warning${t.warnings > 1 ? "s" : ""}</span> ` : ""}${!t.errors && !t.warnings ? `<span class="badge ok">OK</span>` : ""}${t.removed ? ` <span class="muted" style="font-size:12px">${t.removed} removed</span>` : ""}${t.parse_warnings ? ` <span class="muted" style="font-size:12px">${t.parse_warnings} reading note(s)</span>` : ""}</td>
+      <td style="font-size:13px">${esc(t.kind_label)}<div class="muted" style="font-size:12px">${esc(t.received)}</div></td></tr>`).join("") +
+    missing.map(x => `<tr><td><b>${esc(x.name)}</b></td><td colspan="4"><span class="badge no">Not received yet</span></td><td></td></tr>`).join("") + `</table>`;
+  if (document.activeElement !== $("#expectTeams")) $("#expectTeams").value = M.expected_teams.map(x => x.name).join(", ");
+  $("#rInd").value = M.rules.max_individual; $("#rTot").value = M.rules.max_total; $("#rCap").value = M.rules.team_cap_per_event; $("#rType").value = M.rules.meet_type || "regular"; $("#rCap").disabled = M.rules.meet_type === "exhibition";
+  const byId = Object.fromEntries(M.entries.map(e => [e.id, e]));
+  const errs = M.issues.filter(i => i.level === "error").length;
+  $("#issues").innerHTML = !M.entries.length ? `<div class="muted">Upload entries to check them.</div>` :
+    M.issues.length ? M.issues.map(i => `<div class="issue ${i.level}"><b>${esc(i.msg)}</b>${i.rule ? `<div class="muted" style="font-size:12px">Rule: ${esc(i.rule)}</div>` : ""}
+      <div class="ents">${i.entries.map(id => byId[id]).map(e => `<div class="ent"><span>${esc(entLabel(e))}${e.kind === "relay" ? " — " + esc(e.swimmers.map(swName).join(", ")) : ""}</span>
+      <button class="small" data-${e.added ? "rmadd" : "rm"}="${esc(e.id)}">Remove entry</button></div>`).join("")}</div></div>`).join("")
+    : `<div class="okbox">All ${M.entries.filter(e => !e.removed).length} entries pass the rules.</div>`;
+  $("#coachMsgs").innerHTML = !M.coach_msgs.length ? "" : `<h3>Messages to coaches</h3>
+    <div class="muted" style="font-size:13px;margin-bottom:6px">One per team with something to fix. Edit if you like, then copy into your reply.</div>` +
+    M.coach_msgs.map((c, i) => `<details ${c.errors ? "open" : ""} style="margin-bottom:8px"><summary>${esc(c.name)} <span class="muted" style="font-weight:400">· ${c.count} item${c.count > 1 ? "s" : ""}</span></summary>
+      <textarea id="cm${i}" rows="${Math.min(18, c.text.split("\n").length + 1)}" style="width:100%;margin-top:6px;font:13px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px">${esc(c.text)}</textarea>
+      <div class="row" style="margin-top:4px"><button class="small" data-copy="cm${i}">Copy</button><span class="muted" id="cm${i}msg" style="font-size:13px"></span></div></details>`).join("");
+  $("#teams").innerHTML = Object.values(M.teams).map(t => {
+    const sws = Object.values(M.swimmers).filter(s => s.team === t.code).sort((a, b) => a.last.localeCompare(b.last));
+    const rows = sws.map(s => {
+      const ents = M.entries.filter(e => e.swimmers.includes(s.key));
+      return `<tr><td>${esc(s.last)}, ${esc(s.pref || s.first)}</td><td>${esc(s.class || s.age || "")}</td><td>${ents.map(e =>
+        chip(e)).join("") || `<span class="muted">none</span>`} <a class="chip addc" data-addfor="${esc(s.key)}" title="Enter this swimmer in another event">+ Add</a><div class="addslot" data-slot="${esc(s.key)}"></div></td></tr>`;
+    }).join("");
+    const relays = M.entries.filter(e => e.team === t.code && e.kind === "relay");
+    const rrows = relays.map(e => `<tr class="${e.removed ? "removed" : ""}"><td colspan="2">${esc(entLabel(e))}</td><td>${e.swimmers.length ? esc(e.swimmers.map(swName).join(", ")) : `<span class="muted">swimmers not declared</span>`}
+      ${e.added ? `<button class="ghost small" data-rmadd="${esc(e.id)}" title="Added here - delete it">Remove</button> <span class="muted" style="font-size:12px">added here</span>` : `<button class="ghost small" data-${e.removed ? "rs" : "rm"}="${esc(e.id)}">${e.removed ? "Restore" : "Remove"}</button>`}</td></tr>`).join("");
+    return `<details data-teamopen="${esc(t.code)}" ${TEAM_OPEN.has(t.code) ? "open" : ""}><summary>${esc(t.name)} (${esc(t.code)}) — ${sws.length} swimmers, ${M.entries.filter(e => e.team === t.code && !e.removed).length} entries</summary>
+      <table><tr><th>Swimmer</th><th>Yr</th><th>Events</th></tr>${rows}<tr><th colspan="3">Relays <a class="chip addc" style="font-weight:400" data-addrelay="${esc(t.code)}">+ Add relay</a><div class="addslot" data-slot="relay:${esc(t.code)}"></div></th></tr>${rrows}</table></details>`;
+  }).join("") || `<div class="muted">No entries yet.</div>`;
+  $("#seedBtn").classList.toggle("hidden", !!M.preseed);
+  $("#unseedBtn").classList.toggle("hidden", !M.preseed);
+  $("#seedState").innerHTML = M.preseed ? `<b style="color:var(--ok,#3fb950)">&#10003; Heats seeded</b> &middot; at least 3 swimmers in every heat` : "at least 3 swimmers in every heat";
+  const si = M.seed_info || [];
+  const fixed = si.filter(x => x.moved);
+  $("#seedInfo").innerHTML = !M.preseed ? `<div class="muted" style="font-size:13px">Not seeded yet &mdash; click <b>Seed heats</b>, or seed in Meet Manager instead (it can leave a swimmer alone in heat 1).</div>` :
+    !si.length ? "" : `<div class="${fixed.length ? "issue warn" : "okbox"}" style="font-size:13px">${si.length} events seeded${fixed.length ? ` &middot; ${fixed.length} would have had a swimmer alone in heat 1 and were fixed: ${fixed.map(x => `Ev ${esc(x.event_no)}`).join(", ")}` : " &middot; no lone swimmers"}</div>
+    <details><summary class="muted" style="font-weight:400">Heats per event</summary><table style="font-size:13px"><tr><th>Event</th><th>Entries</th><th>Heats (heat 1 first)</th></tr>` +
+    si.map(x => `<tr><td>#${esc(x.event_no)} ${esc(x.event)}</td><td>${x.entries}</td><td>${x.heats.join(" · ")}${x.moved ? ` <span class="muted">(moved ${x.moved} down)</span>` : ""}</td></tr>`).join("") + `</table></details>`;
+  renderHeatSheet();
+  $("#order").innerHTML = M.lanes.order.map((t, i) => `<span class="chip">${i + 1}. ${esc(M.teams[t]?.name || t)}
+    ${i ? `<a href="#" data-up="${i}" title="Move earlier">▲</a>` : ""}</span>`).join("") || `<span class="muted">Upload entries first.</span>`;
+  $("#lanePlan").innerHTML = M.lane_plan.map(l => `<div class="lane"><b>Lane ${l.lane}</b>${esc(l.team)}</div>`).join("");
+  $("#comboLow").value = M.combine_low || "F";
+  $("#combos").innerHTML = !M.combos.length ? `<div class="muted">No 200 Free, 500 Free or 400 Free Relay entries yet.</div>` :
+    `<table><tr><th>Events</th><th>Girls</th><th>Boys</th><th>Lanes needed</th><th>Heat layout</th><th></th></tr>` + M.combos.map(c => `<tr>
+      <td><b style="${c.fits ? "" : "text-decoration:line-through;opacity:.6"}">${esc(c.label)}</b><div class="muted" style="font-size:12px;${c.fits ? "" : "text-decoration:line-through"}">Ev ${esc(c.girls_event || "–")} + Ev ${esc(c.boys_event || "–")}</div></td>
+      <td>${c.girls}</td><td>${c.boys}</td><td>${c.need} of ${c.lanes}</td>
+      <td>${c.fits ? `<div class="row" style="gap:3px">${c.layout.map(l => `<span class="lane" style="min-width:34px;padding:2px 4px;${l.who === "-" ? "opacity:.45" : l.who === "G" ? "border-color:#c2185b" : "border-color:var(--accent)"}"><b>${l.lane}</b>${l.who === "-" ? "&nbsp;" : l.who}</span>`).join("")}</div>`
+        : `<span class="muted">${esc(c.why || "")}</span>`}</td>
+      <td>${c.fits ? `<label><input type="checkbox" data-combo="${esc(c.key)}" ${c.selected ? "checked" : ""}> Combine</label>` : ""}</td></tr>`).join("") + `</table>` +
+    (M.combos.some(c => c.selected && c.fits) ? `<div class="issue warn" style="margin-top:8px">Combined events come pre-seeded in the backup.${M.preseed ? "" : ` In Meet Manager's <b>Seeding</b> screen, select every event <b>except</b> ${M.combos.filter(c => c.selected && c.fits).map(c => `Ev ${esc(c.girls_event)} &amp; ${esc(c.boys_event)}`).join(", ")} before Start Seeding, or it will re-seed them.`} At the console it's one race: Get Times for both events from the same race number.</div>` : "");
+  const autoLbl = M.record_team_auto ? `${M.teams[M.record_team_auto]?.name || M.record_team_auto} only` : "all teams";
+  $("#recTeamSel").innerHTML = `<option value="__auto">Automatic (${esc(autoLbl)})</option>` +
+    M.lanes.order.map(t => `<option value="${esc(t)}">${esc(M.teams[t]?.name || t)} only</option>`).join("") +
+    `<option value="">All teams (intrasquad)</option>`;
+  $("#recTeamSel").value = M.record_team === null || M.record_team === undefined ? "__auto" : M.record_team;
+  $("#seedStep").innerHTML = M.preseed ? `<b>Don't run Seeding</b> &mdash; every heat and lane is already set. Print the heat sheet and go. (Re-seeding in Meet Manager can put a swimmer alone in heat 1 again.)`
+    : `<b>Seeding &rarr; Select All &rarr; Start Seeding</b>${M.combos.some(c => c.selected && c.fits) ? " (leave the combined events unselected)" : ""}.`;
+  $("#dlWarn").innerHTML = (M.has_db ? `<div class="issue warn"><b>This meet has an edited database.</b> The button below rebuilds from the team entries and leaves out changes made there &mdash; to keep them, use <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> &rarr; Download / export.</div>` : "") + (errs ? `<div class="issue error"><b>${errs} rule problem(s) still open.</b> You can download anyway, but those entries go in as-is.</div>` : "");
+  $("#dl").innerHTML = M.files.length ? `<button onclick="location='/api/meets/${M.id}/download-all'">Download all teams</button>` +
+    M.files.map(f => `<button class="ghost" onclick="location='/api/meets/${M.id}/download/${encodeURIComponent(f.name)}'">${esc(f.teams.join(", "))}</button>`).join("") : "";
+}
+
+document.addEventListener("click", async ev => {
+  const t = ev.target;
+  if (t.dataset.addfor) { ev.preventDefault(); openAddSwimmer(t.dataset.addfor); }
+  else if (t.dataset.addrelay) { ev.preventDefault(); openAddRelay(t.dataset.addrelay); }
+  else if (t.dataset.addgo) { ev.preventDefault(); doAdd(t.dataset.addgo); }
+  else if (t.dataset.addcancel) { ev.preventDefault(); document.querySelectorAll(".addslot").forEach(x => x.innerHTML = ""); }
+  else if (t.dataset.rmadd) { ev.preventDefault(); M = await api(`/api/meets/${M.id}/entries/${encodeURIComponent(t.dataset.rmadd)}`, {method: "DELETE"}); render(); }
+  else if (t.dataset.rm) { ev.preventDefault(); toggle(t.dataset.rm, true); }
+  else if (t.dataset.rs) { ev.preventDefault(); toggle(t.dataset.rs, false); }
+  else if (t.dataset.delfile) { await api(`/api/meets/${M.id}/files/${encodeURIComponent(t.dataset.delfile)}`, {method: "DELETE"}); open(M.id); }
+  else if (t.dataset.up) { ev.preventDefault(); const o = [...M.lanes.order], i = +t.dataset.up; [o[i - 1], o[i]] = [o[i], o[i - 1]]; save({lanes: {...M.lanes, order: o}}); }
+  else if (t.dataset.goschool) { ev.preventDefault(); store("school", t.dataset.goschool); tab("schools"); }
+});
+$("#hpFind").addEventListener("input", renderHeatSheet);
+["#rInd", "#rTot", "#rCap", "#rType"].forEach(s => $(s).addEventListener("change", () =>
+  save({rules: {max_individual: +$("#rInd").value, max_total: +$("#rTot").value, team_cap_per_event: +$("#rCap").value, meet_type: $("#rType").value}})));
+$("#seedBtn").onclick = () => save({preseed: true});
+$("#unseedBtn").onclick = () => { if (confirm("Clear the seeding here? You'd seed in Meet Manager instead. Hand moves are kept if you seed again.")) save({preseed: false}); };
+[["#mName", "name"], ["#mDate", "date"], ["#mLoc", "location"]].forEach(([k, f]) => $(k).addEventListener("change", async e => {
+  const v = e.target.value.trim();
+  if (f === "name" && !v) { e.target.value = M.name; return; }
+  await save({[f]: v});
+  const o = [...$("#meetSel").options].find(o => o.value === M.id); if (o) o.textContent = M.name + (M.date ? " — " + M.date : "");
+  if (f === "date" && M.season !== SET.season) { await loadSeasons(); loadMeets(M.id); }
+  $("#mSaved").textContent = "Saved"; setTimeout(() => $("#mSaved").textContent = "", 1500);
+}));
+$("#hostSel").onchange = e => save({host: e.target.value, record_team: null});
+$("#comboLow").onchange = e => save({combine_low: e.target.value});
+document.addEventListener("change", ev => {
+  const k = ev.target.dataset && ev.target.dataset.combo; if (!k) return;
+  const cur = M.combos.filter(c => c.selected).map(c => c.key).filter(x => x !== k);
+  save({combine: ev.target.checked ? [...cur, k] : cur});
+});
+$("#recTeamSel").onchange = e => save({record_team: e.target.value === "__auto" ? null : e.target.value});
+$("#seasonSel").onchange = async e => { SET = await api("/api/settings", J("PUT", {season: e.target.value})); store("meet"); $("#newBox").classList.add("hidden"); loadMeets(); };
+$("#meetSel").onchange = e => { gmailLoaded = false; $("#gmailBox").open = false; return e.target.value && open(e.target.value); };
+$("#newBtn").onclick = () => { $("#newBox").classList.toggle("hidden"); $("#newName").focus(); };
+$("#createBtn").onclick = async () => {
+  store("host", $("#newHost").value);
+  const r = await api("/api/meets", J("POST", {name: $("#newName").value, date: $("#newDate").value, host: $("#newHost").value, season: SET.season}));
+  $("#newName").value = ""; loadMeets(r.id);
+};
+$("#openFileBtn").onclick = $("#openBarBtn").onclick = () => $("#openFileIn").click();
+$("#openFileIn").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  $("#newBox").classList.remove("hidden");
+  $("#openFileMsg").textContent = `Opening ${f.name}…`;
+  const fd = new FormData(); fd.append("file", f);
+  try {
+    const r = await api("/api/open-meet-file", {method: "POST", body: fd});
+    $("#openFileMsg").textContent = "";
+    $("#newBox").classList.add("hidden");
+    await loadMeets(r.id);
+    location.href = `/db?meet=${r.id}`;           // straight to Run the meet
+  } catch (x) { $("#openFileMsg").textContent = x.message; }
+};
+$("#delMeet").onclick = async () => { if (confirm(`Delete "${M.name}" and its uploaded files?`)) { await api(`/api/meets/${M.id}`, {method: "DELETE"}); store("meet"); loadMeets(); } };
+document.addEventListener("click", async ev => {
+  const id = ev.target.dataset && ev.target.dataset.copy; if (!id) return;
+  const ta = document.getElementById(id); let ok = false;
+  try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(ta.value); ok = true; } } catch (e) {}
+  if (!ok) { ta.focus(); ta.select(); try { ok = document.execCommand("copy"); } catch (e) {} }
+  document.getElementById(id + "msg").textContent = ok ? "Copied - paste it into your reply." : "Select the text and press Ctrl+C.";
+});
+$("#expectTeams").onchange = e => save({expected_teams: e.target.value.split(",").map(x => x.trim()).filter(Boolean)});
+function showResult(r) {
+  $("#uploadMsg").innerHTML = [r.added.length && `Added ${r.added.length} file(s).`, r.replaced.length && `Replaced ${r.replaced.map(esc).join(", ")}.`,
+    ...r.skipped.map(s => `<span style="color:var(--err)">${esc(s)}</span>`),
+    r.warnings && r.warnings.length ? `<span style="color:var(--warn)">${r.warnings.length} note(s) while reading - see Files received.</span>` : ""].filter(Boolean).join(" ");
+}
+$("#pasteBtn").onclick = async () => {
+  try { showResult(await api(`/api/meets/${M.id}/paste`, J("POST", {text: $("#pasteBox").value}))); $("#pasteBox").value = ""; }
+  catch (e) { $("#uploadMsg").textContent = "Couldn't add pasted entries: " + e.message; }
+  open(M.id);
+};
+let gmailLoaded = false;
+$("#gmailBox").addEventListener("toggle", () => { if ($("#gmailBox").open && !gmailLoaded) gmailScan(); });
+async function gmailScan() {
+  gmailLoaded = true;
+  const st = await api("/api/gmail/status");
+  if (!st.configured) {
+    $("#gmailBody").innerHTML = `<div class="muted" style="font-size:13px">Gmail isn't connected yet &mdash; see <a href="#" data-gosetup="1">Setup</a>.</div>`;
+    return;
+  }
+  $("#gmailBody").innerHTML = `<div class="row"><label class="muted">Last <input id="gDays" type="number" value="14" min="1" max="90" style="width:60px"> days</label>
+    <input id="gWords" placeholder="optional words, e.g. Stansbury" size="24"><button class="small" id="gGo">Search</button>
+    <span class="muted" id="gMsg">${esc(st.user)}</span></div><div id="gList" style="margin-top:8px"></div>`;
+  $("#gGo").onclick = gmailRun; gmailRun();
+}
+async function gmailRun() {
+  $("#gMsg").textContent = "Searching…"; $("#gList").innerHTML = "";
+  try {
+    const r = await api(`/api/meets/${M.id}/gmail?days=${+$("#gDays").value || 14}&words=${encodeURIComponent($("#gWords").value)}`);
+    $("#gMsg").textContent = `${r.messages.length} email(s) with entry attachments`;
+    $("#gList").innerHTML = r.messages.length ? `<table><tr><th>Date</th><th>From / subject</th><th>Attachments</th></tr>` + r.messages.map(m => `<tr>
+      <td style="white-space:nowrap;font-size:13px">${esc(m.date)}</td><td>${esc(m.from)}<div class="muted" style="font-size:13px">${esc(m.subject)}</div></td>
+      <td>${m.attachments.map(a => `<div class="row" style="gap:6px;margin-bottom:3px"><span style="font-size:13px">${esc(a.filename)}</span>
+        ${a.imported ? `<span class="badge ok">imported</span>` : ""}<button class="${a.imported ? "ghost " : ""}small" data-gimport="${a.id}">${a.imported ? "Import again" : "Import"}</button></div>`).join("")}</td></tr>`).join("") + `</table>`
+      : `<div class="muted">Nothing found. Try more days or fewer words.</div>`;
+  } catch (e) { $("#gMsg").textContent = e.message; }
+}
+document.addEventListener("click", async ev => {
+  const id = ev.target.dataset && ev.target.dataset.gimport; if (!id) return;
+  ev.target.disabled = true; ev.target.textContent = "Importing…";
+  try { showResult(await api(`/api/meets/${M.id}/gmail/import`, J("POST", {id}))); ev.target.textContent = "Imported"; await open(M.id); }
+  catch (e) { ev.target.textContent = "Failed"; $("#uploadMsg").textContent = e.message; }
+});
+async function upload(files) {
+  if (!files.length) return;
+  const fd = new FormData(); [...files].forEach(f => fd.append("files", f));
+  $("#uploadMsg").textContent = "Uploading…";
+  try {
+    showResult(await api(`/api/meets/${M.id}/upload`, {method: "POST", body: fd}));
+  } catch (e) { $("#uploadMsg").textContent = "Upload failed: " + e.message; }
+  open(M.id);
+}
+const drop = $("#drop");
+drop.onclick = () => $("#fileIn").click();
+$("#fileIn").onchange = e => { upload(e.target.files); e.target.value = ""; };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); upload(e.dataTransfer.files); };
+$("#mmBtn").onclick = async () => {
+  $("#mmMsg").textContent = "Building database…"; $("#mmReport").innerHTML = ""; $("#mmBtn").disabled = true;
+  try {
+    const r = await fetch(`/api/meets/${M.id}/mm-backup`);
+    if (!r.ok) { let d = await r.text(); try { d = JSON.parse(d).detail; } catch (e) {} throw new Error(d); }
+    const rep = JSON.parse(r.headers.get("X-Build-Report") || "{}");
+    const name = (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1] || "meet.zip";
+    const url = URL.createObjectURL(await r.blob());
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    $("#mmMsg").textContent = `Saved ${name}`;
+    $("#mmReport").innerHTML = `<div class="okbox">${esc(rep.host)} master &middot; ${rep.teams} teams, ${rep.athletes} athletes, ${rep.entries} entries, ${rep.relays} relays &middot; ${rep.meet_style == 3 ? "3+ Team Dbl Dual" : rep.meet_style == 2 ? "2 Team Dual" : "Standard"}${rep.anyone_on_relay ? " &middot; 'anyone on relay' turned on" : ""}${rep.preseeded ? ` &middot; ${rep.preseeded} entries/relays seeded into heats and lanes` : ""}</div>` +
+      (rep.warnings || []).map(w => `<div class="issue warn">${esc(w)}</div>`).join("");
+  } catch (e) { $("#mmMsg").textContent = ""; $("#mmReport").innerHTML = `<div class="issue error">${esc(e.message)}</div>`; }
+  $("#mmBtn").disabled = false;
+};
+
+// ---------------- schools ----------------
+async function loadSchools() {
+  await loadHosts();
+  $("#schoolCards").innerHTML = HOSTS.map(h => `<button class="school" data-school="${h.id}"><b>${esc(h.name)}</b>
+    <span class="badge ${h.has_master ? "ok" : "no"}">${h.has_master ? "Master ready" : "No master yet"}</span>
+    ${h.master_updated ? `<div class="muted" style="font-size:12px;margin-top:4px">Updated ${esc(h.master_updated)}</div>` : ""}</button>`).join("");
+  await openSchool(recall("school") || "THS");
+}
+async function openSchool(id) {
+  if (S && id !== S.id && DIRTY && !confirm("You have unsaved record changes. Switch schools without saving?")) return;
+  store("school", id); DIRTY = false;
+  document.querySelectorAll(".school").forEach(b => b.classList.toggle("on", b.dataset.school === id));
+  $("#schoolDetail").innerHTML = `<section class="muted">Loading…</section>`;
+  const r = await api(`/api/hosts/${id}/master`);
+  S = r.host; SM = r.loaded ? r : null;
+  REC = SM ? SM.records.map(x => ({...x})) : []; TAGS = SM ? SM.tags.map(t => ({...t, team: S.team_tags.includes(t.tag_ptr)})) : [];
+  renderSchool();
+}
+document.addEventListener("click", ev => { const b = ev.target.closest("[data-school]"); if (b) openSchool(b.dataset.school); });
+
+function renderSchool() {
+  const others = HOSTS.filter(h => h.id !== S.id && h.has_master);
+  const settings = `<section><h2>${esc(S.name)}</h2>
+    <div class="grid2">
+      <label>School name<input id="sName" value="${esc(S.name)}"></label>
+      <label>Short name<input id="sShort" value="${esc(S.short)}"></label>
+      <label>Team codes in coach files (comma separated)<input id="sCodes" value="${esc(S.team_codes.join(", "))}"></label>
+    </div>
+    <div class="muted" style="font-size:13px;margin-top:6px">Team codes decide whose swimmers count for school records when ${esc(S.short)} hosts.</div>
+    <div class="row" style="margin-top:8px"><button class="small" id="sSave">Save school</button><span class="muted" id="sMsg"></span></div></section>`;
+  const masterBox = `<section><h2>Master meet file</h2>
+    ${SM ? `<div class="row"><span><b>${esc(SM.file)}</b> &middot; Meet Manager ${esc(SM.version)}${SM.updated ? " &middot; updated " + esc(SM.updated) : ""}</span></div>
+      <div class="muted" style="margin-top:4px">${SM.events.length} events &middot; ${SM.counts.sessions} sessions &middot; ${SM.counts.officials} officials &middot; ${SM.records.length} records${SM.counts.teams ? ` &middot; <span style="color:var(--warn)">${SM.counts.teams} teams / ${SM.counts.athletes} athletes still inside</span>` : ""}</div>
+      <div class="row" style="margin-top:10px">
+        <a href="/api/hosts/${S.id}/master/download"><button class="small">Download master</button></a>
+        <button class="ghost small" id="mReplace">Replace with a Meet Manager backup&hellip;</button>
+        <label class="muted" style="font-size:13px"><input type="checkbox" id="mClean" checked> strip teams, swimmers and entries</label>
+      </div>`
+    : `<div class="issue warn">${esc(S.short)} doesn't have a master file yet. Meets hosted by ${esc(S.short)} can't be built until it does.</div>
+      <div class="row">
+        <button class="small" id="mReplace">Upload a Meet Manager backup&hellip;</button>
+        <label class="muted" style="font-size:13px"><input type="checkbox" id="mClean" checked> strip teams, swimmers and entries</label>
+      </div>`}
+    ${others.length ? `<div class="row" style="margin-top:10px"><span class="muted">or start from</span>
+      <select id="mFrom">${others.map(h => `<option value="${h.id}">${esc(h.short)}'s master</option>`).join("")}</select>
+      <button class="ghost small" id="mClone">${SM ? "Replace with a copy" : "Copy it"}</button>
+      <span class="muted" style="font-size:13px">same events, sessions and scoring; empty records</span></div>` : ""}
+    <div id="mMsg" class="muted" style="margin-top:6px"></div></section>`;
+  if (!SM) { $("#schoolDetail").innerHTML = settings + masterBox; wireSchool(); return; }
+  const meet = SM.meet;
+  const meetBox = `<section><h2>Pool &amp; meet info</h2><div class="grid2">
+      <label>Facility<input data-meet="Meet_location" value="${esc(meet.Meet_location)}"></label>
+      <label>Address<input data-meet="Meet_addr1" value="${esc(meet.Meet_addr1)}"></label>
+      <label>City<input data-meet="Meet_city" value="${esc(meet.Meet_city)}"></label>
+      <label>State<input data-meet="Meet_state" value="${esc(meet.Meet_state)}" maxlength="3"></label>
+      <label>Zip<input data-meet="Meet_zip" value="${esc(meet.Meet_zip)}"></label>
+    </div></section>`;
+  const tagRows = TAGS.map((t, i) => `<tr><td><input data-tag="${i}" data-f="name" value="${esc(t.name)}" maxlength="12" style="width:140px"></td>
+      <td><input data-tag="${i}" data-f="flag" value="${esc(t.flag)}" maxlength="1" style="width:44px" title="Symbol printed next to times that break this record"></td>
+      <td><label><input type="checkbox" data-tag="${i}" data-f="team" ${t.team ? "checked" : ""}> home swimmers only</label></td>
+      <td><button class="ghost small" data-deltag="${i}">Remove</button></td></tr>`).join("");
+  const tagsBox = `<section><h2>Record categories</h2>
+    <div class="scroll"><table><tr><th>Name (shows in Meet Manager)</th><th>Flag</th><th>Who can set it</th><th></th></tr>${tagRows}</table></div>
+    <div class="row" style="margin-top:8px"><button class="ghost small" id="addTag">Add category</button></div>
+    <div class="muted" style="font-size:13px;margin-top:6px">"Home swimmers only" is for school records: only the host team's swimmers can break them. Leave it off for pool records.</div></section>`;
+  // events (unique, in meet order) + any records that don't match an event
+  const evs = []; const seen = new Set();
+  [...SM.events].sort((a, b) => a.no - b.no).forEach(e => { const k = `${e.gender}|${e.indrel}|${e.dist}|${e.stroke}`; if (!seen.has(k)) { seen.add(k); evs.push(e); } });
+  REC.forEach(r => { const k = `${r.gender}|${r.indrel}|${r.dist}|${r.stroke}`; if (!seen.has(k)) { seen.add(k); evs.push({no: 999, gender: r.gender, indrel: r.indrel, dist: r.dist, stroke: r.stroke}); } });
+  const recBoxes = TAGS.map(t => {
+    const rows = evs.map(e => {
+      const idx = REC.findIndex(r => r.tag_ptr === t.tag_ptr && r.gender === e.gender && r.indrel === e.indrel && r.dist === e.dist && r.stroke === e.stroke);
+      const r = idx >= 0 ? REC[idx] : null;
+      const key = `${t.tag_ptr}|${e.gender}|${e.indrel}|${e.dist}|${e.stroke}`;
+      const relay = e.indrel === "R";
+      return `<tr class="${r && r._changed ? "changed" : ""}" data-key="${key}">
+        <td class="ev">${e.no < 999 ? "#" + e.no + " " : ""}${esc(evName(e.gender, e.indrel, e.dist, e.stroke))}</td>
+        <td><input class="t" data-rec="time" value="${r ? esc(fmtT(r.time)) : ""}" placeholder="—"></td>
+        <td><input data-rec="holder" value="${r ? esc(r.holder) : ""}" placeholder="${relay ? "School" : "Swimmer"}" maxlength="30"></td>
+        <td><input data-rec="team" value="${r ? esc(r.team) : ""}" placeholder="Team" maxlength="16"></td>
+        <td><input class="y" data-rec="date" value="${r ? esc(fmtD(r)) : ""}" placeholder="Year"></td>
+        <td>${relay ? `<input data-rec="relay_names" value="${r ? esc(r.relay_names) : ""}" placeholder="Relay swimmers" maxlength="50">` : ""}</td>
+        <td>${r ? `<button class="ghost small" data-clearrec="${key}" title="Remove this record">✕</button>` : ""}</td></tr>`;
+    }).join("");
+    return `<section><h2>${esc(t.name)} <span class="muted" style="font-weight:400;font-size:13px">${t.team ? "school record · home swimmers only" : "everyone"} · ${REC.filter(r => r.tag_ptr === t.tag_ptr).length} records</span></h2>
+      <div class="scroll"><table class="rec"><tr><th>Event</th><th>Time</th><th>Holder</th><th>Team</th><th>Date</th><th>Relay swimmers</th><th></th></tr>${rows}</table></div></section>`;
+  }).join("");
+  const saveBar = `<div class="sticky row"><button id="recSave">Save to ${esc(S.short)} master</button>
+    <button class="ghost" id="recUndo">Undo changes</button><span class="muted" id="recMsg"></span></div>`;
+  $("#schoolDetail").innerHTML = settings + masterBox + meetBox + tagsBox + recBoxes + saveBar;
+  wireSchool();
+  markDirty(DIRTY);
+}
+
+function markDirty(on) {
+  DIRTY = on;
+  if ($("#recSave")) { $("#recSave").disabled = !on; $("#recUndo").disabled = !on; }
+  if ($("#recMsg") && on) $("#recMsg").textContent = "Unsaved changes";
+}
+
+function wireSchool() {
+  $("#sSave").onclick = async () => {
+    try {
+      S = await api(`/api/hosts/${S.id}`, J("PUT", {name: $("#sName").value, short: $("#sShort").value, team_codes: $("#sCodes").value.split(",")}));
+      $("#sMsg").textContent = "Saved"; await loadHosts();
+      document.querySelector(`[data-school="${S.id}"] b`).textContent = S.name;
+    } catch (e) { $("#sMsg").textContent = e.message; }
+  };
+  $("#mReplace").onclick = () => {
+    if (SM && !confirm(`Replace ${S.short}'s master file? The current one is kept in the history folder on the server.`)) return;
+    $("#masterIn").click();
+  };
+  if ($("#mClone")) $("#mClone").onclick = async () => {
+    const from = $("#mFrom").value;
+    if (SM && !confirm(`Replace ${S.short}'s master with a copy of ${hostName(from)}'s? ${S.short}'s records will be emptied.`)) return;
+    $("#mMsg").textContent = "Copying…";
+    try { await api(`/api/hosts/${S.id}/master/clone`, J("POST", {from})); DIRTY = false; await loadSchools(); }
+    catch (e) { $("#mMsg").textContent = e.message; }
+  };
+  if (!SM) return;
+  document.querySelectorAll("[data-meet]").forEach(i => i.oninput = () => markDirty(true));
+  document.querySelectorAll("[data-tag]").forEach(i => i.onchange = i.oninput = () => {
+    const t = TAGS[+i.dataset.tag]; t[i.dataset.f] = i.type === "checkbox" ? i.checked : i.value; markDirty(true);
+  });
+  document.querySelectorAll("[data-deltag]").forEach(b => b.onclick = () => {
+    const t = TAGS[+b.dataset.deltag], n = REC.filter(r => r.tag_ptr === t.tag_ptr).length;
+    if (!confirm(`Remove the "${t.name}" category${n ? ` and its ${n} records` : ""}?`)) return;
+    TAGS.splice(+b.dataset.deltag, 1); REC = REC.filter(r => r.tag_ptr !== t.tag_ptr); markDirty(true); renderSchool();
+  });
+  $("#addTag").onclick = () => {
+    const ptr = Math.max(0, ...TAGS.map(t => t.tag_ptr)) + 1;
+    TAGS.push({tag_ptr: ptr, order: TAGS.length + 1, name: "New Record", flag: "*", team: false}); markDirty(true); renderSchool();
+  };
+  document.querySelectorAll("[data-rec]").forEach(inp => inp.onchange = () => {
+    const tr = inp.closest("tr"), [ptr, g, ir, d, st] = tr.dataset.key.split("|");
+    let r = REC.find(x => x.tag_ptr === +ptr && x.gender === g && x.indrel === ir && x.dist === +d && x.stroke === st);
+    if (!r) { r = {tag_ptr: +ptr, gender: g, indrel: ir, dist: +d, stroke: st, holder: "", team: "", relay_names: "", time: 0, year: 0, month: 0, day: 0, course: "Y"}; REC.push(r); }
+    const f = inp.dataset.rec;
+    if (f === "time") { const v = parseT(inp.value); if (isNaN(v)) { inp.style.borderColor = "var(--err)"; inp.title = "Use 1:46.17 or 25.08"; return; } r.time = v; inp.value = fmtT(v); }
+    else if (f === "date") { const v = parseD(inp.value); if (!v) { inp.style.borderColor = "var(--err)"; inp.title = "Use 2025 or 2/8/2020"; return; } Object.assign(r, v); inp.value = fmtD(r); }
+    else r[f] = inp.value.trim();
+    inp.style.borderColor = ""; inp.title = "";
+    r._changed = true; tr.classList.add("changed"); markDirty(true);
+  });
+  document.querySelectorAll("[data-clearrec]").forEach(b => b.onclick = () => {
+    const [ptr, g, ir, d, st] = b.dataset.clearrec.split("|");
+    REC = REC.filter(x => !(x.tag_ptr === +ptr && x.gender === g && x.indrel === ir && x.dist === +d && x.stroke === st)); markDirty(true); renderSchool();
+  });
+  $("#recUndo").onclick = () => { DIRTY = false; openSchool(S.id); };
+  $("#recSave").onclick = async () => {
+    const bad = REC.filter(r => r.time > 0 && !r.holder);
+    if (bad.length && !confirm(`${bad.length} record(s) have a time but no holder. Save anyway?`)) return;
+    const records = REC.filter(r => r.time > 0).map(({_changed, ...r}) => r);
+    const dropped = REC.length - records.length;
+    const meet = {}; document.querySelectorAll("[data-meet]").forEach(i => meet[i.dataset.meet] = i.value);
+    $("#recSave").disabled = true; $("#recMsg").textContent = "Saving…";
+    try {
+      await api(`/api/hosts/${S.id}`, J("PUT", {team_tags: TAGS.filter(t => t.team).map(t => t.tag_ptr)}));
+      const tags = TAGS.map((t, i) => ({tag_ptr: t.tag_ptr, order: i + 1, name: t.name.trim() || "Record", flag: t.flag || "*"}));
+      const r = await api(`/api/hosts/${S.id}/master`, J("PUT", {meet, tags, records}));
+      S = r.host; SM = r; REC = SM.records.map(x => ({...x})); TAGS = SM.tags.map(t => ({...t, team: S.team_tags.includes(t.tag_ptr)}));
+      DIRTY = false; renderSchool();
+      $("#recMsg").textContent = `Saved ${records.length} records to ${S.short}'s master${dropped ? ` (${dropped} without a time left out)` : ""}.`;
+    } catch (e) { $("#recMsg").textContent = "Save failed: " + e.message; $("#recSave").disabled = false; }
+  };
+}
+
+$("#masterIn").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const fd = new FormData(); fd.append("file", f);
+  $("#mMsg").textContent = "Uploading…";
+  try { await api(`/api/hosts/${S.id}/master?clean=${$("#mClean").checked ? 1 : 0}`, {method: "POST", body: fd}); DIRTY = false; await loadSchools(); }
+  catch (err) { $("#mMsg").textContent = "Upload failed: " + err.message; }
+  e.target.value = "";
+};
+
+// ---- updates (MeetDeck for Windows pulls new versions from GitHub) ----
+let UPD = null;
+function showUpdate(u) {
+  UPD = u;
+  const av = u.available && u.latest;
+  $("#updStatus").innerHTML = `This version: <b>${esc(u.current)}</b>` + (u.error ? ` &middot; <span class="muted">${esc(u.error)}</span>`
+    : av ? ` &middot; <b>${esc(u.latest.version)}</b> is available (${esc(u.latest.published)})` : ` &middot; up to date`)
+    + ` <span class="muted">&middot; from github.com/${esc(u.repo)}</span>`;
+  $("#updGo").classList.toggle("hidden", !av);
+  $("#updNotes").textContent = av ? (u.latest.notes || "") : "";
+  const b = $("#updBanner");
+  b.classList.toggle("hidden", !av);
+  if (av) b.innerHTML = `<b>MeetDeck ${esc(u.latest.version)} is available.</b> <span>${esc((u.latest.notes || "").split("\n")[0])}</span><span style="flex:1"></span>
+    <button class="small" id="updBanGo" style="background:#fff;color:#111">Install update</button><button class="ghost small" id="updBanLater" style="color:inherit;border-color:currentColor">Later</button>`;
+}
+async function checkUpdate(force) {
+  try { const u = await api("/api/update" + (force ? "?fresh=1" : "")); if (u.supported) showUpdate(u); return u; }
+  catch (e) { $("#updMsg").textContent = e.message; }
+}
+async function installUpdate() {
+  if (!confirm(`Install MeetDeck ${UPD.latest.version}? MeetDeck restarts (about 10 seconds); your meets aren't touched.`)) return;
+  $("#updMsg").textContent = "Downloading…"; $("#updBanner").innerHTML = "<b>Updating MeetDeck…</b> this page reloads when it's back.";
+  try { await api("/api/update/install", {method: "POST"}); } catch (e) { $("#updMsg").textContent = e.message; $("#updBanner").textContent = e.message; return; }
+  await new Promise(r => setTimeout(r, 4000));
+  for (let i = 0; i < 60; i++) {
+    try { const v = await (await fetch("/api/version", {cache: "no-store"})).json(); if (v.version === UPD.latest.version) { location.reload(); return; } } catch (e) {}
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  location.reload();
+}
+$("#updCheck").onclick = async () => { $("#updMsg").textContent = "Checking…"; await checkUpdate(true); $("#updMsg").textContent = ""; };
+$("#updGo").onclick = installUpdate;
+document.addEventListener("click", e => { if (e.target.id === "updBanGo") installUpdate(); if (e.target.id === "updBanLater") $("#updBanner").classList.add("hidden"); });
+(async () => {
+  try {
+    const v = await api("/api/version");
+    if (!v.windows) return;
+    $("#updBox").classList.remove("hidden"); $("#winApp").classList.add("hidden");
+    $("#updStatus").innerHTML = `This version: <b>${esc(v.version)}</b>`;
+    checkUpdate();
+  } catch (e) {}
+})();
+(async () => { await loadHosts();
+  const qm = new URLSearchParams(location.search).get("meet");      // "← Meet setup" from the meet page lands on that meet
+  if (qm) { store("meet", qm); store("tab", "meets"); history.replaceState(null, "", "/"); }
+  const h0 = location.hash.slice(1), t0 = ["schools", "setup", "meets", "rules", "run"].includes(h0) ? h0 : (recall("tab") || "meets"); tab(["schools", "setup", "rules", "run"].includes(t0) ? t0 : "meets"); })();
+</script>
+</body>
+</html>

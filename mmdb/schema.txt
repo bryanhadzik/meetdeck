@@ -1,0 +1,1063 @@
+Unable to find image 'eclipse-temurin:21-jdk' locally
+21-jdk: Pulling from library/eclipse-temurin
+edafa32f5d9e: Pulling fs layer
+f3f25b84a7d7: Pulling fs layer
+e2d2affae475: Pulling fs layer
+d8fd58b758a8: Pulling fs layer
+713854158147: Pulling fs layer
+041a5864a699: Pulling fs layer
+d8fd58b758a8: Waiting
+713854158147: Waiting
+041a5864a699: Waiting
+f3f25b84a7d7: Verifying Checksum
+f3f25b84a7d7: Download complete
+e2d2affae475: Verifying Checksum
+e2d2affae475: Download complete
+713854158147: Verifying Checksum
+713854158147: Download complete
+edafa32f5d9e: Verifying Checksum
+edafa32f5d9e: Download complete
+041a5864a699: Verifying Checksum
+041a5864a699: Download complete
+edafa32f5d9e: Pull complete
+f3f25b84a7d7: Pull complete
+e2d2affae475: Pull complete
+d8fd58b758a8: Verifying Checksum
+d8fd58b758a8: Download complete
+d8fd58b758a8: Pull complete
+713854158147: Pull complete
+041a5864a699: Pull complete
+Digest: sha256:5d90b26c0784ccf55af55f97cbcf7f3969c66a06299c93bdc72649219942a48f
+Status: Downloaded newer image for eclipse-temurin:21-jdk
+FORMAT GENERIC_JET4 [VERSION_4] pwd? TeP69s)lAd_mW-(J_72u
+
+== Agegroup rows=0
+Low_age:INT  High_age:INT  
+
+== AltScoring rows=80
+score_divno:INT  score_sex:TEXT(1)  score_place:INT  ind_score:FLOAT  rel_score:FLOAT  
+  idx altscore [GenLegTextColumnDescriptor@215be6bb[
+  column: TextColumn@2cb4c3ab[
+    name: (AltScoring) score_sex
+    type: 0xa (TEXT)
+    number: 1
+    length: 2
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@68be2bc2[
+  column: Column@13c78c0b[
+    name: (AltScoring) score_place
+    type: 0x3 (INT)
+    number: 2
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== Athlete rows=84
+Ath_no:LONG(auto)  Last_name:TEXT(20)  First_name:TEXT(20)  Initial:TEXT(1)  Ath_Sex:TEXT(1)  Birth_date:SHORT_DATE_TIME  Team_no:LONG  Schl_yr:TEXT(2)  Ath_age:INT  Reg_no:TEXT(14)  Ath_stat:TEXT(1)  Div_no:LONG  Comp_no:LONG  Pref_name:TEXT(20)  Home_addr1:TEXT(30)  Home_addr2:TEXT(30)  Home_city:TEXT(30)  Home_prov:TEXT(30)  Home_statenew:TEXT(3)  Home_zip:TEXT(10)  Home_cntry:TEXT(3)  Home_daytele:TEXT(20)  Home_evetele:TEXT(20)  Home_faxtele:TEXT(20)  Home_email:TEXT(50)  Citizen_of:TEXT(3)  Picture_bmp:TEXT(30)  second_club:TEXT(16)  Home_celltele:TEXT(20)  bcssa_type:TEXT(2)  Home_emergcontact:TEXT(30)  Home_emergtele:TEXT(20)  Disab_Scode:INT  Disab_SBcode:INT  Disab_SMcode:INT  Disab_SDMSID:TEXT(7)  Disab_Exeptioncodes:TEXT(14)  Masters_RegVerified:BOOLEAN  PC_Hide:BOOLEAN  Ath_Sex_BS:TEXT(1)  
+  idx athno PK U [IntegerColumnDescriptor@cb5822[
+  column: Column@29ee9faa[
+    name: (Athlete) Ath_no
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+    lastAutoNumber: 84
+  ]
+  flags: 1 (ASC)
+]]
+  idx athteam [IntegerColumnDescriptor@4b9e13df[
+  column: Column@c038203[
+    name: (Athlete) Team_no
+    type: 0x4 (LONG)
+    number: 6
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx idnum [GenLegTextColumnDescriptor@2b98378d[
+  column: TextColumn@cc285f4[
+    name: (Athlete) Reg_no
+    type: 0xa (TEXT)
+    number: 9
+    length: 28
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+]]
+  idx lastname [GenLegTextColumnDescriptor@475530b9[
+  column: TextColumn@55f3ddb1[
+    name: (Athlete) Last_name
+    type: 0xa (TEXT)
+    number: 1
+    length: 40
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+]]
+  idx athcompno [IntegerColumnDescriptor@1d057a39[
+  column: Column@8bd1b6a[
+    name: (Athlete) Comp_no
+    type: 0x4 (LONG)
+    number: 12
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx sdmsid [GenLegTextColumnDescriptor@26be92ad[
+  column: TextColumn@18be83e4[
+    name: (Athlete) Disab_SDMSID
+    type: 0xa (TEXT)
+    number: 35
+    length: 14
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+]]
+
+== CCrank rows=0
+Event_ptr:LONG  Ath_no:LONG  Ath_sex:TEXT(1)  Ath_stat:TEXT(1)  Team_no:LONG  Chute_rank:LONG  Chute_no:INT  Div_no:LONG  Ev_score:LONG  JDEv_score:LONG  score_stat:TEXT(1)  multi_age:INT  Fin_hand:BOOLEAN  Fin_stat:TEXT(1)  Fin_Time:FLOAT  Fin_course:TEXT(1)  Fin_place:INT  Fin_jdplace:INT  Fin_award:INT  Fin_exh:TEXT(1)  Team_ltr:TEXT(1)  
+  idx ccrankevtchutenorank [IntegerColumnDescriptor@523884b2[
+  column: Column@224edc67[
+    name: (CCrank) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@5b275dab[
+  column: Column@14acaea5[
+    name: (CCrank) Chute_no
+    type: 0x3 (INT)
+    number: 6
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@61832929[
+  column: Column@46d56d67[
+    name: (CCrank) Chute_rank
+    type: 0x4 (LONG)
+    number: 5
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx ccrankathnoevt [IntegerColumnDescriptor@29774679[
+  column: Column@d8355a8[
+    name: (CCrank) Ath_no
+    type: 0x4 (LONG)
+    number: 1
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@3ffc5af1[
+  column: Column@224edc67[
+    name: (CCrank) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx ccrankevtteamplace [IntegerColumnDescriptor@5e5792a0[
+  column: Column@224edc67[
+    name: (CCrank) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@26653222[
+  column: Column@59fa1d9b[
+    name: (CCrank) Team_no
+    type: 0x4 (LONG)
+    number: 4
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@3532ec19[
+  column: Column@28d25987[
+    name: (CCrank) Fin_place
+    type: 0x3 (INT)
+    number: 16
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx ccrankevtsexteamplace [IntegerColumnDescriptor@68c4039c[
+  column: Column@224edc67[
+    name: (CCrank) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], GenLegTextColumnDescriptor@ae45eb6[
+  column: TextColumn@4501b7af[
+    name: (CCrank) Ath_sex
+    type: 0xa (TEXT)
+    number: 2
+    length: 2
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@59f99ea[
+  column: Column@59fa1d9b[
+    name: (CCrank) Team_no
+    type: 0x4 (LONG)
+    number: 4
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@27efef64[
+  column: Column@28d25987[
+    name: (CCrank) Fin_place
+    type: 0x3 (INT)
+    number: 16
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx ccrankevtplace [IntegerColumnDescriptor@6f7fd0e6[
+  column: Column@224edc67[
+    name: (CCrank) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@47c62251[
+  column: Column@28d25987[
+    name: (CCrank) Fin_place
+    type: 0x3 (INT)
+    number: 16
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx ccrankevtplacechuteno [IntegerColumnDescriptor@3e6fa38a[
+  column: Column@224edc67[
+    name: (CCrank) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@66a3ffec[
+  column: Column@28d25987[
+    name: (CCrank) Fin_place
+    type: 0x3 (INT)
+    number: 16
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@77caeb3e[
+  column: Column@14acaea5[
+    name: (CCrank) Chute_no
+    type: 0x3 (INT)
+    number: 6
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== CCtime rows=0
+Event_ptr:LONG  Ath_no:LONG  Chute_rank:LONG  Chute_no:INT  Fin_hand:BOOLEAN  Fin_stat:TEXT(1)  Fin_Time:FLOAT  
+  idx ccevtchutetime [IntegerColumnDescriptor@5c3bd550[
+  column: Column@42d80b78[
+    name: (CCtime) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@91161c7[
+  column: Column@3bfdc050[
+    name: (CCtime) Chute_no
+    type: 0x3 (INT)
+    number: 3
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], FloatingPointColumnDescriptor@604ed9f0[
+  column: Column@1bce4f0a[
+    name: (CCtime) Fin_Time
+    type: 0x6 (FLOAT)
+    number: 6
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx ccchuterank [IntegerColumnDescriptor@6a4f787b[
+  column: Column@5e3a8624[
+    name: (CCtime) Chute_rank
+    type: 0x4 (LONG)
+    number: 2
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx ccevttime [IntegerColumnDescriptor@685cb137[
+  column: Column@42d80b78[
+    name: (CCtime) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], FloatingPointColumnDescriptor@6a41eaa2[
+  column: Column@1bce4f0a[
+    name: (CCtime) Fin_Time
+    type: 0x6 (FLOAT)
+    number: 6
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx ccevtchuterank [IntegerColumnDescriptor@7cd62f43[
+  column: Column@42d80b78[
+    name: (CCtime) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@6d4b1c02[
+  column: Column@3bfdc050[
+    name: (CCtime) Chute_no
+    type: 0x3 (INT)
+    number: 3
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@6093dd95[
+  column: Column@5e3a8624[
+    name: (CCtime) Chute_rank
+    type: 0x4 (LONG)
+    number: 2
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== CheckList rows=1
+meet_setup:BOOLEAN  athlete_pref:BOOLEAN  seeding_pref:BOOLEAN  report_pref:BOOLEAN  printer_setup:BOOLEAN  entry_pref:BOOLEAN  scoring_setup:BOOLEAN  entryfee_surcharges:BOOLEAN  divreg_names:BOOLEAN  dir_pref:BOOLEAN  event_setup:BOOLEAN  records_setup:BOOLEAN  timestd_setup:BOOLEAN  timing_setup:BOOLEAN  scbd_setup:BOOLEAN  session_setup:BOOLEAN  
+
+== CombinedEvent rows=0
+Event_no:INT  Event_ltr:TEXT(1)  CombEvent_ptr:LONG(auto)  Event_sex:TEXT(1)  Event_gender:TEXT(1)  Low_age:INT  High_Age:INT  Num_events:INT  Score_event:BOOLEAN  Div_no:INT  Comm_1:TEXT(36)  Comm_2:TEXT(36)  Comm_3:TEXT(36)  Comm_4:TEXT(36)  Entry_fee:MONEY  Event_note:TEXT(20)  Event_ptr1:LONG  Event_ptr2:LONG  Event_ptr3:LONG  Event_ptr4:LONG  Event_ptr5:LONG  Event_ptr6:LONG  Event_ptr7:LONG  Event_ptr8:LONG  Event_ptr9:LONG  Event_ptr10:LONG  
+  idx combeventptr PK U [IntegerColumnDescriptor@4883b407[
+  column: Column@5622fdf[
+    name: (CombinedEvent) CombEvent_ptr
+    type: 0x4 (LONG)
+    number: 2
+    length: 4
+    variableLength: false
+    lastAutoNumber: 0
+  ]
+  flags: 1 (ASC)
+]]
+
+== Divisions rows=10
+Div_no:LONG  Div_abbr:TEXT(10)  Div_name:TEXT(20)  old_date:SHORT_DATE_TIME  young_date:SHORT_DATE_TIME  
+
+== Dualteams rows=6
+team_gender:TEXT(1)  ateam_no:LONG  bteam_no:LONG  
+
+== Entry rows=167
+Event_ptr:LONG  Ath_no:LONG  ActSeed_course:TEXT(1)  ActualSeed_time:FLOAT  ConvSeed_course:TEXT(1)  ConvSeed_time:FLOAT  Scr_stat:BOOLEAN  Spec_stat:TEXT(1)  Dec_stat:TEXT(1)  Alt_stat:BOOLEAN  Bonus_event:BOOLEAN  Div_no:LONG  Ev_score:FLOAT  JDEv_score:FLOAT  Seed_place:INT  event_age:INT  Pre_heat:INT  Pre_lane:INT  Pre_stat:TEXT(1)  Pre_Time:FLOAT  Pre_course:TEXT(1)  Pre_heatplace:INT  Pre_place:INT  Pre_jdplace:INT  Pre_exh:TEXT(1)  Pre_points:INT  Pre_back1:FLOAT  Pre_back2:FLOAT  Pre_back3:FLOAT  Pre_watch1:FLOAT  Pre_pad:FLOAT  Pre_dqcode:TEXT(2)  Pre_dqcodeSecond:TEXT(2)  Pre_TimeType:TEXT(1)  Fin_heat:INT  Fin_lane:INT  Fin_stat:TEXT(1)  Fin_Time:FLOAT  Fin_course:TEXT(1)  Fin_heatplace:INT  Fin_jdheatplace:INT  Fin_place:INT  Fin_jdplace:INT  Fin_exh:TEXT(1)  Fin_points:INT  Fin_back1:FLOAT  Fin_back2:FLOAT  Fin_back3:FLOAT  Fin_watch1:FLOAT  Fin_pad:FLOAT  Fin_dqcode:TEXT(2)  Fin_dqcodeSecond:TEXT(2)  Fin_ptsplace:INT  fin_heatltr:TEXT(1)  fin_TimeType:TEXT(1)  Sem_heat:INT  Sem_lane:INT  Sem_stat:TEXT(1)  Sem_Time:FLOAT  Sem_course:TEXT(1)  Sem_heatplace:INT  Sem_place:INT  Sem_jdplace:INT  Sem_exh:TEXT(1)  Sem_points:INT  Sem_back1:FLOAT  Sem_back2:FLOAT  Sem_back3:FLOAT  Sem_watch1:FLOAT  Sem_pad:FLOAT  Sem_dqcode:TEXT(2)  Sem_dqcodeSecond:TEXT(2)  Sem_TimeType:TEXT(1)  dq_type:TEXT(1)  Fin_group:INT  Fin_dolphin1:FLOAT  Fin_dolphin2:FLOAT  Fin_dolphin3:FLOAT  Pre_dolphin1:FLOAT  Pre_dolphin2:FLOAT  Pre_dolphin3:FLOAT  Sem_dolphin1:FLOAT  Sem_dolphin2:FLOAT  Sem_dolphin3:FLOAT  early_seed:BOOLEAN  super_prefinalist:BOOLEAN  super_finfinalist:BOOLEAN  fin_adjuststat:TEXT(1)  pre_adjuststat:TEXT(1)  sem_adjuststat:TEXT(1)  fin_divingdd:TEXT(4)  pre_divingdd:TEXT(4)  sem_divingdd:TEXT(4)  entry_method:TEXT(1)  fin_dqofficial:LONG  pre_dqofficial:LONG  sem_dqofficial:LONG  pre_contacted:BOOLEAN  P_early_seed:BOOLEAN  Fin_reactiontime1:TEXT(8)  Pre_reactiontime1:TEXT(8)  Sem_reactiontime1:TEXT(8)  
+  idx entevtptr [IntegerColumnDescriptor@1794d431[
+  column: Column@7d9d1a19[
+    name: (Entry) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx entathno [IntegerColumnDescriptor@42e26948[
+  column: Column@39c0f4a[
+    name: (Entry) Ath_no
+    type: 0x4 (LONG)
+    number: 1
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== Event rows=22
+Event_no:INT  Event_ltr:TEXT(1)  Event_ptr:LONG(auto)  Ind_rel:TEXT(1)  Event_sex:TEXT(1)  Event_gender:TEXT(1)  Event_dist:FLOAT  Event_stroke:TEXT(1)  Low_age:INT  High_Age:INT  Multi_age:BOOLEAN  Event_stat:TEXT(1)  Event_rounds:INT  Num_prelanes:INT  Num_finlanes:INT  Heats_infinal:TEXT(1)  Heats_insemi:INT  Std_lanes:TEXT(1)  Auto_seed:BOOLEAN  Twoperlane_req:BOOLEAN  Preheat_order:TEXT(1)  Finheat_order:TEXT(1)  Score_event:BOOLEAN  Div_no:INT  Relay_size:INT  Comm_1:TEXT(36)  Comm_2:TEXT(36)  Comm_3:TEXT(36)  Comm_4:TEXT(36)  Entry_fee:MONEY  Is_locked:BOOLEAN  Locked_by:TEXT(20)  Event_Type:TEXT(1)  Locked_list:TEXT(12)  Event_note:TEXT(20)  Suppress_stroke:BOOLEAN  Custom_ABCFinal:BOOLEAN  Num_dives:INT  Num_HeatsInFinal:INT  Multiage_SuperFinal:BOOLEAN  Finals_LanesVary:BOOLEAN  Finals_LanesVaryOrder:TEXT(18)  ABCfinal_order:TEXT(6)  ABC_Style:BOOLEAN  PrelimsAs_ExtendedFinal:BOOLEAN  Num_LanesInBestHeatsTimedFinal:INT  Num_BestHeatsTimedFinal:INT  TimedFinal_LanesVary:BOOLEAN  ScoreTimedFinal_asABC:BOOLEAN  Num_HeatsInTimedFinalToScore:INT  Pads_BothEnds:BOOLEAN  Multiage_SuperSeed:BOOLEAN  Suppress_distance:BOOLEAN  Fin_AwardsPrinted:BOOLEAN  Pre_AwardsPrinted:BOOLEAN  Sem_AwardsPrinted:BOOLEAN  FastTimeStd_Abbr:TEXT(4)  SlowTimeStd_Abbr:TEXT(4)  SuperFinal_ElimOldAgeGrp:BOOLEAN  SeedMultiAge_OldToYoung:BOOLEAN  Multi_ageScnd:BOOLEAN  Num_RelayLegs:INT  Pads_BothEndsFinals:BOOLEAN  Checkin_starttime:LONG  Checkin_endtime:LONG  Checkin_startdate:SHORT_DATE_TIME  Checkin_enddate:SHORT_DATE_TIME  Num_semlanes:INT  EvtMaxAgeFor_CFinal:INT  EvtMaxAgeNumHeats_CFinal:INT  fin_actualstarttime:LONG  sem_actualstarttime:LONG  pre_actualstarttime:LONG  Swimoff_SourcePtr:LONG  Swimoff_SourceRndLtr:TEXT(1)  Swimoff_Created:SHORT_DATE_TIME  Multiage_BestRestFinal:BOOLEAN  
+  idx eventptr PK U [IntegerColumnDescriptor@343f4d3d[
+  column: Column@57baeedf[
+    name: (Event) Event_ptr
+    type: 0x4 (LONG)
+    number: 2
+    length: 4
+    variableLength: false
+    lastAutoNumber: 22
+  ]
+  flags: 1 (ASC)
+]]
+
+== EventGetTimes rows=0
+Event_ptr:LONG  Heat_no:INT  Vendor_abbr:TEXT(5)  Race_number:TEXT(6)  Get_Date:SHORT_DATE_TIME  Get_Time:LONG  Now_Date:SHORT_DATE_TIME  Now_Time:LONG  Rnd_ltr:TEXT(1)  
+  idx eventptr [IntegerColumnDescriptor@4667ae56[
+  column: Column@5442a311[
+    name: (EventGetTimes) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@77cd7a0[
+  column: Column@548e7350[
+    name: (EventGetTimes) Heat_no
+    type: 0x3 (INT)
+    number: 1
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], GenLegTextColumnDescriptor@204f30ec[
+  column: TextColumn@1a968a59[
+    name: (EventGetTimes) Race_number
+    type: 0xa (TEXT)
+    number: 3
+    length: 12
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+]]
+
+== Masters rows=0
+timer_type:INT  pool_name:TEXT(45)  pool_city:TEXT(20)  pool_state:TEXT(3)  pool_lmsc:TEXT(3)  Meet_type:INT  ref_name:TEXT(40)  sub_name:TEXT(40)  sub_address:TEXT(40)  sub_city:TEXT(20)  sub_state:TEXT(3)  sub_zip:TEXT(10)  sub_phone:TEXT(20)  sub_email:TEXT(50)  sendto_name:TEXT(40)  sendto_address:TEXT(40)  sendto_city:TEXT(20)  sendto_state:TEXT(3)  sendto_zip:TEXT(10)  sendto_email:TEXT(50)  record_name:TEXT(12)  
+
+== Meet rows=1
+Meet_name1:TEXT(45)  Meet_header1:TEXT(75)  Meet_header2:TEXT(75)  Meet_location:TEXT(45)  Meet_start:SHORT_DATE_TIME  Meet_end:SHORT_DATE_TIME  Meet_idformat:INT  Meet_class:INT  Meet_meettype:INT  Meet_course:INT  Enter_ages:BOOLEAN  Enter_birthdate:BOOLEAN  Calc_date:SHORT_DATE_TIME  Enter_schoolyr:BOOLEAN  A_Relaysonly:BOOLEAN  Use_hometown:BOOLEAN  Show_countrycode:BOOLEAN  Scores_afterevt:BOOLEAN  Lastname_first:BOOLEAN  Punct_names:BOOLEAN  Punct_teams:BOOLEAN  win_mm:BOOLEAN  meet_numlanes:INT  prelimheats_circle:INT  timedfinal_circleseed:BOOLEAN  foreign_infinal:BOOLEAN  exh_infinal:BOOLEAN  nonconform_last:BOOLEAN  course_order:TEXT(255)  seed_exhlast:BOOLEAN  dual_evenodd:BOOLEAN  strict_evenodd:BOOLEAN  team_evenlanes:LONG  team_oddlanes:LONG  masters_bytimeonly:BOOLEAN  masters_agegrpsskip:INT  timer_port:INT  scbd_port:INT  timer_vendor:TEXT(4)  scbd_vendor:TEXT(4)  show_initial:BOOLEAN  ucase_names:BOOLEAN  ucase_teams:BOOLEAN  open_senior_none:TEXT(1)  entryqual_faster:BOOLEAN  Facility_Surcharge:MONEY  anyone_onrelay:BOOLEAN  language_choice:TEXT(20)  military_time:BOOLEAN  check_times:BOOLEAN  enterkey_astab:BOOLEAN  double_endedsplits:BOOLEAN  use_compnumbers:BOOLEAN  flighted_minentries:INT  diffpts_malefemale:BOOLEAN  diffpts_eachdivision:BOOLEAN  scoreonly_ifexceedqualtime:BOOLEAN  score_fastestheatonly:BOOLEAN  entrylimits_warn:BOOLEAN  pointsbasedon_seedtime:BOOLEAN  pointsfor_overachievers:BOOLEAN  pointsfor_underachievers:BOOLEAN  indmaxscorers_perteam:INT  relmaxscorers_perteam:INT  indtopmany_awards:INT  reltopmany_awards:INT  entrymax_total:INT  indmax_perath:INT  relmax_perath:INT  foreign_getteampoints:BOOLEAN  include_swimupsinteamscore:BOOLEAN  enter_citizenof:BOOLEAN  meet_meetstyle:INT  flag_overachievers:BOOLEAN  flag_underachievers:BOOLEAN  scbd_punctuation:INT  scbd_names:INT  scbd_relaynames:INT  scbd_cycle:BOOLEAN  scbd_cycleseconds:INT  copies_toprinter:INT  report_headersonly:BOOLEAN  autoinc_compno:BOOLEAN  pentscoring_usedqtime:BOOLEAN  swimmer_surcharge:MONEY  directly_toprinter:BOOLEAN  lastname_asinitial:BOOLEAN  under_eventname:BOOLEAN  suppress_Arelay:BOOLEAN  Punct_recholders:BOOLEAN  ucase_recholders:BOOLEAN  suppress_lsc:BOOLEAN  showathlete_status:BOOLEAN  open_lowage:INT  useeventsex_teamscore:BOOLEAN  suppress_smallx:BOOLEAN  score_Arelayonly:BOOLEAN  thirteenandover_assenior:BOOLEAN  suppress_jd:BOOLEAN  abcfinal_order:TEXT(3)  maxagefor_cfinal:INT  Sanction_number:TEXT(30)  include_sanction:BOOLEAN  special_points:INT  countrelay_alt:BOOLEAN  UseNonConforming_PoolFactor:BOOLEAN  NonConforming_PoolFactor:FLOAT  apnews_team:TEXT(1)  PointsAwarded_ForDQ:FLOAT  PointsAwarded_ForScratch:FLOAT  PointsAwarded_ForNT:FLOAT  Enter_AthStat:BOOLEAN  Show_secondclub:BOOLEAN  firstinitial_fulllastname:BOOLEAN  turnon_autobackup:BOOLEAN  autobackup_interval:INT  PointsAwarded_ForExh:BOOLEAN  Use_AltTeamAbbr:BOOLEAN  IsCanadian_Masters:BOOLEAN  entry_msg:TEXT(80)  timedfinalnonconform_last:BOOLEAN  referee_name:TEXT(30)  referee_homphone:TEXT(20)  referee_offphone:TEXT(20)  Meet_altitude:LONG  Import_Dir:TEXT(80)  Export_Dir:TEXT(80)  Backup_Dir:TEXT(80)  RestoreFrom_Dir:TEXT(80)  RestoreTo_Dir:TEXT(80)  FlatHtml_Dir:TEXT(80)  APNews_Dir:TEXT(80)  AllowSameEvent_DupRelayNames:BOOLEAN  dualteam_lane1:LONG  dualteam_lane2:LONG  dualteam_lane3:LONG  dualteam_lane4:LONG  dualteam_lane5:LONG  dualteam_lane6:LONG  dualteam_lane7:LONG  dualteam_lane8:LONG  dualteam_lane9:LONG  dualteam_lane10:LONG  strict_evenoddfastestheatonly:BOOLEAN  dualseeding_altunusedlane:BOOLEAN  team_surcharge:MONEY  Display_ActualEntryTime:BOOLEAN  indmaxadvance_perteam:INT  relmaxadvance_perteam:INT  RelayNames_LinkByLSC:BOOLEAN  Read_Only:BOOLEAN  Flighted_BasedOnResultsTime:BOOLEAN  ShowYear_InPlaceOfAge:BOOLEAN  PenaltyPts_ForNS:FLOAT  EntryEligibility_date:SHORT_DATE_TIME  Suppress_TimeStdAbbr:BOOLEAN  masters_indlowage:INT  masters_rellowage:INT  Custom_QualTimes:BOOLEAN  Suppress_SplitsForDQs:BOOLEAN  Suppress_SplitsForDQsRelay:BOOLEAN  DQCodes_Type:TEXT(1)  SuppressTimes_NotMeetQualTime:BOOLEAN  Show_AgeandBirthYear:BOOLEAN  Meet_state:TEXT(3)  Meet_country:TEXT(3)  Meet_lsc:TEXT(3)  BCSSA_DivbyTimeStd:BOOLEAN  Show_HyTekDecimals:BOOLEAN  Suppress_ResultsAdvQ:BOOLEAN  RelaysAs_4x100Style:BOOLEAN  flighted_flightcount:INT  flighted_inclDQ:BOOLEAN  RelaysAlternate_TwoFastestFirst:BOOLEAN  dualteam_lane11:LONG  dualteam_lane12:LONG  entry_deadline:SHORT_DATE_TIME  Meet_addr1:TEXT(30)  Meet_addr2:TEXT(30)  Meet_city:TEXT(30)  Meet_zip:TEXT(10)  Meet_hostlsc:TEXT(3)  Meet_USMastersMeetID:TEXT(20)  ShowFirstName_OverPreferred:BOOLEAN  ExcludeNTEntries_WhenImporting:BOOLEAN  Enter_birthcentury:BOOLEAN  Using_twopools:BOOLEAN  Pool1_name:TEXT(30)  Pool2_name:TEXT(30)  indtopmany_awardsSr:INT  reltopmany_awardsSr:INT  maxforeign_infinal:INT  Flag_FastestRecordOnly:BOOLEAN  athlete_earlysurcharge:MONEY  athlete_latesurcharge:MONEY  athlete_earlysurchargedate:SHORT_DATE_TIME  athlete_latesurchargedate:SHORT_DATE_TIME  entry_OpenDate:SHORT_DATE_TIME  DisplayNTfor_TimesUnder5Sec:BOOLEAN  SortTeamCombos_ByTeamName:BOOLEAN  FastestHeat_SomeLanesDoNotScore:BOOLEAN  RankDisabled_ByPoints:BOOLEAN  special_parapoints:INT  DisabledDoNot_AdvanceToFinals:BOOLEAN  prelimheats_circledist:INT  DisabledIgnoreQualTime_ForScoring:BOOLEAN  CountTimeTrial_Events:BOOLEAN  QualNonConformCourse_UseMinStd:BOOLEAN  Last_updated:TEXT(40)  MixedRelays_DividedPoints:BOOLEAN  RelayOnly_Surcharge:MONEY  TimeAdj_Method:TEXT(1)  DisabledSeedWithAgeGroup_IfTimedFinalSuperSeed:BOOLEAN  Lock_Reseed:BOOLEAN  Competition_Code:TEXT(6)  PenaltyTimeSec_ForCombEvtDQ:FLOAT  
+
+== MEETMOBILE2OPTIONS rows=1
+MeetMobile2MeetID:LONG  AgencyID:TEXT(40)  EV5_uploaded:BOOLEAN  Heatpsych_uploaded:BOOLEAN  Heatsheet_amount:FLOAT  Teamscoring_choice:INT  Contract_agreed:BOOLEAN  DoNotShow_timeline:BOOLEAN  HeatPsych_choice:INT  Contract_PersonName:TEXT(40)  Contract_PersonBirth:SHORT_DATE_TIME  LastName:TEXT(50)  FirstName:TEXT(50)  Phone:TEXT(20)  EMail:TEXT(50)  TeamName:TEXT(50)  Addr:TEXT(50)  SecAddr:TEXT(30)  City:TEXT(30)  State:TEXT(3)  Zip:TEXT(10)  Cntry:TEXT(3)  TimeZone:TEXT(50)  PayTo:TEXT(50)  Classification:TEXT(50)  WebSite:TEXT(50)  Token:TEXT(80)  OMEWebSite:TEXT(100)  License:TEXT(120)  NoShowActiveComSetup:BOOLEAN  AnnounceEV5_uploaded:BOOLEAN  SharingEV5_uploaded:BOOLEAN  FileSharingMeetID:LONG  FileSharingEvtsOk:BOOLEAN  FileSharingPricingOk:BOOLEAN  FileSharingEntryLimitsOk:BOOLEAN  FileSharingQualTimesOk:BOOLEAN  FileSharingMeetSetupOk:BOOLEAN  NotInterestedIn_FileSharing:BOOLEAN  DoNotShow_MeetSharingImportMsg:BOOLEAN  ResultsFile_uploaded:BOOLEAN  MeetResultsID:LONG  NotInterestedIn_MeetMobile:BOOLEAN  Contract_agreedMeetSharing:BOOLEAN  Contract_PersonNameMeetSharing:TEXT(40)  Contract_PersonBirthMeetSharing:SHORT_DATE_TIME  HeatSheetsAre_Free:BOOLEAN  
+
+== MemorizedReports rows=0
+Mem_Name:TEXT(40)  Mem_Type:INT  Mem_Ptr:LONG(auto)  Num_Columns:INT  Sort_Order:INT  Date_Time:INT  ID_Type:INT  Top_HowMany:INT  Num_RelayNames:INT  Show_StartTimes:BOOLEAN  Incl_Records:BOOLEAN  Incl_TimeStds:BOOLEAN  Incl_QualTimes:BOOLEAN  Incl_EvtComments:BOOLEAN  Line_ForResults:BOOLEAN  Incl_NoEntries:BOOLEAN  Incl_PriorResults:BOOLEAN  Incl_Rnd1Alt:BOOLEAN  Incl_EmptyLanes:BOOLEAN  Show_SeedTimes:BOOLEAN  Sep_ABFinal:BOOLEAN  OneEvent_PerPage:BOOLEAN  Ref_Format:BOOLEAN  OneHeat_PerPage:BOOLEAN  Dbl_Space:BOOLEAN  Show_Ranks:BOOLEAN  MultiAge_Split:BOOLEAN  Incl_QualifiedAlts:BOOLEAN  ScrAltExhSpec_Filters:INT  Incl_Scratches:BOOLEAN  Ignore_Psych:BOOLEAN  Sess_Row:LONG  Evt_Gender:INT  Evt_LowAge:INT  Evt_HighAge:INT  Team_Abbr:TEXT(9)  Evt_Round:INT  Evt_IndivOrRelay:INT  Report_Type:INT  Sort_OrderAthAge:INT  Incl_AthNoEntries:BOOLEAN  Incl_AthNoEntries4Col:BOOLEAN  AddApost_ClassYear:BOOLEAN  Incl_CompNo:BOOLEAN  Incl_CompNo4Col:BOOLEAN  AddrSort_ByTeam:BOOLEAN  AddrSort_ByZip:BOOLEAN  Incl_ScrInEntryCount:BOOLEAN  Incl_AltInEntryCount:BOOLEAN  Incl_BirthDate:BOOLEAN  Incl_TeamAddr:BOOLEAN  Incl_Coaches:BOOLEAN  AthUseAbbr_ForTeam:BOOLEAN  Div_Abbr:TEXT(30)  Report_Format:INT  Incl_HeatLane:BOOLEAN  Add_LineSpace:BOOLEAN  Incl_RegID:BOOLEAN  Show_CheckIn:BOOLEAN  NumAth_PerPage:INT  Splits_Choice:INT  Results_ByHeat:BOOLEAN  Page_Break:BOOLEAN  Incl_SpecPts:BOOLEAN  Incl_TimeTrials:BOOLEAN  Incl_NoShows:BOOLEAN  Incl_TeamPts:BOOLEAN  Low_Lane:INT  High_Lane:INT  Score_Female:BOOLEAN  Score_Male:BOOLEAN  Score_Combined:BOOLEAN  Score_CombinedBoth:BOOLEAN  BAG_CATS:BOOLEAN  Flat_HTML:BOOLEAN  DotMatrix_LabelChoice:TEXT(40)  Laser_LabelChoice:TEXT(40)  Incl_TeamScore:BOOLEAN  Incl_FemaleTeamScore:BOOLEAN  Incl_MaleTeamScore:BOOLEAN  CombineDivisions_ForTeamPoints:BOOLEAN  Incl_DQCodes:BOOLEAN  Incl_ReactionTimes:BOOLEAN  Incl_Backups:BOOLEAN  UseLaser_Label:INT  UseDQTimesfor_CombinedEvents:BOOLEAN  Incl_EntryTimes:BOOLEAN  Incl_PriorResultsSplits:BOOLEAN  Incl_LogosinFooter:BOOLEAN  LaneTimer_Pads:BOOLEAN  UseBestTimes_AllRounds:BOOLEAN  Qual_Club:BOOLEAN  QualClub_Scorers:BOOLEAN  PtBreakOut_HighPt:BOOLEAN  RTF_export:BOOLEAN  Results_ByHeatInclLane:BOOLEAN  NoShows_Only:BOOLEAN  Scratches_Only:BOOLEAN  DQs_Only:BOOLEAN  Combined_BothMustScore:BOOLEAN  
+  idx memptr PK U [IntegerColumnDescriptor@146ba0ac[
+  column: Column@754ba872[
+    name: (MemorizedReports) Mem_Ptr
+    type: 0x4 (LONG)
+    number: 2
+    length: 4
+    variableLength: false
+    lastAutoNumber: 0
+  ]
+  flags: 1 (ASC)
+]]
+
+== Multiage rows=0
+event_ptr:LONG  low_age:INT  high_age:INT  Heats_infinal:TEXT(1)  Num_Heatsinfinal:INT  
+
+== MultiageScnd rows=0
+event_ptr:LONG  low_age:INT  high_age:INT  
+
+== Officials rows=7
+Official_no:LONG(auto)  Last_name:TEXT(20)  First_name:TEXT(20)  Initial:TEXT(1)  Pref_name:TEXT(20)  Home_email:TEXT(50)  
+  idx officialno [IntegerColumnDescriptor@464bee09[
+  column: Column@4dfa3a9d[
+    name: (Officials) Official_no
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+    lastAutoNumber: 8
+  ]
+  flags: 1 (ASC)
+]]
+  idx lastname [GenLegTextColumnDescriptor@f6c48ac[
+  column: TextColumn@6eebc39e[
+    name: (Officials) Last_name
+    type: 0xa (TEXT)
+    number: 1
+    length: 40
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+]]
+
+== OMEOPTIONS rows=1
+OMEEntryStyle:BYTE  OMEReviewTime:BYTE  EMailFrom:TEXT(50)  EMailSubject:TEXT(100)  EMailText:TEXT(254)  LastName:TEXT(50)  FirstName:TEXT(50)  Phone:TEXT(20)  EMail:TEXT(50)  TeamName:TEXT(50)  Addr:TEXT(50)  SecAddr:TEXT(30)  City:TEXT(30)  State:TEXT(3)  Zip:TEXT(10)  Cntry:TEXT(3)  TimeZone:TEXT(50)  PayTo:TEXT(50)  Classification:TEXT(50)  WebSite:TEXT(50)  NoShowMeetList:BOOLEAN  NoShowMeetSetup:BOOLEAN  NoShowActiveComSetup:BOOLEAN  Token:TEXT(80)  OMEWebSite:TEXT(100)  AgencyID:TEXT(40)  License:TEXT(120)  ActiveMeetID:LONG  EV4_uploaded:BOOLEAN  
+
+== Records rows=44
+tag_ptr:LONG  tag_gender:TEXT(1)  tag_indrel:TEXT(1)  tag_dist:LONG  tag_stroke:TEXT(1)  low_age:INT  high_Age:INT  Record_month:INT  Record_day:INT  Record_year:INT  Record_Holder:TEXT(30)  Record_Holderteam:TEXT(16)  Relay_Names:TEXT(50)  Record_Time:FLOAT  Record_course:TEXT(1)  div_abbr:TEXT(10)  Record_teamabbr:TEXT(5)  Record_teamlsc:TEXT(2)  
+  idx recordtag [IntegerColumnDescriptor@239963d8[
+  column: Column@13deb50e[
+    name: (Records) tag_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== RecordsApp rows=0
+timer_type:INT  app_title:TEXT(90)  app_date:TEXT(11)  sendto_name:TEXT(40)  sendto_address1:TEXT(40)  sendto_address2:TEXT(40)  sendto_city:TEXT(20)  sendto_state:TEXT(3)  sendto_zip:TEXT(10)  sendto_email:TEXT(50)  record_name:TEXT(12)  app_topnote1:TEXT(110)  app_bottomnote1:TEXT(110)  app_topnote2:TEXT(110)  app_bottomnote2:TEXT(110)  app_topnote3:TEXT(110)  app_bottomnote3:TEXT(110)  app_topnote4:TEXT(110)  app_bottomnote4:TEXT(110)  referree_name:TEXT(40)  adminref_name:TEXT(40)  
+
+== RecordsbyEvent rows=0
+tag_ptr:LONG  event_ptr:LONG  low_age:INT  high_Age:INT  Record_month:INT  Record_day:INT  Record_year:INT  Record_Holder:TEXT(30)  Record_Holderteam:TEXT(16)  Relay_Names:TEXT(50)  Record_Time:FLOAT  Record_course:TEXT(1)  tag_gender:TEXT(1)  hide_me:BOOLEAN  div_abbr:TEXT(10)  Record_teamabbr:TEXT(5)  Record_teamlsc:TEXT(2)  
+  idx recordevt [IntegerColumnDescriptor@57fffcd7[
+  column: Column@3abbfa04[
+    name: (RecordsbyEvent) event_ptr
+    type: 0x4 (LONG)
+    number: 1
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== RecordTags rows=2
+tag_ptr:LONG(auto)  tag_order:INT  tag_name:TEXT(12)  tag_flag:TEXT(1)  team_no:LONG  allow_exh:BOOLEAN  allow_foreigner:BOOLEAN  tag_lsc:TEXT(3)  
+
+== Regions rows=4
+Reg_no:LONG  Reg_abbr:TEXT(2)  Reg_name:TEXT(20)  fem_size:INT  male_size:INT  combined_size:INT  
+
+== Relay rows=33
+Event_ptr:LONG  Relay_no:LONG(auto)  Team_no:LONG  Team_ltr:TEXT(1)  Rel_age:INT  Rel_sex:TEXT(1)  ActSeed_course:TEXT(1)  ActualSeed_time:FLOAT  ConvSeed_course:TEXT(1)  ConvSeed_time:FLOAT  Scr_stat:BOOLEAN  Spec_stat:TEXT(1)  Dec_stat:TEXT(1)  Alt_stat:BOOLEAN  Bonus_event:BOOLEAN  Div_no:LONG  Ev_score:FLOAT  JDEv_score:FLOAT  Seed_place:INT  Pre_heat:INT  Pre_lane:INT  Pre_stat:TEXT(1)  Pre_Time:FLOAT  Pre_course:TEXT(1)  Pre_heatplace:INT  Pre_place:INT  Pre_jdplace:INT  Pre_exh:TEXT(1)  Pre_points:INT  Pre_back1:FLOAT  Pre_back2:FLOAT  Pre_back3:FLOAT  Pre_watch1:FLOAT  Pre_pad:FLOAT  Pre_reactiontime1:TEXT(5)  Pre_dqcode:TEXT(2)  Pre_dqcodeSecond:TEXT(2)  Pre_TimeType:TEXT(1)  Fin_heat:INT  Fin_lane:INT  Fin_stat:TEXT(1)  Fin_Time:FLOAT  Fin_course:TEXT(1)  Fin_heatplace:INT  Fin_jdheatplace:INT  Fin_place:INT  Fin_jdplace:INT  Fin_exh:TEXT(1)  Fin_points:INT  Fin_back1:FLOAT  Fin_back2:FLOAT  Fin_back3:FLOAT  Fin_watch1:FLOAT  Fin_pad:FLOAT  Fin_reactiontime1:TEXT(5)  Fin_dqcode:TEXT(2)  Fin_dqcodeSecond:TEXT(2)  Fin_ptsplace:INT  Fin_heatltr:TEXT(1)  Fin_TimeType:TEXT(1)  Sem_heat:INT  Sem_lane:INT  Sem_stat:TEXT(1)  Sem_Time:FLOAT  Sem_course:TEXT(1)  Sem_heatplace:INT  Sem_place:INT  Sem_jdplace:INT  Sem_exh:TEXT(1)  Sem_points:INT  Sem_back1:FLOAT  Sem_back2:FLOAT  Sem_back3:FLOAT  Sem_watch1:FLOAT  Sem_pad:FLOAT  Sem_reactiontime1:TEXT(5)  Sem_dqcode:TEXT(2)  Sem_dqcodeSecond:TEXT(2)  Sem_TimeType:TEXT(1)  Fin_reactiontime2:TEXT(5)  Pre_reactiontime2:TEXT(5)  Sem_reactiontime2:TEXT(5)  Fin_reactiontime3:TEXT(5)  Pre_reactiontime3:TEXT(5)  Sem_reactiontime3:TEXT(5)  Fin_reactiontime4:TEXT(5)  Pre_reactiontime4:TEXT(5)  Sem_reactiontime4:TEXT(5)  dq_type:TEXT(1)  Fin_group:INT  Fin_dolphin1:FLOAT  Fin_dolphin2:FLOAT  Fin_dolphin3:FLOAT  Pre_dolphin1:FLOAT  Pre_dolphin2:FLOAT  Pre_dolphin3:FLOAT  Sem_dolphin1:FLOAT  Sem_dolphin2:FLOAT  Sem_dolphin3:FLOAT  early_seed:BOOLEAN  fin_adjuststat:TEXT(1)  pre_adjuststat:TEXT(1)  sem_adjuststat:TEXT(1)  entry_method:TEXT(1)  fin_dqofficial:LONG  pre_dqofficial:LONG  sem_dqofficial:LONG  pre_contacted:BOOLEAN  
+  idx relevtptr [IntegerColumnDescriptor@5f341870[
+  column: Column@31ef45e3[
+    name: (Relay) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx relteamno [IntegerColumnDescriptor@553f17c[
+  column: Column@598067a5[
+    name: (Relay) Team_no
+    type: 0x4 (LONG)
+    number: 2
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx relteamltr [GenLegTextColumnDescriptor@4f7d0008[
+  column: TextColumn@3c0ecd4b[
+    name: (Relay) Team_ltr
+    type: 0xa (TEXT)
+    number: 3
+    length: 2
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+]]
+  idx relrelayno [IntegerColumnDescriptor@271053e1[
+  column: Column@14bf9759[
+    name: (Relay) Relay_no
+    type: 0x4 (LONG)
+    number: 1
+    length: 4
+    variableLength: false
+    lastAutoNumber: 35
+  ]
+  flags: 1 (ASC)
+]]
+
+== RelayNames rows=132
+Event_ptr:LONG  Team_no:LONG  Team_ltr:TEXT(255)  Ath_no:LONG  Pos_no:INT  Event_round:TEXT(1)  Relay_no:LONG  
+  idx relnamevtptr [IntegerColumnDescriptor@3fee9989[
+  column: Column@589838eb[
+    name: (RelayNames) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx relnameteamno [IntegerColumnDescriptor@73ad2d6[
+  column: Column@42dafa95[
+    name: (RelayNames) Team_no
+    type: 0x4 (LONG)
+    number: 1
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx relnameteamltr [GenLegTextColumnDescriptor@7085bdee[
+  column: TextColumn@6500df86[
+    name: (RelayNames) Team_ltr
+    type: 0xa (TEXT)
+    number: 2
+    length: 510
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+]]
+  idx relathno [IntegerColumnDescriptor@1ce92674[
+  column: Column@402a079c[
+    name: (RelayNames) Ath_no
+    type: 0x4 (LONG)
+    number: 3
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx relrelaynoposno [IntegerColumnDescriptor@5700d6b1[
+  column: Column@59ec2012[
+    name: (RelayNames) Relay_no
+    type: 0x4 (LONG)
+    number: 6
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], GenLegTextColumnDescriptor@6fd02e5[
+  column: TextColumn@4cf777e8[
+    name: (RelayNames) Event_round
+    type: 0xa (TEXT)
+    number: 5
+    length: 2
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@5bcab519[
+  column: Column@2f686d1f[
+    name: (RelayNames) Pos_no
+    type: 0x3 (INT)
+    number: 4
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== ScoreLanes rows=1
+lane_00:BOOLEAN  lane_01:BOOLEAN  lane_02:BOOLEAN  lane_03:BOOLEAN  lane_04:BOOLEAN  lane_05:BOOLEAN  lane_06:BOOLEAN  lane_07:BOOLEAN  lane_08:BOOLEAN  lane_09:BOOLEAN  lane_10:BOOLEAN  lane_11:BOOLEAN  lane_12:BOOLEAN  
+
+== Scoring rows=140
+score_divno:INT  score_sex:TEXT(1)  score_place:INT  ind_score:FLOAT  rel_score:FLOAT  
+  idx scordiv [IntegerColumnDescriptor@3f49dace[
+  column: Column@e45f292[
+    name: (Scoring) score_divno
+    type: 0x3 (INT)
+    number: 0
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], GenLegTextColumnDescriptor@1e397ed7[
+  column: TextColumn@5f2108b5[
+    name: (Scoring) score_sex
+    type: 0xa (TEXT)
+    number: 1
+    length: 2
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@490ab905[
+  column: Column@31a5c39e[
+    name: (Scoring) score_place
+    type: 0x3 (INT)
+    number: 2
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== ScoringImprovement rows=10
+list_no:INT  diff_lowtime:FLOAT  diff_hightime:FLOAT  pt_score:FLOAT  swim_score:FLOAT  
+  idx listno [IntegerColumnDescriptor@27c20538[
+  column: Column@56ac3a89[
+    name: (ScoringImprovement) list_no
+    type: 0x3 (INT)
+    number: 0
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== Session rows=2
+Sess_no:INT  Sess_ltr:TEXT(1)  Sess_ptr:LONG(auto)  Sess_day:INT  Sess_starttime:LONG  Sess_entrymax:INT  Sess_name:TEXT(60)  Sess_interval:INT  Sess_course:TEXT(1)  Sess_entrymaxind:INT  Sess_entrymaxrel:INT  Sess_backinterval:INT  Sess_divinginterval:INT  Sess_chaseinterval:INT  
+  idx sessptr PK U [IntegerColumnDescriptor@6e06451e[
+  column: Column@72d818d1[
+    name: (Session) Sess_ptr
+    type: 0x4 (LONG)
+    number: 2
+    length: 4
+    variableLength: false
+    lastAutoNumber: 2
+  ]
+  flags: 1 (ASC)
+]]
+
+== Sessitem rows=22
+Sess_order:LONG  Sess_ptr:LONG  Event_ptr:LONG  Sess_rnd:TEXT(1)  Rept_type:TEXT(1)  Delay_seconds:LONG  Alt_With:BOOLEAN  Timed_finalheats:INT  EventTo_AlternateWith:LONG  Delay_desc:TEXT(50)  AltHeats_StartCount:INT  Event_Interval:LONG  
+  idx sessptr [IntegerColumnDescriptor@cb644e[
+  column: Column@59494225[
+    name: (Sessitem) Sess_ptr
+    type: 0x4 (LONG)
+    number: 1
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx sessevtptr [IntegerColumnDescriptor@13805618[
+  column: Column@6e1567f1[
+    name: (Sessitem) Event_ptr
+    type: 0x4 (LONG)
+    number: 2
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx sessevtrnd [IntegerColumnDescriptor@56ef9176[
+  column: Column@6e1567f1[
+    name: (Sessitem) Event_ptr
+    type: 0x4 (LONG)
+    number: 2
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], GenLegTextColumnDescriptor@4566e5bd[
+  column: TextColumn@5cb9f472[
+    name: (Sessitem) Sess_rnd
+    type: 0xa (TEXT)
+    number: 3
+    length: 2
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+]]
+
+== Split rows=0
+Event_ptr:LONG  Ath_no:LONG  Team_no:LONG  Team_ltr:TEXT(1)  Rnd_ltr:TEXT(1)  Split_no:INT  Split_Time:FLOAT  Relay_no:LONG  
+  idx athsplit [IntegerColumnDescriptor@73846619[
+  column: Column@1ed4004b[
+    name: (Split) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@4bec1f0c[
+  column: Column@ff5b51f[
+    name: (Split) Ath_no
+    type: 0x4 (LONG)
+    number: 1
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], GenLegTextColumnDescriptor@29ca901e[
+  column: TextColumn@25bbe1b6[
+    name: (Split) Rnd_ltr
+    type: 0xa (TEXT)
+    number: 4
+    length: 2
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@5649fd9b[
+  column: Column@5702b3b1[
+    name: (Split) Split_no
+    type: 0x3 (INT)
+    number: 5
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx relsplit [IntegerColumnDescriptor@6adede5[
+  column: Column@1ed4004b[
+    name: (Split) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@2d928643[
+  column: Column@69ea3742[
+    name: (Split) Team_no
+    type: 0x4 (LONG)
+    number: 2
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], GenLegTextColumnDescriptor@5025a98f[
+  column: TextColumn@4b952a2d[
+    name: (Split) Team_ltr
+    type: 0xa (TEXT)
+    number: 3
+    length: 2
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+], GenLegTextColumnDescriptor@49993335[
+  column: TextColumn@25bbe1b6[
+    name: (Split) Rnd_ltr
+    type: 0xa (TEXT)
+    number: 4
+    length: 2
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@20322d26[
+  column: Column@5702b3b1[
+    name: (Split) Split_no
+    type: 0x3 (INT)
+    number: 5
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx relaynosplit [IntegerColumnDescriptor@192b07fd[
+  column: Column@3159c4b8[
+    name: (Split) Relay_no
+    type: 0x4 (LONG)
+    number: 7
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], GenLegTextColumnDescriptor@64bfbc86[
+  column: TextColumn@25bbe1b6[
+    name: (Split) Rnd_ltr
+    type: 0xa (TEXT)
+    number: 4
+    length: 2
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@64bf3bbf[
+  column: Column@5702b3b1[
+    name: (Split) Split_no
+    type: 0x3 (INT)
+    number: 5
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== StdLanes rows=12
+tot_lanes:INT  order_01:INT  order_02:INT  order_03:INT  order_04:INT  order_05:INT  order_06:INT  order_07:INT  order_08:INT  order_09:INT  order_10:INT  order_11:INT  order_12:INT  
+  idx stdlaneord PK U [IntegerColumnDescriptor@148080bb[
+  column: Column@55d56113[
+    name: (StdLanes) tot_lanes
+    type: 0x3 (INT)
+    number: 0
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== TagNames rows=0
+tag_ptr:LONG(auto)  tag_name:TEXT(4)  for_scoring:BOOLEAN  for_entryqual:BOOLEAN  for_timestd:BOOLEAN  tag_desc:TEXT(20)  
+
+== Team rows=3
+Team_no:LONG(auto)  Team_name:TEXT(30)  Team_short:TEXT(16)  Team_abbr:TEXT(5)  Team_stat:TEXT(1)  Team_lsc:TEXT(3)  Team_div:INT  Team_region:INT  Team_head:TEXT(30)  Team_asst:TEXT(30)  Team_addr1:TEXT(30)  Team_addr2:TEXT(30)  Team_city:TEXT(30)  Team_prov:TEXT(30)  Team_statenew:TEXT(3)  Team_zip:TEXT(10)  Team_cntry:TEXT(3)  Team_daytele:TEXT(20)  Team_evetele:TEXT(20)  Team_faxtele:TEXT(20)  Team_email:TEXT(36)  Team_c3:TEXT(30)  Team_c4:TEXT(30)  Team_c5:TEXT(30)  Team_c6:TEXT(30)  Team_c7:TEXT(30)  Team_c8:TEXT(30)  Team_c9:TEXT(30)  Team_c10:TEXT(30)  Team_altabbr:TEXT(5)  Team_NoPoints:BOOLEAN  Team_Selected:BOOLEAN  Team_altname:TEXT(16)  NoTeam_surcharge:BOOLEAN  NoFacility_surcharge:BOOLEAN  NoAthlete_surcharge:BOOLEAN  Team_cell:TEXT(20)  NoRelayOnly_surcharge:BOOLEAN  Team_Code:TEXT(30)  Team_Gender:TEXT(1)  
+  idx tmteamno PK U [IntegerColumnDescriptor@617faa95[
+  column: Column@dc24521[
+    name: (Team) Team_no
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+    lastAutoNumber: 4
+  ]
+  flags: 1 (ASC)
+]]
+  idx teamabbr [GenLegTextColumnDescriptor@1e127982[
+  column: TextColumn@10bdf5e5[
+    name: (Team) Team_abbr
+    type: 0xa (TEXT)
+    number: 3
+    length: 10
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+]]
+  idx teamname [GenLegTextColumnDescriptor@60c6f5b[
+  column: TextColumn@6e1ec318[
+    name: (Team) Team_name
+    type: 0xa (TEXT)
+    number: 1
+    length: 60
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+]]
+  idx ipcid [GenLegTextColumnDescriptor@2038ae61[
+  column: TextColumn@7e0b0338[
+    name: (Team) Team_Code
+    type: 0xa (TEXT)
+    number: 38
+    length: 60
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+]]
+
+== TeamCoaches rows=3
+Coach_no:LONG(auto)  Team_no:LONG  Coach_LastName:TEXT(20)  Coach_FirstName:TEXT(20)  Coach_Title:TEXT(15)  Primary_MaleHeadCoach:BOOLEAN  Primary_FemaleHeadCoach:BOOLEAN  MaleCoach_Only:BOOLEAN  FemaleCoach_Only:BOOLEAN  Coach_Phone:TEXT(20)  Coach_Cell:TEXT(20)  Coach_EMail:TEXT(36)  Coach_Cert1:TEXT(15)  Coach_Cert2:TEXT(15)  Coach_Cert3:TEXT(15)  Coach_Cert4:TEXT(15)  Coach_ExpDate1:SHORT_DATE_TIME  Coach_ExpDate2:SHORT_DATE_TIME  Coach_ExpDate3:SHORT_DATE_TIME  Coach_ExpDate4:SHORT_DATE_TIME  
+  idx Coachno PK U [IntegerColumnDescriptor@544fe44c[
+  column: Column@3c0f93f1[
+    name: (TeamCoaches) Coach_no
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+    lastAutoNumber: 3
+  ]
+  flags: 1 (ASC)
+]]
+  idx teamno [IntegerColumnDescriptor@31610302[
+  column: Column@31dc339b[
+    name: (TeamCoaches) Team_no
+    type: 0x4 (LONG)
+    number: 1
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== TimeStd rows=0
+tag_ptr:LONG  tag_gender:TEXT(1)  tag_indrel:TEXT(1)  tag_dist:LONG  tag_stroke:TEXT(1)  low_age:INT  high_Age:INT  tag_time:FLOAT  tag_course:TEXT(1)  div_abbr:TEXT(10)  
+  idx timestdtag [IntegerColumnDescriptor@21213b92[
+  column: Column@71318ec4[
+    name: (TimeStd) tag_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+
+== WaveOffset rows=0
+Event_ptr:LONG  Heat_no:INT  Rnd_ltr:TEXT(1)  Wave_offset:FLOAT  
+  idx waveptr [IntegerColumnDescriptor@66480dd7[
+  column: Column@a67c67e[
+    name: (WaveOffset) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]
+  idx waveptrheatnornd [IntegerColumnDescriptor@52a86356[
+  column: Column@a67c67e[
+    name: (WaveOffset) Event_ptr
+    type: 0x4 (LONG)
+    number: 0
+    length: 4
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+], GenLegTextColumnDescriptor@5ce81285[
+  column: TextColumn@3327bd23[
+    name: (WaveOffset) Rnd_ltr
+    type: 0xa (TEXT)
+    number: 2
+    length: 2
+    variableLength: true
+    compressedUnicode: false
+    textSortOrder: SortOrder[1033(0)]
+  ]
+  flags: 1 (ASC)
+], IntegerColumnDescriptor@78c03f1f[
+  column: Column@4e1d422d[
+    name: (WaveOffset) Heat_no
+    type: 0x3 (INT)
+    number: 1
+    length: 2
+    variableLength: false
+  ]
+  flags: 1 (ASC)
+]]

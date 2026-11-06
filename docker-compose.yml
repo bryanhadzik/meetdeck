@@ -1,0 +1,14 @@
+services:
+  swimmeet:
+    build: .
+    container_name: swimmeet
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - TZ=America/Denver
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data:/data

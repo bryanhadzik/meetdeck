@@ -1,0 +1,490 @@
+{
+ "Relay": {
+  "defaults": {
+   "Fin_lane": [
+    "Short",
+    "0"
+   ],
+   "ConvSeed_time": [
+    "Float",
+    "0.0"
+   ],
+   "Fin_heat": [
+    "Short",
+    "0"
+   ],
+   "Fin_heatplace": [
+    "Short",
+    "0"
+   ],
+   "Div_no": [
+    "Integer",
+    "0"
+   ],
+   "Fin_jdheatplace": [
+    "Short",
+    "0"
+   ],
+   "Fin_ptsplace": [
+    "Short",
+    "0"
+   ],
+   "Fin_heatltr": [
+    "String",
+    " "
+   ],
+   "Fin_place": [
+    "Short",
+    "0"
+   ],
+   "pre_contacted": [
+    "Boolean",
+    "false"
+   ],
+   "Team_no": [
+    "Integer",
+    "0"
+   ],
+   "Rel_age": [
+    "Short",
+    "0"
+   ],
+   "Pre_exh": [
+    "String",
+    " "
+   ],
+   "Spec_stat": [
+    "String",
+    " "
+   ],
+   "entry_method": [
+    "String",
+    " "
+   ],
+   "ActualSeed_time": [
+    "Float",
+    "0.0"
+   ],
+   "Scr_stat": [
+    "Boolean",
+    "false"
+   ],
+   "Dec_stat": [
+    "String",
+    " "
+   ],
+   "Bonus_event": [
+    "Boolean",
+    "false"
+   ],
+   "early_seed": [
+    "Boolean",
+    "false"
+   ],
+   "Seed_place": [
+    "Short",
+    "0"
+   ],
+   "Alt_stat": [
+    "Boolean",
+    "false"
+   ],
+   "Event_ptr": [
+    "Integer",
+    "0"
+   ]
+  },
+  "padded": [
+   "Team_ltr",
+   "ActSeed_course",
+   "Fin_course",
+   "Rel_sex",
+   "ConvSeed_course"
+  ]
+ },
+ "Entry": {
+  "defaults": {
+   "Fin_lane": [
+    "Short",
+    "0"
+   ],
+   "fin_heatltr": [
+    "String",
+    " "
+   ],
+   "ConvSeed_time": [
+    "Float",
+    "0.0"
+   ],
+   "Fin_heat": [
+    "Short",
+    "0"
+   ],
+   "Div_no": [
+    "Integer",
+    "0"
+   ],
+   "P_early_seed": [
+    "Boolean",
+    "false"
+   ],
+   "Fin_ptsplace": [
+    "Short",
+    "0"
+   ],
+   "Fin_place": [
+    "Short",
+    "0"
+   ],
+   "pre_contacted": [
+    "Boolean",
+    "false"
+   ],
+   "Pre_exh": [
+    "String",
+    " "
+   ],
+   "Spec_stat": [
+    "String",
+    " "
+   ],
+   "entry_method": [
+    "String",
+    " "
+   ],
+   "ActualSeed_time": [
+    "Float",
+    "0.0"
+   ],
+   "Scr_stat": [
+    "Boolean",
+    "false"
+   ],
+   "super_finfinalist": [
+    "Boolean",
+    "false"
+   ],
+   "Dec_stat": [
+    "String",
+    " "
+   ],
+   "Bonus_event": [
+    "Boolean",
+    "false"
+   ],
+   "early_seed": [
+    "Boolean",
+    "false"
+   ],
+   "Ath_no": [
+    "Integer",
+    "0"
+   ],
+   "Seed_place": [
+    "Short",
+    "0"
+   ],
+   "super_prefinalist": [
+    "Boolean",
+    "false"
+   ],
+   "Alt_stat": [
+    "Boolean",
+    "false"
+   ],
+   "Event_ptr": [
+    "Integer",
+    "0"
+   ]
+  },
+  "padded": [
+   "ActSeed_course",
+   "Fin_course",
+   "ConvSeed_course"
+  ]
+ },
+ "RelayNames": {
+  "defaults": {
+   "Ath_no": [
+    "Integer",
+    "0"
+   ],
+   "Pos_no": [
+    "Short",
+    "0"
+   ],
+   "Team_no": [
+    "Integer",
+    "0"
+   ],
+   "Event_ptr": [
+    "Integer",
+    "0"
+   ],
+   "Relay_no": [
+    "Integer",
+    "0"
+   ]
+  },
+  "padded": ["Event_round"]
+ },
+ "RecordTags": {
+  "defaults": {
+   "team_no": [
+    "Integer",
+    "0"
+   ],
+   "allow_foreigner": [
+    "Boolean",
+    "false"
+   ],
+   "tag_order": [
+    "Short",
+    "0"
+   ],
+   "allow_exh": [
+    "Boolean",
+    "false"
+   ]
+  },
+  "padded": [
+   "tag_flag",
+   "tag_name"
+  ]
+ },
+ "TeamCoaches": {
+  "defaults": {
+   "MaleCoach_Only": [
+    "Boolean",
+    "false"
+   ],
+   "Primary_MaleHeadCoach": [
+    "Boolean",
+    "false"
+   ],
+   "Team_no": [
+    "Integer",
+    "0"
+   ],
+   "Coach_Cert2": [
+    "String",
+    ""
+   ],
+   "FemaleCoach_Only": [
+    "Boolean",
+    "false"
+   ],
+   "Coach_Cert1": [
+    "String",
+    ""
+   ],
+   "Coach_Cert4": [
+    "String",
+    ""
+   ],
+   "Coach_Cert3": [
+    "String",
+    ""
+   ],
+   "Coach_Cell": [
+    "String",
+    ""
+   ],
+   "Coach_Title": [
+    "String",
+    ""
+   ],
+   "Coach_Phone": [
+    "String",
+    ""
+   ],
+   "Primary_FemaleHeadCoach": [
+    "Boolean",
+    "false"
+   ],
+   "Coach_EMail": [
+    "String",
+    ""
+   ]
+  },
+  "padded": []
+ },
+ "Team": {
+  "defaults": {
+   "Team_NoPoints": [
+    "Boolean",
+    "false"
+   ],
+   "NoTeam_surcharge": [
+    "Boolean",
+    "false"
+   ],
+   "Team_div": [
+    "Short",
+    "0"
+   ],
+   "NoAthlete_surcharge": [
+    "Boolean",
+    "false"
+   ],
+   "Team_Selected": [
+    "Boolean",
+    "false"
+   ],
+   "NoRelayOnly_surcharge": [
+    "Boolean",
+    "false"
+   ],
+   "Team_region": [
+    "Short",
+    "0"
+   ],
+   "NoFacility_surcharge": [
+    "Boolean",
+    "false"
+   ]
+  },
+  "padded": [
+   "Team_abbr",
+   "Team_daytele",
+   "Team_asst",
+   "Team_statenew",
+   "Team_addr1",
+   "Team_email",
+   "Team_addr2",
+   "Team_short",
+   "Team_head",
+   "Team_zip",
+   "Team_name",
+   "Team_cntry",
+   "Team_city",
+   "Team_c3",
+   "Team_c4"
+  ]
+ },
+ "Dualteams": {
+  "defaults": {
+   "bteam_no": [
+    "Integer",
+    "0"
+   ],
+   "ateam_no": [
+    "Integer",
+    "0"
+   ]
+  },
+  "padded": ["team_gender"]
+ },
+ "Athlete": {
+  "defaults": {
+   "Reg_no": [
+    "String",
+    "              "
+   ],
+   "bcssa_type": [
+    "String",
+    "  "
+   ],
+   "Masters_RegVerified": [
+    "Boolean",
+    "false"
+   ],
+   "Ath_age": [
+    "Short",
+    "0"
+   ],
+   "Ath_stat": [
+    "String",
+    " "
+   ],
+   "PC_Hide": [
+    "Boolean",
+    "false"
+   ],
+   "Citizen_of": [
+    "String",
+    "   "
+   ],
+   "Initial": [
+    "String",
+    " "
+   ],
+   "Team_no": [
+    "Integer",
+    "0"
+   ],
+   "Pref_name": [
+    "String",
+    " "
+   ],
+   "Comp_no": [
+    "Integer",
+    "0"
+   ]
+  },
+  "padded": [
+   "Reg_no",
+   "Ath_Sex",
+   "First_name",
+   "Schl_yr",
+   "Last_name",
+   "Initial",
+   "Pref_name"
+  ]
+ },
+ "Records": {
+  "defaults": {
+   "low_age": [
+    "Short",
+    "0"
+   ],
+   "high_Age": [
+    "Short",
+    "0"
+   ],
+   "tag_ptr": [
+    "Integer",
+    "0"
+   ],
+   "Record_month": [
+    "Short",
+    "0"
+   ],
+   "div_abbr": [
+    "String",
+    " "
+   ],
+   "Record_year": [
+    "Short",
+    "0"
+   ],
+   "Record_Holderteam": [
+    "String",
+    " "
+   ],
+   "Relay_Names": [
+    "String",
+    " "
+   ],
+   "tag_dist": [
+    "Integer",
+    "0"
+   ],
+   "Record_day": [
+    "Short",
+    "0"
+   ],
+   "Record_Time": [
+    "Float",
+    "0.0"
+   ]
+  },
+  "padded": [
+   "Record_course",
+   "tag_gender",
+   "tag_indrel",
+   "Relay_Names",
+   "tag_stroke"
+  ]
+ }
+}

@@ -1,0 +1,19 @@
+# MeetDeck - code only. Meet data, swimmer names and settings never go in the repo.
+data/
+meets/
+.env
+*.mdb
+*.ldb
+sample-backup.zip
+mmdb/master/
+mmdb/fixed/
+mmdb/sample/
+mmdb/*.class
+mmdb/records-fix-*.json
+tests/fixtures/
+timing/cts-log.txt
+windows/cache/
+windows/build/
+windows/dist/
+__pycache__/
+*.pyc

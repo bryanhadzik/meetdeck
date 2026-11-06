@@ -1442,6 +1442,43 @@ def _install_db(d: Path, mdb_name: str, mdb: bytes, hyb: str, source: str):
     (_dbdir(d) / "info.json").write_text(json.dumps({"mdb_name": mdb_name, "hyb": hyb, "source": source,
                                                       "created": time.strftime("%Y-%m-%d %H:%M")}))
     _dblog(d, f"Database loaded: {source}", "load")
+    _adopt_scoring(d)
+
+
+def _adopt_scoring(d: Path):
+    """A meet that Meet Manager already scored: mark the races that have points as scored, with the scoring
+    method whose points match the file best, so the Scores tab and the Scored badges show right away."""
+    info = _dbinfo(d)
+    if info.get("scoring") or info.get("adopted"):
+        return
+    info["adopted"] = True
+    try:
+        m = meetdb.load(_dbfile(d))
+        done = sorted({e["event"] for e in m["entries"] if e["points"] and not e["scr"]})
+        if done:
+            have = {(meetdb._table(e), repr(sorted(meetdb._match(e).items()))): e["points"] or 0 for e in m["entries"]}
+            mm = m["meet"].get("mm_scoring") or {}
+            fastest = bool(mm.get("fastest_heat"))
+            def limits(k):   # Meet Manager's own "max scorers per team" (0 = no limit) wins over the method's
+                c = meetdb.SCORING[k]
+                return (mm.get("ind_max", c["ind_max"]), mm.get("rel_max", c["rel_max"])) if mm else (c["ind_max"], c["rel_max"])
+            def misses(k):
+                ops, scored, _, _ = meetdb.score_events(m, k, *limits(k), set(done), False, fastest)
+                bad = sum(1 for o in ops if abs(o["set"]["Ev_score"] - have.get((o["table"], repr(sorted(o["match"].items()))), 0)) > 0.001)
+                return bad + 100 * len(set(done) - set(scored))
+            default = meetdb.default_scoring(m)
+            method = min(meetdb.SCORING, key=lambda k: (misses(k), k != default))
+            cfg = meetdb.SCORING[method]
+            im, rm = limits(method)
+            summary = {"method": method, "method_name": cfg["name"], "ind_max": im, "rel_max": rm, "fastest": fastest,
+                       "events": done, "sigs": {str(p): meetdb.event_sig(m, p) for p in done}, "skipped": [],
+                       "when": time.strftime("%Y-%m-%d %H:%M"), "from_file": True}
+            summary.update(meetdb.score_totals(m, summary))
+            info["scoring"] = summary
+            _dblog(d, f"{len(done)} race(s) were already scored in Meet Manager - kept their points", "score")
+    except Exception as x:   # never block opening a meet over this
+        print("adopt scoring:", x)
+    (_dbdir(d) / "info.json").write_text(json.dumps(info))
 
 
 @app.get("/api/meets/{mid}/db")
@@ -1450,6 +1487,9 @@ def db_get(mid: str):
     info = _dbinfo(d)
     if not _dbfile(d).exists():
         return {"exists": False, "meet": _meta(d)["name"]}
+    if not info.get("scoring") and not info.get("adopted"):
+        _adopt_scoring(d)
+        info = _dbinfo(d)
     m = meetdb.load(_dbfile(d))
     logf = _dbdir(d) / "log.jsonl"
     log = [json.loads(l) for l in logf.read_text().splitlines()[-200:]] if logf.exists() else []
@@ -1703,7 +1743,8 @@ def db_score(mid: str, body: dict):
     cfg = meetdb.SCORING[method]
     ind_max = int(body["ind_max"]) if body.get("ind_max") is not None else prev.get("ind_max", cfg["ind_max"]) if prev.get("method") == method else cfg["ind_max"]
     rel_max = int(body["rel_max"]) if body.get("rel_max") is not None else prev.get("rel_max", cfg["rel_max"]) if prev.get("method") == method else cfg["rel_max"]
-    same = prev.get("method") == method and prev.get("ind_max") == ind_max and prev.get("rel_max") == rel_max
+    fastest = bool(body["fastest"]) if body.get("fastest") is not None else bool(prev.get("fastest"))
+    same = prev.get("method") == method and prev.get("ind_max") == ind_max and prev.get("rel_max") == rel_max and bool(prev.get("fastest")) == fastest
     kept = set(prev.get("events", [])) if same else set()
     if body.get("all"):
         targets = None
@@ -1713,7 +1754,7 @@ def db_score(mid: str, body: dict):
         raise HTTPException(400, "Pick an event to score")
     ops, scored, skipped, sigs = ([], [], [], {})
     if targets is None or targets:
-        ops, scored, skipped, sigs = meetdb.score_events(m, method, ind_max, rel_max, targets, True)
+        ops, scored, skipped, sigs = meetdb.score_events(m, method, ind_max, rel_max, targets, True, fastest)
     asked = {int(x) for x in body.get("events", [])}
     if asked and not (asked & set(scored)):
         raise HTTPException(400, "That event isn't finished yet - every lane needs a time, DQ or no-show" + (f": {skipped[0]}" if skipped else ""))
@@ -1732,7 +1773,7 @@ def db_score(mid: str, body: dict):
     _snapshot(d, "before: " + msg)
     if ops:
         meetdb.apply(db, ops)
-    summary = {"method": method, "method_name": cfg["name"], "ind_max": ind_max, "rel_max": rel_max,
+    summary = {"method": method, "method_name": cfg["name"], "ind_max": ind_max, "rel_max": rel_max, "fastest": fastest,
                "events": sorted(kept | set(scored)), "sigs": {**(prev.get("sigs", {}) if same else {}), **sigs},
                "skipped": skipped if body.get("all") else [], "when": time.strftime("%Y-%m-%d %H:%M")}
     summary.update(meetdb.score_totals(meetdb.load(db), summary))
@@ -1786,6 +1827,7 @@ def db_backup(mid: str):
     hyb = info.get("hyb") or _hyb_default()
     data = _pack(name, mdb, hyb)
     zname = f"Swmm8Bkup{Path(name).stem}-{time.strftime('%m%d-%H%M')}.zip"
+    _activity(d, "backup")
     bk = d / "backups"
     bk.mkdir(exist_ok=True)
     (bk / f"{time.strftime('%Y-%m-%d %H%M')} {zname}").write_bytes(data)
@@ -1812,6 +1854,7 @@ def db_export(mid: str, fmt: str):
     if not db.exists():
         raise HTTPException(400, "No database yet")
     m = meetdb.load(db)
+    _activity(d, f"export_{fmt}")
     if fmt == "hy3":
         info = _dbinfo(d)
         seq = int(info.get("result_exports", 0)) + 1          # Meet Manager numbers its exports -001, -002 ...
@@ -1899,6 +1942,18 @@ async def font_upload(file: UploadFile = File(...)):
     return heatsheet.font_status()
 
 
+def _any_licensee() -> str:
+    """Meet Manager licence name from another meet's backup, for meets opened from a bare .mdb."""
+    for f in sorted(DATA.glob("*/db/info.json"), key=lambda f: f.stat().st_mtime, reverse=True):
+        try:
+            lic = (json.loads(f.read_text()).get("hyb") or "")[28:78].strip()
+            if lic:
+                return lic
+        except Exception:
+            pass
+    return ""
+
+
 @app.get("/api/meets/{mid}/db/report/{kind}.pdf")
 def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
     """Printable reports laid out like Meet Manager's: heatsheet (Meet Program), referee program, timer sheets."""
@@ -1908,18 +1963,21 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
     if not db.exists():
         raise HTTPException(400, "No database yet")
     m = meetdb.load(db)
-    licensee = (_dbinfo(d).get("hyb") or "")[28:78].strip()
+    licensee = (_dbinfo(d).get("hyb") or "")[28:78].strip() or _any_licensee()
     if kind == "heatsheet":
         pdf, label = heatsheet.heat_sheet_pdf(m, licensee), "heat sheet"
     elif kind == "referee":
         pdf, label = heatsheet.referee_pdf(m, licensee), "referee program"
     elif kind == "results":
         pdf, label = heatsheet.results_pdf(m, db, licensee), "results"
+    elif kind == "timeline":
+        pdf, label = heatsheet.timeline_pdf(m, licensee), "timeline"
     elif kind == "timer":
         pdf, label = heatsheet.timer_pdf(m, licensee, lane=lane or None), "timer sheets" + (f" lane {lane}" if lane else "")
     else:
         raise HTTPException(404)
     name = f"{_stem(m['meet']['name'])} {label}.pdf"
+    _activity(d, f"print_{kind}")
     disp = "attachment" if download else "inline"
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'{disp}; filename="{name}"'})
 
@@ -1929,6 +1987,57 @@ def _fmr(d: Path):
     """The signed Final Meet Report the user added to the meet's documents (scan / photo / PDF)."""
     docs = sorted((d / "docs").iterdir(), key=lambda f: -f.stat().st_mtime) if (d / "docs").exists() else []
     return next((f for f in docs if re.search(r"final|meet.?report|fmr", f.name, re.I)), None)
+
+
+def _activity(d: Path, key: str):
+    """Remember when the operator did something (printed a report, downloaded the backup...) for the checklist."""
+    try:
+        info = _dbinfo(d)
+        info.setdefault("activity", {})[key] = time.strftime("%Y-%m-%d %H:%M")
+        (_dbdir(d) / "info.json").write_text(json.dumps(info))
+    except Exception:
+        pass
+
+
+@app.post("/api/meets/{mid}/db/activity")
+def db_activity(mid: str, body: dict):
+    key = str(body.get("key") or "")
+    if key not in ("console", "gettimes"):
+        raise HTTPException(400, "unknown activity")
+    _activity(_dir(mid), key)
+    return {"ok": True}
+
+
+@app.get("/api/meets/{mid}/operator")
+def operator_status(mid: str):
+    """What the computer operator has done for this meet, worked out from the meet itself."""
+    d = _dir(mid)
+    meta = _meta(d)
+    out = {"has_db": _dbfile(d).exists(), "sent": meta.get("sent", {}), "ended": meta.get("ended", "")}
+    if not out["has_db"]:
+        return out
+    info = _dbinfo(d)
+    m = meetdb.load(_dbfile(d))
+    act = [e for e in m["entries"] if not e["scr"]]
+    with_entries = {e["event"] for e in act}
+    sc = info.get("scoring") or {}
+    sigs = sc.get("sigs") or {}
+    done_ev = [p for p in with_entries if all(e["time"] or (e["stat"] or "").strip() in ("Q", "F", "D", "R")
+                                               for e in act if e["event"] == p and e["heat"])]
+    scored = [p for p in sc.get("events", []) if p in with_entries]
+    stale = [p for p in scored if sigs.get(str(p)) and sigs.get(str(p)) != meetdb.event_sig(m, p)]
+    out.update({
+        "activity": info.get("activity", {}), "timers": info.get("timers"), "created": info.get("created", ""),
+        "source": info.get("source", ""),
+        "entries": len(act), "unseeded": sum(1 for e in act if not e["heat"] or not e["lane"]),
+        "scratches": sum(1 for e in m["entries"] if e["scr"]),
+        "events": len(with_entries), "events_done": len(done_ev),
+        "events_started": sum(1 for p in with_entries if any(e["time"] or (e["stat"] or "").strip() for e in act if e["event"] == p)),
+        "scored": len(scored) - len(stale), "stale": len(stale),
+        "dqs": sum(1 for e in act if (e["stat"] or "").strip() in ("Q", "F", "D")),
+        "noshows": sum(1 for e in act if (e["stat"] or "").strip() == "R"),
+    })
+    return out
 
 
 @app.get("/api/meets/{mid}/send")
@@ -1951,7 +2060,7 @@ def send_status(mid: str):
             v[1] += bool(e["time"] or (e["stat"] or "").strip())
         out["events"] = {"total": len(evs), "done": sum(1 for a, b in evs.values() if a and b == a),
                          "started": sum(1 for a, b in evs.values() if b)}
-        out["dqs"] = sum(1 for e in m["entries"] if (e["stat"] or "").strip() in ("Q", "F"))
+        out["dqs"] = sum(1 for e in m["entries"] if (e["stat"] or "").strip() in ("Q", "F", "D"))
     return out
 
 

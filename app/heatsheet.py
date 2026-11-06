@@ -608,7 +608,7 @@ class _Results(_Sheet):
         ents = [e for e in self.m["entries"] if e["event"] == v["ptr"] and not e["scr"]]
         stat = lambda e: (e["stat"] or "").strip()
         fin = sorted((e for e in ents if e["time"] and stat(e) == ""), key=lambda e: e["time"])
-        dqs = sorted((e for e in ents if stat(e) in ("Q", "F")), key=lambda e: (e["time"] or 9e9))
+        dqs = sorted((e for e in ents if stat(e) in ("Q", "F", "D")), key=lambda e: (e["time"] or 9e9))
         blocks, place, prev_t = [], 0, None
         for i, e in enumerate(fin):
             if prev_t is None or abs(e["time"] - prev_t) > 0.001:
@@ -622,8 +622,8 @@ class _Results(_Sheet):
     def block(self, v, e, place, relay, aths, teams):
         lines = []          # (dy, [(x, text, align)])
         st = (e["stat"] or "").strip()
-        dfs = st in ("Q", "F") and (e.get("dq") or "").upper() in ("7B", "7P") and not e["time"]
-        if st in ("Q", "F"):
+        dfs = st in ("Q", "F", "D") and (e.get("dq") or "").upper() in ("7B", "7P") and not e["time"]
+        if st in ("Q", "F", "D"):
             tm = "DFS" if dfs else "DQ"
         else:
             tm = ("x" if e.get("exh") else "") + meetdb.fmt_time(e["time"])
@@ -636,7 +636,7 @@ class _Results(_Sheet):
             lines.append((0, [(18.0, place, "r"), (24.0, nm(a), "l", 108), (138.0, a.get("yr", ""), "r"),
                               (144.0, teams.get(a.get("team"), {}).get("abbr", ""), "l", 60), (240.0, tm, "r")]))
         y = 11.5
-        if st in ("Q", "F") and e.get("dq"):
+        if st in ("Q", "F", "D") and e.get("dq"):
             if relay:
                 d1 = dqcodes.describe(e["dq"], v["stroke"], True)
                 d2 = dqcodes.describe(e["dq2"], v["stroke"], True) if e.get("dq2") else ""
@@ -711,3 +711,147 @@ def results_pdf(m, db, licensee="", printed=None) -> bytes:
         except Exception:
             printed = dt.datetime.now()
     return _Results(m, licensee, printed, results_mod.splits(db)).render()
+
+
+# ---------------- timeline (Meet Manager's Session Report) ----------------
+TL_SEX = {"G": "Girls", "B": "Boys", "W": "Women", "F": "Women", "M": "Men", "X": "Mixed"}
+TL_STROKE = {"A": "Freestyle", "B": "Backstroke", "C": "Breaststroke", "D": "Butterfly", "E": "IM"}
+
+
+def _tl_title(v):
+    what = ("Medley Relay" if v["stroke"] == "E" else f"{TL_STROKE.get(v['stroke'], v['stroke'])} Relay") if v["ind_rel"] == "R" \
+        else TL_STROKE.get(v["stroke"], v["stroke"])
+    return f"{TL_SEX.get(v.get('sex') or v['gender'], v['gender'])} {v['dist']} {what}"
+
+
+def _nt_estimate(v, course):
+    """Meet Manager's canned time for an NT swim: distance x a stroke/distance factor (x1.1 for meters)."""
+    d, st = v["dist"], v["stroke"]
+    if d <= 200:
+        f = {"A": 0.82, "C": 0.90}.get(st, 0.85)
+    else:
+        f = {"A": 0.95, "C": 1.0}.get(st, 0.90)
+    return d * f * (1.1 if course in ("L", "S") else 1.0)
+
+
+def timeline(m) -> list:
+    """Session Report timeline, worked out the way Meet Manager does:
+    each heat lasts as long as its slowest seed time (NT entries don't count unless the whole heat is NT,
+    then a canned estimate) plus the session's heat interval, plus the backstroke allowance for events that
+    start in the water (backstroke and medley relays). Unseeded events use the average entry time and a
+    projected heat count. Start times are rounded up to the minute."""
+    import math
+    evs = {v["ptr"]: v for v in m["events"]}
+    lanes = m["meet"].get("lanes") or 8
+    out = []
+    for s in m.get("sessions", []):
+        t, rows, swimmers, n_ent, n_heat = 0.0, [], set(), 0, 0
+        for it in s["items"]:
+            v = evs.get(it["event"])
+            if not v:
+                continue
+            t += it["delay"] or 0
+            ents = [e for e in m["entries"] if e["event"] == v["ptr"] and not e["scr"]]
+            for e in ents:
+                if e["kind"] == "I":
+                    swimmers.add(e["ath"])
+                else:
+                    swimmers.update(a for a in e["legs"] if a)
+            back = s["back"] if (v["stroke"] == "B" or (v["ind_rel"] == "R" and v["stroke"] == "E")) else 0
+            nt = _nt_estimate(v, s["course"])
+            seeded = any(e["heat"] for e in ents)
+            start = t
+            if seeded:
+                heats = sorted({e["heat"] for e in ents if e["heat"]})
+                for h in heats:
+                    times = [e["conv"] or e["seed"] for e in ents if e["heat"] == h]
+                    slow = max([x for x in times if x] or [nt])
+                    t += slow + s["interval"] + back
+                nh, proj = len(heats), False
+            else:
+                nh, proj = (math.ceil(len(ents) / lanes) if ents else 0), True
+                times = [e["conv"] or e["seed"] for e in ents if (e["conv"] or e["seed"])]
+                avg = sum(times) / len(times) if times else nt
+                t += nh * (avg + s["interval"] + back)
+            n_ent += len(ents)
+            n_heat += nh
+            rows.append({"no": v["no"], "ltr": v.get("ltr") or "", "title": _tl_title(v), "round": "Finals" if it["rnd"] == "F" else "Prelims",
+                         "entries": len(ents), "heats": nh, "projected": proj, "start": s["start"] + math.ceil(start / 60 - 1e-9) * 60,
+                         "break": it["delay_desc"] if it["delay"] else ""})
+        out.append({**{k: s[k] for k in ("no", "ltr", "name", "day", "start", "interval", "back")}, "rows": rows,
+                    "swimmers": len(swimmers), "entries": n_ent, "heats": n_heat,
+                    "finish": s["start"] + math.ceil(t / 60 - 1e-9) * 60})
+    return out
+
+
+def _clock(sec):
+    h, mi = divmod(int(sec) // 60, 60)
+    return f"{(h - 1) % 12 + 1:02d}:{mi:02d} {'AM' if h % 24 < 12 else 'PM'}"
+
+
+def timeline_pdf(m, licensee="", printed=None) -> bytes:
+    if printed is None:
+        try:
+            from zoneinfo import ZoneInfo
+            printed = dt.datetime.now(ZoneInfo("America/Denver"))
+        except Exception:
+            printed = dt.datetime.now()
+    sh = _Sheet(m, licensee, printed)
+    sh.c.setTitle(f"{m['meet']['name']} - Session Report")
+    mt = m["meet"]
+    try:
+        d = dt.date.fromisoformat(mt["start"])
+        when = f"{d.month}/{d.day}/{d.year}"
+    except Exception:
+        when = mt.get("start") or ""
+    sessions = timeline(m) or [{"no": 0, "ltr": "", "name": "No sessions set up in Meet Manager", "day": 1, "start": 0,
+                                "interval": 0, "back": 0, "rows": [], "swimmers": 0, "entries": 0, "heats": 0, "finish": 0}]
+    X_RND, X_NO, X_EV, X_ENT, X_HT, X_ST, X_END = 28.0, 177.0, 187.0, 588.0, 672.0, 709.0, 869.0
+    k = 0.6458   # the layout above is in 936-wide units (the original's), scaled to the page
+    S = lambda x: x * k
+    for page, s in enumerate(sessions, 1):
+        if page > 1:
+            sh.c.showPage()
+        sh.text(18.0, 34.1, licensee, size=HSZ)
+        stamp = f"MeetDeck - {printed.strftime('%I:%M %p').lstrip('0')}  {printed.month}/{printed.day}/{printed.year}  Page {page}"
+        sh.text(557.7, 34.1, stamp, size=HSZ, align="r")
+        sh.text(PAGE_W / 2, 46.1, f"{mt['name']} - {when}" if when else mt["name"], bold=True, size=HSZ, align="c")
+        sh.text(PAGE_W / 2, 57.7, "Session Report", bold=True, size=HSZ, align="c")
+        sh.text(PAGE_W / 2, 90.0, f"Session: {s['no']}{s['ltr'] or ''}   {s['name']}", size=HSZ, align="c")
+        sh.text(PAGE_W / 2, 101.5, f"Day of Meet: {s['day']}   Starts at {_clock(s['start'])}   Heat Interval: {s['interval']} Seconds"
+                + (f" / Back +{s['back']} Seconds" if s["back"] else ""), size=HSZ, align="c")
+        y = 126.0
+        for x, lab, al in ((X_RND, "Round", "l"), (X_EV, "Event", "l"), (X_ENT, "Entries", "r"), (X_HT, "Heats", "r"), (X_ST + 66, "Starts at", "r")):
+            sh.text(S(x), y, lab, bold=True, size=SZ + 0.5, align=al)
+        sh.rule(S(X_RND), S(X_END), y + 10.5, 0.7)
+        y += 15.0
+        for r in s["rows"]:
+            if r["break"]:
+                sh.text(S(X_EV), y, r["break"], size=SZ + 0.5)
+                y += 13.5
+            sh.text(S(X_RND), y, r["round"], size=SZ + 0.5)
+            sh.text(S(X_NO), y, f"{r['no']}{r['ltr']}", size=SZ + 0.5, align="r")
+            sh.text(S(X_EV), y, r["title"], size=SZ + 0.5, w=S(X_ENT - X_EV - 60))
+            sh.text(S(X_ENT), y, str(r["entries"]), size=SZ + 0.5, align="r")
+            sh.text(S(X_HT), y, f"{r['heats']}{'u' if r['projected'] else ''}", size=SZ + 0.5, align="r")
+            sh.text(S(X_ST + 66), y, _clock(r["start"]), size=SZ + 0.5, align="r")
+            sh.rule(S(X_END - 43), S(X_END), y + 9.5, 0.5)
+            y += 13.5
+            if y > 740:
+                sh.c.showPage()
+                y = 60.0
+        if s["rows"]:
+            sh.text(S(X_EV + 6), y, f"Swimmers Counts for Warm-ups: {s['swimmers']}", size=SZ + 0.5)
+            sh.text(S(X_ENT), y, "====", size=SZ + 0.5, align="r")
+            sh.text(S(X_HT), y, "====", size=SZ + 0.5, align="r")
+            y += 13.5
+            sh.text(S(X_EV + 6), y, "Entry / Heat Totals:", size=SZ + 0.5)
+            sh.text(S(X_ENT), y, str(s["entries"]), size=SZ + 0.5, align="r")
+            sh.text(S(X_HT), y, str(s["heats"]), size=SZ + 0.5, align="r")
+            y += 13.5
+            sh.text(S(X_EV + 6), y, "Finish Time", size=SZ + 0.5)
+            sh.text(S(X_ST + 66), y, _clock(s["finish"]), size=SZ + 0.5, align="r")
+            sh.rule(S(X_END - 43), S(X_END), y + 9.5, 0.5)
+    sh.c.showPage()
+    sh.c.save()
+    return sh.buf.getvalue()

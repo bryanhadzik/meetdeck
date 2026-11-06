@@ -100,7 +100,7 @@ def _result_fields(e, date_col: int, date: str):
     return [(2, "F", 1), (3, _t(e["time"]), 8, "r"), (11, e.get("fin_course") or "Y", 1), (12, stat, 1), (13, e["dq"], 2),
             (15, "0", 5, "r"), (20, e["heat"], 3, "r"), (23, e["lane"], 3, "r"), (26, e["heatplace"], 3, "r"),
             (29, e["place"], 4, "r"), (33, "0", 3, "r"), (36, _t(e["backup"]), 8, "r"), (44, _t(e.get("back2")), 8, "r"),
-            (52, _t(e.get("back3")), 8, "r"), (63, e.get("dq2") if stat in ("Q", "F") else "", 2), (65, _t(e["pad"]), 8, "r"),
+            (52, _t(e.get("back3")), 8, "r"), (63, e.get("dq2") if stat in ("Q", "F", "D") else "", 2), (65, _t(e["pad"]), 8, "r"),
             (74, "0.00", 8, "r"), (date_col, date, 8), (date_col + 8, time_code(e), 1),
             (date_col + 9, "" if e.get("dq_official") is None else e["dq_official"], 4, "r"), (122, "0", 1)]
 
@@ -111,7 +111,7 @@ def _swum(e) -> bool:
 
 
 def _dq_lines(e, v) -> list:
-    if (e["stat"] or "").strip() not in ("Q", "F") or not e["dq"]:
+    if (e["stat"] or "").strip() not in ("Q", "F", "D") or not e["dq"]:
         return []
     relay = e["kind"] == "R"
     out = [_line("H1", [(2, e["dq"], 2), (4, dqcodes.describe(e["dq"], v["stroke"], relay), 124)])]
@@ -298,7 +298,7 @@ def cl2(m: dict, db, export_time=None) -> bytes:
             for e in (x for x in inds if x["ath"] == a["no"]):      # database order, like Meet Manager
                 v = ev[e["event"]]
                 st = (e["stat"] or "").strip()
-                bad = st in ("Q", "F", "R")
+                bad = st in ("Q", "F", "D", "R")
                 g = "F" if v["gender"] in ("F", "W") else ("X" if v["gender"] == "X" else "M")
                 out.append(_sline("D0", [(2, "9", 1), (3, lsc, 2), (7, a.get("yr", "") if a.get("age") else "", 2), (11, name(a), 28),
                                          (39, a.get("reg", "")[:12], 12), (51, "A", 1), (52, a.get("citizen", ""), 3), (55, _mdy(a.get("birth", "")), 8),
@@ -323,7 +323,7 @@ def cl2(m: dict, db, export_time=None) -> bytes:
         for e in sorted(rels, key=lambda x: (ev[x["event"]]["no"], x["ltr"])):
             v = ev[e["event"]]
             st = (e["stat"] or "").strip()
-            bad = st in ("Q", "F", "R")
+            bad = st in ("Q", "F", "D", "R")
             g = "F" if v["gender"] in ("F", "W") else ("X" if v["gender"] == "X" else "M")
             rs = 7 if v["stroke"] == "E" else 6
             out.append(_sline("E0", [(2, "9", 1), (3, lsc, 2), (11, e["ltr"], 1), (12, code, 6), (20, g, 1), (21, v["dist"], 4, "r"),
@@ -401,9 +401,9 @@ def _rows(m):
                 name, yr, team = f"{tm.get('name', '')} \"{e['ltr']}\"", "", tm.get("abbr", "")
                 legs = ", ".join(f"{aths.get(x, {}).get('first', '')} {aths.get(x, {}).get('last', '')}" for x in e["legs"] if x)
             result = mark if st == "R" else meetdb.fmt_time(e["time"]) if e["time"] else ("NT" if not mark else mark)
-            if st in ("Q", "F") and e["time"]:
+            if st in ("Q", "F", "D") and e["time"]:
                 result = f"DQ {meetdb.fmt_time(e['time'])}"
-            dqtxt = " / ".join(f"{c} {dqcodes.describe(c, v['stroke'], e['kind'] == 'R')}" for c in (e["dq"], e.get("dq2")) if c) if st in ("Q", "F") else ""
+            dqtxt = " / ".join(f"{c} {dqcodes.describe(c, v['stroke'], e['kind'] == 'R')}" for c in (e["dq"], e.get("dq2")) if c) if st in ("Q", "F", "D") else ""
             rows.append({"place": e["place"] or "", "name": name, "dqtxt": dqtxt, "yr": yr, "team": team, "seed": meetdb.fmt_time(e["seed"]) or "NT",
                          "result": result if (e["time"] or mark) else "", "points": (f"{e['points']:g}" if e["points"] else ""),
                          "dq": e["dq"], "legs": legs, "exh": e["exh"]})

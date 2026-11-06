@@ -194,3 +194,11 @@ from ./.env (Bryan sets it; not in code). Tests: tests/make_cl2.py builds an SDI
 - Swim coaches, athletic directors and officials (`contacts.json` in the data folder): name, role, school, email, phone, notes. Search, filter by role, Copy emails / Email these (Bcc).
 - **Find coaches in my meets** lists coaches named in entry files (team contact lines) and Meet Manager team records that aren't saved yet - Add one or Add all.
 - Coaches saved for a school are added to "Email coaches" (Meet checklist and Send results) for meets that school is in.
+
+### Timeline (Session Report)
+- Print menu in the meet database → Timeline: Meet Manager's Session Report, one page per session, from the sessions set up in Meet Manager.
+- Same math as Meet Manager: each heat = slowest seed time (NT entries ignored unless the whole heat is NT, then distance × stroke factor) + heat interval, + the backstroke allowance for backstroke and medley relays; start times rounded up to the minute. Matches MM to the minute on Millard @ Grantsville 2026.
+
+### Meets already scored in Meet Manager
+- Opening a scored meet keeps Meet Manager's points: the races show as Scored and the Scores tab fills in. Scoring follows the file's own settings (max scorers per team, "score fastest heat only").
+

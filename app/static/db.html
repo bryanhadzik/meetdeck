@@ -100,6 +100,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     <div class="pop hidden" id="printPop">
       <div class="prow"><span>Heat sheet</span><button class="small" data-pr="heatsheet">Print</button><button class="ghost small" data-pdf="heatsheet">PDF</button></div>
       <div class="prow"><span>Referee program</span><button class="small" data-pr="referee">Print</button><button class="ghost small" data-pdf="referee">PDF</button></div>
+      <div class="prow"><span>Timeline <span class="muted" style="font-size:11px">(session report)</span></span><button class="small" data-pr="timeline">Print</button><button class="ghost small" data-pdf="timeline">PDF</button></div>
       <div class="prow"><span>Results</span><button class="small" data-pr="results">Print</button><button class="ghost small" data-pdf="results">PDF</button></div>
       <div class="prow"><span>Timer sheets <select id="prLane" title="All lanes, or just one lane's sheets"><option value="">all lanes</option></select></span><button class="small" data-pr="timer">Print</button><button class="ghost small" data-pdf="timer">PDF</button></div>
     </div></div>
@@ -191,6 +192,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     <label style="display:block;margin-bottom:8px">Scoring <select id="scMethod" style="width:100%"></select></label>
     <div class="row"><label>Scorers per team per event: individual <input id="scInd" type="number" min="0" style="width:60px"></label>
       <label>relay <input id="scRel" type="number" min="0" style="width:60px"></label><span class="muted" style="font-size:12px">0 = no limit</span></div>
+    <label style="display:block;margin-top:6px;font-size:13px"><input type="checkbox" id="scFast"> Only the fastest heat scores <span class="muted">(Meet Manager's "score fastest heat only")</span></label>
 
     <div id="scMsg" class="muted" style="font-size:13px;margin-top:8px"></div>
     <div class="row" style="margin-top:10px"><button id="scSave">Save settings</button><button class="ghost" id="scAll" title="Score every race that's finished and not scored yet">Score all finished races</button><button class="ghost" id="scCancel">Close</button></div>
@@ -273,7 +275,7 @@ function render() {
 // ---------------- events ----------------
 function evEntries(ptr) { return M.entries.filter(e => e.event === ptr); }
 // an entry is "resolved" once it has a time, a DQ or a no-show
-const resolved = e => !!(e.time || ["Q", "F", "R"].includes((e.stat || "").trim()));
+const resolved = e => !!(e.time || ["Q", "F", "D", "R"].includes((e.stat || "").trim()));
 function heatState(ents) {
   const n = ents.length, r = ents.filter(resolved).length;
   return {n, r, cls: !n ? "none" : r === n ? "done" : r ? "part" : "none"};
@@ -285,7 +287,7 @@ function eventState(v) {
   const timed = heats.length && doneHeats === heats.length;
   const pts = act.reduce((t, e) => t + (e.points || 0), 0);
   const placed = act.filter(e => e.place).length;
-  const dq = act.filter(e => ["Q", "F"].includes((e.stat || "").trim())).length, ns = act.filter(e => (e.stat || "").trim() === "R").length;
+  const dq = act.filter(e => ["Q", "F", "D"].includes((e.stat || "").trim())).length, ns = act.filter(e => (e.stat || "").trim() === "R").length;
   const any = act.some(resolved);
   const sc = S.scoring || {}, sig = (sc.sigs || {})[v.ptr], scoredNow = sig && sig === (S.event_sigs || {})[v.ptr];
   const status = timed && scoredNow ? "scored" : timed && sig ? "stale" : timed ? "timed" : any ? "prog" : "none";
@@ -334,7 +336,7 @@ function relayIssues(e) {
 }
 function statBadge(e) {
   const s = (e.stat || "").trim();
-  return s === "Q" || s === "F" ? `<span class="badge dq">DQ${e.dq ? " " + esc(e.dq) : ""}</span>` : s === "R" ? `<span class="badge dq">NS</span>` : "";
+  return s === "Q" || s === "F" || s === "D" ? `<span class="badge dq">DQ${e.dq ? " " + esc(e.dq) : ""}</span>` : s === "R" ? `<span class="badge dq">NS</span>` : "";
 }
 // same rules as the server: 1:05.32, 65.32, or digits only (10532 = 1:05.32, 5632 = 56.32)
 function parseTime(x) {
@@ -429,9 +431,9 @@ function renderEvent() {
       ${MOVING ? `<td style="white-space:nowrap">${e.scr ? "" : hsel(e) + " " + lsel(e)}</td>` : ""}
       <td style="white-space:nowrap">${e.scr ? "" : timerCells(e)}</td>
       <td class="plc" data-plc="${e.key}">${e.place || ""} ${(e.stat || "").trim() === "R" ? statBadge(e) : ""}</td>
-      <td class="st" style="white-space:nowrap">${e.scr ? "" : (e.stat === "Q" || e.stat === "F") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
+      <td class="st" style="white-space:nowrap">${e.scr ? "" : (e.stat === "Q" || e.stat === "F" || e.stat === "D") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" || e.stat === "D" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
         : `<select data-stat="${e.key}" title="Status"><option value="">OK</option><option value="R" ${e.stat === "R" ? "selected" : ""}>No show</option></select> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>`}
-        ${(e.stat === "Q" || e.stat === "F") && e.dq ? `<div class="legs" style="color:var(--err)">${esc(dqText(e))}</div>` : ""}</td>
+        ${(e.stat === "Q" || e.stat === "F" || e.stat === "D") && e.dq ? `<div class="legs" style="color:var(--err)">${esc(dqText(e))}</div>` : ""}</td>
       <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}">Swimmers</button> ` : ""}<button class="ghost small" data-scr="${e.key}" data-on="${e.scr ? 0 : 1}">${e.scr ? "Un-scratch" : "Scratch"}</button>
         <button class="ghost small danger" data-del="${e.key}" title="Delete this entry">✕</button></td></tr>`;
   const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th>Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>${TIMERS() === 2 ? "Timers <span class=\"muted\" style=\"font-weight:400\">(1 · 2 → official)</span>" : "Timers"}</th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
@@ -439,7 +441,6 @@ function renderEvent() {
   let html = `<div class="row" style="justify-content:flex-end;margin-bottom:6px;font-size:13px"><label>Timers per lane <select id="timersSel" title="How many timers work each lane at this meet"><option value="1" ${TIMERS() === 1 ? "selected" : ""}>1 timer</option><option value="2" ${TIMERS() === 2 ? "selected" : ""}>2 timers</option></select></label></div>
     <div class="row" style="margin-bottom:4px"><h2 style="margin:0">Event ${v.no} &nbsp;${esc(v.label)}</h2><span class="pill ${eventState(v).status}">${eventState(v).label}</span><span class="muted">${act.length} entered${scr.length ? ` · ${scr.length} scratched` : ""}${v.day > 1 ? ` · day ${v.day}` : ""}</span>
     <span class="grow"></span>${scoreBtn(v)}<button class="ghost small${MOVING ? " on" : ""}" id="moveBtn" title="Heats and lanes are locked so they can't be changed by accident">${MOVING ? "Done moving" : "Move swimmers"}</button><button class="ghost small" id="addEntryBtn">Add entry</button></div><div id="addEntry" class="hidden"></div>`;
-  html += `<div class="aorow">${aoTip("timing")}${aoTip("dq")}${aoTip("score")}${v.ind_rel === "R" ? aoTip("relay") : aoTip("swimmer")}</div>`;
   for (const h of heats.filter(h => h)) {
     const inHeat = act.filter(e => e.heat === h);
     const hs = heatState(act.filter(e => e.heat === h));
@@ -618,7 +619,7 @@ $("#tmSend").onclick = async () => {
   const slot = +$("#tmSlot").value;
   if (!confirm(`Write ${events.length} events into event sequence slot ${slot} on the console? Whatever is in that slot is replaced. (Console must be in RESET with Allow Remote Setup on.)`)) return;
   tmMsg("Sending events…");
-  try { const r = await bridge("/download", {slot, events}); tmMsg(`Sent ${r.events} events to slot ${r.slot}; it's now the active sequence. Advance heats on the console as usual.`); } catch (e) { tmMsg(e.message, true); }
+  try { const r = await bridge("/download", {slot, events}); tmMsg(`Sent ${r.events} events to slot ${r.slot}; it's now the active sequence. Advance heats on the console as usual.`); api(`${API}/activity`, J({key: "console"})).catch(() => {}); } catch (e) { tmMsg(e.message, true); }
 };
 async function loadPractice(v) {
   const act = evEntries(v.ptr).filter(e => !e.scr && e.heat && e.lane);
@@ -780,7 +781,7 @@ $("#scoreBtn").onclick = () => {
   sel.innerHTML = Object.entries(S.scoring_methods).map(([k, c]) => `<option value="${k}">${esc(c.name)}</option>`).join("");
   sel.value = S.scoring_default;
   const fill = () => { const c = S.scoring_methods[sel.value]; const prev = (S.scoring || {}).method === sel.value ? S.scoring : null;
-    $("#scInd").value = prev ? prev.ind_max : c.ind_max; $("#scRel").value = prev ? prev.rel_max : c.rel_max; };
+    $("#scInd").value = prev ? prev.ind_max : c.ind_max; $("#scRel").value = prev ? prev.rel_max : c.rel_max; $("#scFast").checked = !!(S.scoring || {}).fastest; };
   sel.onchange = fill; fill();
   const states = M.events.map(eventState), ready = states.filter(x => x.status === "timed" || x.status === "stale").length;
   const n = ((S.scoring || {}).events || []).length;
@@ -792,7 +793,7 @@ async function scoreReq(body, after) {
   try { S = await api(`${API}/score`, J(body)); toast(S.log[0]?.msg || "Scored"); show(); if (after) after(); return true; }
   catch (e) { toast(e.message); return false; }
 }
-const scSettings = () => ({method: $("#scMethod").value, ind_max: +$("#scInd").value || 0, rel_max: +$("#scRel").value || 0});
+const scSettings = () => ({method: $("#scMethod").value, ind_max: +$("#scInd").value || 0, rel_max: +$("#scRel").value || 0, fastest: $("#scFast").checked});
 $("#scSave").onclick = () => scoreReq({...scSettings(), settings_only: true}, () => $("#scoreDlg").classList.add("hidden"));
 $("#scAll").onclick = () => scoreReq({...scSettings(), all: true}, () => { $("#scoreDlg").classList.add("hidden"); TAB = "scores"; render(); });
 function scoreStrip() {
@@ -887,9 +888,9 @@ document.addEventListener("change", async ev => {
     const e = M.entries.find(x => x.key === d.key);
     const box = ev.target.closest("td");
     const t1 = box.querySelector('[data-timer="1"]').value.trim(), t2 = box.querySelector('[data-timer="2"]').value.trim();
-    change("result", {key: d.key, t1_s: t1, t2_s: t2, stat: e.stat === "R" && (t1 || t2) ? "" : e.stat === "F" && (t1 || t2) ? "Q" : e.stat, dq: e.dq});
+    change("result", {key: d.key, t1_s: t1, t2_s: t2, stat: e.stat === "R" && (t1 || t2) ? "" : (e.stat === "F" || e.stat === "D") && (t1 || t2) ? "Q" : e.stat, dq: e.dq});
   }
-  else if (d.time) { const e = M.entries.find(x => x.key === d.time); change("result", {key: d.time, time_s: ev.target.value, stat: e.stat === "R" ? "" : e.stat === "F" && ev.target.value ? "Q" : e.stat, dq: e.dq}); }
+  else if (d.time) { const e = M.entries.find(x => x.key === d.time); change("result", {key: d.time, time_s: ev.target.value, stat: e.stat === "R" ? "" : (e.stat === "F" || e.stat === "D") && ev.target.value ? "Q" : e.stat, dq: e.dq}); }
   else if (d.stat) { const e = M.entries.find(x => x.key === d.stat); change("result", {key: d.stat, time_s: fmt(e.time), stat: ev.target.value, dq: ""}); }
   else if (d.move) {
     const e = M.entries.find(x => x.key === d.move);

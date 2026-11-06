@@ -16,7 +16,7 @@ _proc = None
 
 STROKE = {"A": "Free", "B": "Back", "C": "Breast", "D": "Fly", "E": "IM"}
 GENDER = {"F": "Girls", "M": "Boys", "X": "Mixed", "W": "Women"}
-STAT = {"": "", "Q": "DQ", "F": "DQ", "R": "NS", "S": "SCR", "D": "DNF"}
+STAT = {"": "", "Q": "DQ", "F": "DQ", "R": "NS", "S": "SCR", "D": "DQ"}
 TABLES = ["Meet", "Team", "Athlete", "Event", "Session", "Sessitem", "Entry", "Relay", "RelayNames", "Scoring"]
 
 
@@ -150,7 +150,7 @@ def load(db) -> dict:
         stroke = ("Medley Relay" if st == "E" else f"{STROKE.get(st, st)} Relay") if ir == "R" else STROKE.get(st, st)
         g = _s(r["Event_gender"]) or _s(r["Event_sex"])
         events.append({"ptr": r["Event_ptr"], "no": r["Event_no"], "ltr": _s(r["Event_ltr"]), "ind_rel": ir,
-                       "gender": g, "dist": int(r["Event_dist"] or 0), "stroke": st, "rounds": r.get("Event_rounds") or 1,
+                       "gender": g, "sex": _s(r["Event_sex"]), "dist": int(r["Event_dist"] or 0), "stroke": st, "rounds": r.get("Event_rounds") or 1,
                        "label": f"{GENDER.get(g, g)} {int(r['Event_dist'] or 0)} {stroke}",
                        "order": order.get(r["Event_ptr"], (99, r["Event_no"] or 0, 1))[:2],
                        "day": order.get(r["Event_ptr"], (0, 0, 1))[2],
@@ -171,19 +171,28 @@ def load(db) -> dict:
         entries.append(_entry(r, "R", f"R:{r['Relay_no']}", relay=r["Relay_no"], team=r["Team_no"],
                               ltr=_s(r["Team_ltr"]), legs=[lg.get(i) for i in range(1, 5)],
                               alts=[lg.get(i) for i in range(5, 9)], rel_sex=_s(r.get("Rel_sex"))))
-    return {"meet": {"name": _s(meet.get("Meet_name1")), "start": (meet.get("Meet_start") or "")[:10],
+    sessions = [{"ptr": s["Sess_ptr"], "no": s.get("Sess_no") or 0, "ltr": _s(s.get("Sess_ltr")), "name": _s(s.get("Sess_name")),
+                 "day": s.get("Sess_day") or 1, "start": s.get("Sess_starttime") or 0, "interval": s.get("Sess_interval") or 0,
+                 "back": s.get("Sess_backinterval") or 0, "course": _s(s.get("Sess_course")) or "Y",
+                 "items": sorted(({"event": it["Event_ptr"], "order": it.get("Sess_order") or 0, "rnd": _s(it.get("Sess_rnd")) or "F",
+                                   "delay": it.get("Delay_seconds") or 0, "delay_desc": _s(it.get("Delay_desc"))}
+                                  for it in t.get("Sessitem", []) if it["Sess_ptr"] == s["Sess_ptr"]), key=lambda x: x["order"])}
+                for s in sorted(t.get("Session", []), key=lambda s: (s.get("Sess_day") or 1, s.get("Sess_no") or 0))]
+    return {"sessions": sessions, "meet": {"name": _s(meet.get("Meet_name1")), "start": (meet.get("Meet_start") or "")[:10],
                      "end": (meet.get("Meet_end") or "")[:10], "location": _s(meet.get("Meet_location")),
                      "calc_date": (meet.get("Calc_date") or "")[:10], "city": _s(meet.get("Meet_city")), "state": _s(meet.get("Meet_state")),
                      "zip": _s(meet.get("Meet_zip")), "country": _s(meet.get("Meet_country")), "addr1": _s(meet.get("Meet_addr1")), "addr2": _s(meet.get("Meet_addr2")),
                      "header1": _s(meet.get("Meet_header1")), "header2": _s(meet.get("Meet_header2")), "altitude": meet.get("Meet_altitude") or 0,
                      "style": meet.get("meet_meetstyle") or 1, "course": meet.get("Meet_course") or 3, "mtype": meet.get("Meet_meettype") or 1,
                      "lanes": meet.get("meet_numlanes") or 8, "style": meet.get("meet_meetstyle") or 1,
-                     "ind_max": meet.get("indmax_perath") or 0, "total_max": meet.get("entrymax_total") or 0},
+                     "ind_max": meet.get("indmax_perath") or 0, "total_max": meet.get("entrymax_total") or 0,
+                     "mm_scoring": {"ind_max": meet.get("indmaxscorers_perteam") or 0, "rel_max": meet.get("relmaxscorers_perteam") or 0,
+                                    "fastest_heat": bool(meet.get("score_fastestheatonly"))}},
             "teams": teams, "athletes": aths, "events": events, "entries": entries}
 
 
 def _entry(r, kind, key, **kw):
-    return {"key": key, "kind": kind, "event": r["Event_ptr"], "seed": r.get("ActualSeed_time") or 0,
+    return {"key": key, "kind": kind, "event": r["Event_ptr"], "seed": r.get("ActualSeed_time") or 0, "conv": r.get("ConvSeed_time") or 0,
             "seed_course": _s(r.get("ActSeed_course")) or "Y", "seed_crs": _s(r.get("ConvSeed_course")), "fin_course": _s(r.get("Fin_course")),
             "dq_official": r.get("fin_dqofficial"),
             "adj": None if r.get("fin_adjuststat") is None else _s(r.get("fin_adjuststat")), "scr": bool(r.get("Scr_stat")),
@@ -618,8 +627,9 @@ def _score_list(ents, table, team_max):
     return out
 
 
-def score_events(m, method, ind_max, rel_max, targets=None, only_timed=True):
-    """Score the given events (default: all). -> (ops, scored_ptrs, skipped, sigs)."""
+def score_events(m, method, ind_max, rel_max, targets=None, only_timed=True, fastest=False):
+    """Score the given events (default: all). -> (ops, scored_ptrs, skipped, sigs).
+    fastest: only the fastest (last) heat scores, like Meet Manager's "score fastest heat only"."""
     cfg = SCORING[method]
     ops, scored, skipped, sigs = [], [], [], {}
     for v in m["events"]:
@@ -629,13 +639,17 @@ def score_events(m, method, ind_max, rel_max, targets=None, only_timed=True):
         act = [e for e in ents if not e["scr"] and e["heat"]]
         if not act:
             continue
-        unresolved = [e for e in act if not (e["time"] or (e["stat"] or "").strip() in ("Q", "F", "R"))]
+        unresolved = [e for e in act if not (e["time"] or (e["stat"] or "").strip() in ("Q", "F", "D", "R"))]
         if only_timed and unresolved:
             skipped.append(f"#{v['no']} {v['label']} ({len(unresolved)} lane(s) without a result)")
             continue
         table = cfg["rel"] if v["ind_rel"] == "R" else cfg["ind"]
         tmax = rel_max if v["ind_rel"] == "R" else ind_max
-        res = {e["key"]: (0, 0) for e in ents} if cfg.get("pairs") else _score_list(ents, table, tmax)
+        pool = ents
+        if fastest:
+            top = max(e["heat"] for e in act)
+            pool = [e for e in ents if e["heat"] == top]
+        res = {e["key"]: (0, 0) for e in ents} if cfg.get("pairs") else {**{e["key"]: (0, 0) for e in ents}, **_score_list(pool, table, tmax)}
         for e in ents:
             pts, pp = res.get(e["key"], (0, 0))
             if abs((e["points"] or 0) - pts) > 0.001 or (e["ptsplace"] or 0) != pp:
@@ -676,12 +690,12 @@ def score_totals(m, summary) -> dict:
     return {"teams": teams, "pairs": pairs}
 
 
-def score_meet(m, method="champ", ind_max=None, rel_max=None, only_timed=True):
+def score_meet(m, method="champ", ind_max=None, rel_max=None, only_timed=True, fastest=False):
     """Whole-meet scoring in one go (kept for scripts/tests)."""
     cfg = SCORING[method]
     ind_max = cfg["ind_max"] if ind_max is None else int(ind_max)
     rel_max = cfg["rel_max"] if rel_max is None else int(rel_max)
-    ops, scored, skipped, sigs = score_events(m, method, ind_max, rel_max, None, only_timed)
+    ops, scored, skipped, sigs = score_events(m, method, ind_max, rel_max, None, only_timed, fastest)
     summary = {"method": method, "method_name": cfg["name"], "ind_max": ind_max, "rel_max": rel_max,
                "events": scored, "skipped": skipped, "sigs": sigs, "when": time.strftime("%Y-%m-%d %H:%M")}
     # totals as they will be after the ops are applied

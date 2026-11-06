@@ -67,6 +67,13 @@ details summary{cursor:pointer;font-weight:600;padding:6px 0}
 .badge{display:inline-block;font-size:12px;border-radius:10px;padding:1px 8px;margin-top:4px}
 .badge.ok{background:var(--ok-bg);color:var(--ok)}
 .badge.no{background:var(--warn-bg);color:var(--warn)}
+.opsec .oprow{display:flex;gap:10px;align-items:flex-start;padding:8px 6px;border-top:1px solid var(--line)}
+.opsec .oprow.ok .opn{background:var(--ok);color:#fff;border-color:var(--ok)}
+.opsec .oprow.warn .opn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+.opn{flex:none;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.opmsg{font-size:12.5px;color:var(--muted);margin-top:1px}
+.opst{display:inline-block;font-size:11px;font-weight:600;border-radius:9px;padding:0 7px;line-height:17px;margin-left:4px;vertical-align:1px}
+.opst.done{background:var(--ok-bg);color:var(--ok)}.opst.part{background:var(--warn-bg);color:var(--warn)}.opst.todo{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 14px}
 .grid2 label{flex-direction:column;align-items:stretch;gap:2px;font-size:13px;color:var(--muted)}
 .rec td{padding:3px 4px}
@@ -556,49 +563,82 @@ $("#sUrlSave").onclick = async () => {
 };
 // ---------------- run the meet: per-meet checklist ----------------
 const RESULTS_TO = "utahtop50@yahoo.com";
+// The computer operator's jobs come first, each with a status worked out from the meet itself;
+// everything else (officials, paperwork, deadlines) follows in its own section.
+const OPS = [
+  {id: "entries", ao: "entries", t: "Entries in and rule check clean", go: "meets",
+   st: (o, M) => { if (!M.files.length && o.has_db) return [1, "Opened from a Meet Manager file"];
+     const e = M.issues.filter(i => i.level === "error").length;
+     return !M.files.length ? [0, "No entry files yet"] : e ? [-1, `${e} rule-check problem${e > 1 ? "s" : ""} to fix`] : [1, `${M.files.length} entry file${M.files.length > 1 ? "s" : ""}, rule check clean`]; }},
+  {id: "db", ao: "seeding", t: "Meet database built and seeded", db: true,
+   st: o => !o.has_db ? [0, "No meet database yet"] : o.unseeded ? [-1, `${o.unseeded} entr${o.unseeded > 1 ? "ies have" : "y has"} no heat or lane`] : [1, `${o.entries} entries seeded${o.created ? " · built " + o.created : ""}`]},
+  {id: "op_timers", t: "Timers per lane set (1 or 2)", db: true,
+   st: o => o.timers ? [1, `${o.timers} timer${o.timers > 1 ? "s" : ""} per lane`] : [0, "Not set (the meet database uses 1)"]},
+  {id: "print", t: "Heat sheets, referee program, timer sheets and timeline printed", print: true,
+   st: o => { const a = o.activity || {}, got = [["heatsheet", "heat sheet"], ["referee", "referee program"], ["timer", "timer sheets"], ["timeline", "timeline"]].filter(([k]) => a["print_" + k]);
+     return a.print_heatsheet && a.print_timer ? [1, got.map(([k, l]) => `${l} ${a["print_" + k].slice(11)}`).join(" · ")] : got.length ? [-1, "Printed: " + got.map(x => x[1]).join(", ")] : [0, "Nothing printed yet"]; }},
+  {id: "console", ao: "setup", t: "Timing console connected and events sent to it", db: true,
+   st: o => (o.activity || {}).console ? [1, "Events sent " + o.activity.console] : [0, "Events not sent from MeetDeck yet"]},
+  {id: "scratches", t: "Scratches from the coaches' meeting entered", db: true, manual: true,
+   st: o => [0, `${o.scratches || 0} scratched so far`]},
+  {id: "times", ao: "timing", t: "Times in for every heat (Get times after each heat)", db: true,
+   st: o => !o.events ? [0, "No events"] : o.events_done === o.events ? [1, `All ${o.events} events timed`] : [o.events_started ? -1 : 0, `${o.events_done} of ${o.events} events timed`]},
+  {id: "dqs", ao: "dq", t: "DQ slips entered on their events", db: true, manual: true,
+   st: o => [0, `${o.dqs || 0} DQ${o.dqs === 1 ? "" : "s"} and ${o.noshows || 0} no-show${o.noshows === 1 ? "" : "s"} entered`]},
+  {id: "score", ao: "score", t: "Every event scored", db: true,
+   st: o => !o.events ? [0, "No events"] : o.stale ? [-1, `${o.stale} event${o.stale > 1 ? "s" : ""} changed since scoring: rescore`] : o.scored >= o.events ? [1, `All ${o.events} events scored`] : [o.scored ? -1 : 0, `${o.scored} of ${o.events} events scored`]},
+  {id: "ended", t: "Meet end time recorded", ended: true,
+   st: (o, M) => M.ended ? [1, "Ended " + M.ended.replace("T", " ")] : [0, "Not set yet: enter it above"]},
+  {id: "backup", t: "Meet Manager backup downloaded", db: true,
+   st: o => (o.activity || {}).backup ? [1, "Downloaded " + o.activity.backup] : [0, "Not downloaded yet"]},
+  {id: "export", t: "Results exported (HY3 / CL2 / results PDF)", db: true,
+   st: o => { const a = o.activity || {}, got = [["export_hy3", "HY3"], ["export_cl2", "CL2"], ["print_results", "results PDF"]].filter(([k]) => a[k]);
+     return got.length ? [1, got.map(([k, l]) => `${l} ${a[k].slice(11)}`).join(" · ")] : [0, "Not exported yet"]; }},
+  {id: "initial", t: "Initial results sent to all coaches", mail: "coaches", send: true,
+   st: o => (o.sent || {}).coaches ? [1, "Sent " + o.sent.coaches] : [0, "Not marked sent (Send results tab)"]},
+];
 const RUN = [
   {phase: "Before meet day", items: [
-    {id: "entries", ao: "entries", t: "Entries in and checked. Every team's file received, rule check clean, coach messages answered.", go: "meets"},
-    {id: "db", ao: "seeding", t: "Meet database built and seeded (heats and lanes set, no lone swimmers). Restore the backup in Meet Manager too if you're running MM.", db: true},
     {id: "officials", t: "Two certified officials lined up (from the Utah Swim Coaches Association list), or times won't count toward state qualifying.", rule: "UHSAA Handbook, Swimming: Qualifying Meets and Times"},
-    {id: "timers", t: "Timers arranged: non-competing, 15 or older. Decide 1 or 2 timers per lane and set it in the meet database.", rule: "UHSAA Handbook, Swimming: Volunteer Timers"},
-    {id: "print", t: "Print heat sheets (coaches, announcer, officials), the referee program, and timer sheets (a set per lane).", print: true},
+    {id: "timers", t: "Timers arranged: non-competing, 15 or older.", rule: "UHSAA Handbook, Swimming: Volunteer Timers"},
     {id: "fmr", t: "Final Meet Report form on the clipboard: date, location, start time, host team, session, teams attending, plus coach and official sign-in lines."},
   ]},
-  {phase: "Meet day, before the first race", items: [
-    {id: "console", ao: "setup", t: "Timing console connected (or the simulator checked), events sent to the console, timers per lane set.", db: true},
+  {phase: "Meet day", items: [
     {id: "signin", t: "Coaches sign the Final Meet Report (name, signature, team). Officials sign with their position (starter, referee, turn judge…). Write the start time."},
-    {id: "scratches", t: "Scratches from the coaches' meeting entered in the meet database.", db: true},
-  ]},
-  {phase: "During the meet", items: [
-    {id: "times", ao: "timing", t: "After each heat: Get times, check the amber lanes (pad, buttons and timers disagree), then apply. Collect the timer sheets.", db: true},
-    {id: "dqs", ao: "dq", t: "DQ slips from the referee entered on the event (DQ button). Keep every slip."},
-    {id: "score", ao: "score", t: "Score each event once its times and DQs are final.", db: true},
-  ]},
-  {phase: "Before leaving the venue", items: [
-    {id: "ended", t: "Write the time the meet ended on the Final Meet Report (and below). It goes on the result sheets.", ended: true},
-    {id: "backup", t: "Download the Meet Manager backup (it's also filed in this meet's Google Drive folder).", db: true},
-    {id: "initial", t: "Send initial results to all coaches. Export results, then email them.", mail: "coaches"},
+    {id: "slips", t: "Collect the timer sheets and every DQ slip from the referee."},
+    {id: "fmr_end", t: "Write the time the meet ended on the Final Meet Report."},
   ]},
   {phase: "Within 24 hours", deadline: 24, items: [
     {id: "review", ao: "closing", t: "Coaches review the results for errors. Verify every change request with the AO / meet referee before changing anything in the database (every change is logged and can be undone).", db: true},
   ]},
   {phase: "Within 48 hours", deadline: 48, items: [
-    {id: "final", t: `48-hour rule: email the Final Meet Report and the meet results to ${RESULTS_TO}, with the referee, AO and host coach cc'd. Results must be signed by both officials and the head coaches.`, mail: "final"},
+    {id: "final", t: `48-hour rule: email the Final Meet Report and the meet results to ${RESULTS_TO}, with the referee, AO and host coach cc'd. Results must be signed by both officials and the head coaches.`, mail: "final", auto: o => (o.sent || {}).final},
   ]},
   {phase: "All season", items: [
-    {id: "keep", t: "Keep all paperwork for the entire season: the signed Final Meet Report, timer sheets, DQ slips and information. Scan them into this meet's files.", go: "meets"},
+    {id: "keep", t: "Keep all paperwork for the entire season: the signed Final Meet Report, timer sheets, DQ slips and information. Scan them into this meet's files.", go: "meets", auto: o => (o.sent || {}).keep},
   ]},
 ];
+let OP = null, OP_FOR = null;
 function runWhen(stamp) { return stamp ? new Date(stamp.replace(" ", "T")) : null; }
-function runRender() {
+async function runLoadOps() {
+  if (!M) return;
+  const id = M.id;
+  try { const o = await api(`/api/meets/${id}/operator`); if (M && M.id === id) { OP = o; OP_FOR = id; runRender(true); } } catch (e) {}
+}
+function runRender(fromLoad) {
   if (!M) { $("#runHead").innerHTML = `<h2>Meet checklist</h2><div class="muted">Pick a meet on the Meets tab first.</div>`; $("#runList").innerHTML = ""; return; }
-  const run = M.run || {}, c = M.contacts || {}, all = RUN.flatMap(p => p.items), done = all.filter(i => run[i.id]).length;
+  if (!fromLoad) runLoadOps();
+  const o = OP_FOR === M.id ? OP : null;
+  const run = M.run || {}, c = M.contacts || {};
+  const opState = i => { if (!o) return [0, "checking…"]; const [s, msg] = i.st(o, M); return [s, msg]; };
+  const opDone = i => run[i.id] || opState(i)[0] === 1;
+  const all = RUN.flatMap(p => p.items), done = all.filter(i => run[i.id] || (o && i.auto && i.auto(o))).length;
+  const opN = OPS.filter(opDone).length;
   const ended = runWhen(M.ended);
   const due = h => ended ? new Date(ended.getTime() + h * 3600e3) : null;
   const fmtDue = d => d ? d.toLocaleString([], {weekday: "short", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit"}) : "";
   $("#runHead").innerHTML = `<h2>Meet checklist &mdash; ${esc(M.name)}</h2>
-    <div class="muted" style="font-size:13px">${done} of ${all.length} done. Checks are saved with this meet.</div>
+    <div class="muted" style="font-size:13px">Computer operator: ${opN} of ${OPS.length} done &middot; officials &amp; paperwork: ${done} of ${all.length} done.</div>
     <div class="row" style="margin-top:8px;font-size:13px;flex-wrap:wrap;gap:10px">
       <label>Meet ended <input type="datetime-local" id="runEnded" value="${esc((M.ended || "").replace(" ", "T"))}"></label>
       <label>Referee email <input id="runRef" type="email" value="${esc(c.referee || "")}" size="22"></label>
@@ -606,22 +646,38 @@ function runRender() {
       <label>Host coach email <input id="runHost" type="email" value="${esc(c.host || "")}" size="22"></label></div>`;
   const link = i => [
     i.db ? `<a href="/db?meet=${M.id}" target="_blank">Meet database ↗</a>` : "",
-    i.print ? ["heatsheet:Heat sheet", "referee:Referee program", "timer:Timer sheets"].map(x => { const [k, l] = x.split(":"); return `<a href="/api/meets/${M.id}/db/report/${k}.pdf" target="_blank">${l} PDF</a>`; }).join(" · ") : "",
+    i.print ? ["heatsheet:Heat sheet", "referee:Referee program", "timer:Timer sheets", "timeline:Timeline"].map(x => { const [k, l] = x.split(":"); return `<a href="/api/meets/${M.id}/db/report/${k}.pdf" target="_blank" data-printed="1">${l}</a>`; }).join(" · ") : "",
     i.go ? `<a href="#" data-gotab="${i.go}">Meets tab</a>` : "",
+    i.send ? `<a href="#" data-gotab="send">Send results tab</a>` : "",
     i.mail === "coaches" ? `<a href="${runMail("coaches")}">Email coaches</a>${(M.coach_emails || []).length ? "" : ' <span class="muted">(no coach emails on file. Add them in the email)</span>'}` : "",
     i.mail === "final" ? `<a href="${runMail("final")}">Email ${RESULTS_TO}</a>${c.referee && c.ao && c.host ? "" : ' <span class="muted">(add the referee, AO and host coach emails above to cc them)</span>'}` : "",
     i.rule ? `<span class="muted">${esc(i.rule)}</span>` : "",
   ].filter(Boolean).join(" &nbsp;·&nbsp; ");
-  $("#runList").innerHTML = RUN.map(p => {
-    const d = p.deadline ? due(p.deadline) : null, late = d && new Date() > d, open = p.items.some(i => !run[i.id]);
-    return `<section><h3 style="margin:0 0 6px">${esc(p.phase)}${p.deadline ? ` <span class="badge ${late && open ? "no" : "ok"}" style="font-weight:400">${d ? (late && open ? "overdue · was due " : "due ") + fmtDue(d) : "set the meet end time"}</span>` : ""}</h3>` +
-      p.items.map(i => `<label style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)">
-        <input type="checkbox" data-run="${i.id}" ${run[i.id] ? "checked" : ""} style="margin-top:3px">
-        <span style="flex:1"><span style="${run[i.id] ? "text-decoration:line-through;opacity:.6" : ""}">${esc(i.t)}</span>
+  const pill = (s, manualOn) => manualOn && s !== 1 ? `<span class="opst done">Checked off</span>` :
+    s === 1 ? `<span class="opst done">&#10003; Done</span>` : s === -1 ? `<span class="opst part">In progress</span>` : `<span class="opst todo">Not yet</span>`;
+  const opsHtml = `<section class="opsec"><h3 style="margin:0 0 2px">Computer operator</h3>
+    <div class="muted" style="font-size:12.5px;margin-bottom:6px">MeetDeck checks these from the meet itself. Tick one by hand only if you did it outside MeetDeck.</div>` +
+    OPS.map((i, n) => { const [s, msg] = opState(i), man = !!run[i.id];
+      return `<div class="oprow ${s === 1 || man ? "ok" : s === -1 ? "warn" : ""}">
+        <div class="opn">${n + 1}</div>
+        <div style="flex:1;min-width:0"><div><b>${esc(i.t)}</b> ${pill(s, man)}</div>
+          <div class="opmsg">${esc(msg)}${man ? ` &middot; checked off ${esc(run[i.id])}` : ""}</div>
           ${link(i) ? `<div style="font-size:12.5px;margin-top:2px">${link(i)}</div>` : ""}
-          ${run[i.id] ? `<div class="muted" style="font-size:11.5px">done ${esc(run[i.id])}</div>` : ""}</span></label>${i.ao ? `<div style="margin:0 0 6px 28px">${aoTip(i.ao)}</div>` : ""}`).join("") + `</section>`;
+          ${i.ao ? `<div style="margin-top:4px">${aoTip(i.ao)}</div>` : ""}</div>
+        ${s === 1 ? "" : `<label class="muted" style="font-size:12px;white-space:nowrap" title="Mark done by hand"><input type="checkbox" data-run="${i.id}" ${man ? "checked" : ""}> done</label>`}
+      </div>`; }).join("") + `</section>`;
+  $("#runList").innerHTML = opsHtml + `<h2 style="margin:18px 14px 8px">Officials &amp; paperwork</h2>` + RUN.map(p => {
+    const d = p.deadline ? due(p.deadline) : null, isDone = i => run[i.id] || (o && i.auto && i.auto(o)), late = d && new Date() > d, open = p.items.some(i => !isDone(i));
+    return `<section><h3 style="margin:0 0 6px">${esc(p.phase)}${p.deadline ? ` <span class="badge ${late && open ? "no" : "ok"}" style="font-weight:400">${d ? (late && open ? "overdue · was due " : "due ") + fmtDue(d) : "set the meet end time"}</span>` : ""}</h3>` +
+      p.items.map(i => { const a = o && i.auto && i.auto(o), on = run[i.id] || a;
+        return `<label style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)">
+        <input type="checkbox" data-run="${i.id}" ${on ? "checked" : ""} ${a && !run[i.id] ? "disabled" : ""} style="margin-top:3px">
+        <span style="flex:1"><span style="${on ? "text-decoration:line-through;opacity:.6" : ""}">${esc(i.t)}</span>
+          ${link(i) ? `<div style="font-size:12.5px;margin-top:2px">${link(i)}</div>` : ""}
+          ${on ? `<div class="muted" style="font-size:11.5px">done ${esc(run[i.id] || a)}${a && !run[i.id] ? " (marked on Send results)" : ""}</div>` : ""}</span></label>${i.ao ? `<div style="margin:0 0 6px 28px">${aoTip(i.ao)}</div>` : ""}`; }).join("") + `</section>`;
   }).join("");
 }
+document.addEventListener("click", ev => { if (ev.target.dataset && ev.target.dataset.printed) setTimeout(runLoadOps, 1500); });
 function runMail(kind) {
   const c = M.contacts || {}, date = M.date || "";
   const subj = encodeURIComponent(kind === "final" ? `Final Meet Report and results - ${M.name} ${date}` : `Initial results - ${M.name} ${date}`);

@@ -1652,6 +1652,15 @@ def dq_codes():
     return {"groups": dqcodes.GROUPS, "codes": dqcodes.CODES, "no_time": sorted(dqcodes.NO_TIME)}
 
 
+def _jet3(db: Path) -> bool:
+    """Access 97 (Jet 3) file: Jackcess on the server can read it but not write it."""
+    try:
+        with open(db, "rb") as f:
+            return f.read(0x15)[0x14] == 0
+    except Exception:
+        return False
+
+
 @app.post("/api/meets/{mid}/db/op")
 def db_op(mid: str, body: dict):
     d = _dir(mid)
@@ -1672,6 +1681,9 @@ def db_op(mid: str, body: dict):
     try:
         meetdb.apply(db, ops)
     except RuntimeError as e:
+        if "NonWritable" in str(e) and _jet3(db):
+            raise HTTPException(400, "This meet file is in Meet Manager's older Access 97 format, which MeetDeck can only read on the "
+                                     "server. Open the meet in the MeetDeck Windows app to change it (or save it in Meet Manager 8 format).")
         raise HTTPException(500, f"Database change failed: {e}")
     _dblog(d, msg)
     if body.get("op") == "meet":            # keep the meet list (name / date / location) in step with the database

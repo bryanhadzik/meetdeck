@@ -771,8 +771,62 @@ $("#sCopy").onclick = async () => {
 };
 
 let SEED_PICK = null;      // entry id picked to move
+// A meet opened from a Meet Manager file has no entry files: its heats are in the meet database.
+const MM_SEEDED = () => !!M && !(M.files || []).length && M.has_db;
+let DBH = null, DBH_PICK = null;
+async function dbhLoad() {
+  const id = M.id;
+  try { const r = await api(`/api/meets/${id}/db`); DBH = {id, m: r.model}; } catch (e) { DBH = {id, err: e.message}; }
+  if (M && M.id === id) renderHeatSheet();
+}
+function renderDbHeats(box) {
+  if (!DBH || DBH.id !== M.id) { box.innerHTML = `<div class="muted" style="font-size:13px">Loading the heats from the meet database…</div>`; if (!DBH || DBH.id !== M.id) { DBH = {id: M.id, loading: true}; dbhLoad(); } return; }
+  if (DBH.loading) return;
+  if (DBH.err) { box.innerHTML = `<div class="issue">${esc(DBH.err)}</div>`; return; }
+  const m = DBH.m, lanes = m.meet.lanes || 8, ath = k => m.athletes[String(k)] || {}, tm = k => m.teams[String(k)] || {};
+  const act = m.entries.filter(e => !e.scr && e.heat && e.lane);
+  const pick = DBH_PICK && act.find(e => e.key === DBH_PICK);
+  const name = e => e.kind === "I" ? `${ath(e.ath).first || ""} ${ath(e.ath).last || ""}` : `${tm(e.team).short || tm(e.team).name || "?"} "${e.ltr}"`;
+  $("#seedPick").innerHTML = pick ? `Moving <b>${esc(name(pick))}</b> &mdash; click a lane, or <a href="#" data-dbcancel="1">cancel</a>` : "";
+  $("#seedResetAll").classList.add("hidden");
+  const q = ($("#hpFind").value || "").trim().toLowerCase(); let hits = 0;
+  box.innerHTML = m.events.map(v => {
+    const ents = act.filter(e => e.event === v.ptr);
+    if (!ents.length) return "";
+    const hn = [...new Set(ents.map(e => e.heat))].sort((a, b) => a - b), nh = hn.length, spare = Math.max(...hn) + 1;
+    const showSpare = pick && pick.event === v.ptr, heats = showSpare ? [...hn, spare] : hn;
+    return `<div class="ev"><h4>#${v.no}${esc(v.ltr || "")} ${esc(v.label)} <span class="muted" style="font-weight:400">· ${nh} heat${nh > 1 ? "s" : ""}</span></h4><div class="heats">` +
+      heats.map(h => `<table${h === spare && showSpare ? ' style="opacity:.8;border-style:dashed"' : ""}><tr><th colspan="4">${h === spare && showSpare ? "New heat " + h : `Heat ${h} of ${nh}`}</th></tr>` +
+        Array.from({length: lanes}, (_, i) => i + 1).map(l => {
+          const e = ents.find(x => x.heat === h && x.lane === l);
+          const target = pick && pick.event === v.ptr && !(e && e.key === pick.key) ? ` data-dbto="${esc(pick.key)}|${h}|${l}" style="cursor:pointer" title="Move here${e ? " (swap)" : ""}"` : "";
+          if (!e) return `<tr class="empty"${target}><td class="ln">${l}</td><td colspan="3">${target ? '<span class="muted">move here</span>' : "&mdash;"}</td></tr>`;
+          const legs = e.kind === "R" ? `<div class="legs">${esc(e.legs.filter(Boolean).map(a => `${ath(a).first || ""} ${ath(a).last || ""}`).join(", ") || "swimmers not declared")}</div>` : "";
+          const txt = (name(e) + " " + (tm(e.team).name || "") + " " + (tm(e.team).abbr || "")).toLowerCase();
+          const hit = q && txt.includes(q); if (hit) hits++;
+          const picked = pick && e.key === pick.key;
+          const attrs = target || (!pick ? ` data-dbpick="${esc(e.key)}" style="cursor:pointer" title="Click to move"` : (picked ? ` data-dbcancel="1" style="cursor:pointer" title="Click again to cancel"` : ""));
+          return `<tr class="${hit ? "hit" : ""}${picked ? " picked" : ""}"${attrs}><td class="ln">${l}</td><td>${esc(name(e))}${legs}${e.exh ? ' <span class="muted">exh</span>' : ""}</td><td>${esc(tm(e.team).abbr || "")}</td><td>${esc(fmtT(e.seed) || "NT")}</td></tr>`;
+        }).join("") + `</table>`).join("") + `</div></div>`;
+  }).join("") || `<div class="muted" style="font-size:13px">No heats in the meet database.</div>`;
+  $("#hpCount").textContent = q ? `${hits} match${hits === 1 ? "" : "es"}` : `${act.length} entries in heats`;
+}
+document.addEventListener("click", async ev => {
+  const row = ev.target.closest("[data-dbpick],[data-dbto],[data-dbcancel]");
+  if (!row) return;
+  ev.preventDefault();
+  const d = row.dataset;
+  if (d.dbcancel) { DBH_PICK = null; renderHeatSheet(); return; }
+  if (d.dbpick) { DBH_PICK = d.dbpick; renderHeatSheet(); return; }
+  if (d.dbto) {
+    const [key, h, l] = d.dbto.split("|");
+    try { const r = await api(`/api/meets/${M.id}/db/op`, J("POST", {op: "move", args: {key, heat: +h, lane: +l}})); DBH = {id: M.id, m: r.model}; } catch (x) { alert(x.message); }
+    DBH_PICK = null; renderHeatSheet();
+  }
+});
 function renderHeatSheet() {
   const box = $("#heatSheet"); if (!box) return;
+  if (MM_SEEDED()) { renderDbHeats(box); return; }
   if (!M.preseed) { box.innerHTML = `<div class="muted" style="font-size:13px">Click <b>Seed heats</b> above to see and adjust the heats.</div>`; $("#hpCount").textContent = ""; $("#seedResetAll").classList.add("hidden"); return; }
   const pos = {...(M.seed_lanes || {}), ...(M.combo_lanes || {})};
   const moved = new Set(M.seed_moved || []);
@@ -922,15 +976,17 @@ function render() {
     return `<details data-teamopen="${esc(t.code)}" ${TEAM_OPEN.has(t.code) ? "open" : ""}><summary>${esc(t.name)} (${esc(t.code)}) — ${sws.length} swimmers, ${M.entries.filter(e => e.team === t.code && !e.removed).length} entries</summary>
       <table><tr><th>Swimmer</th><th>Yr</th><th>Events</th></tr>${rows}<tr><th colspan="3">Relays <a class="chip addc" style="font-weight:400" data-addrelay="${esc(t.code)}">+ Add relay</a><div class="addslot" data-slot="relay:${esc(t.code)}"></div></th></tr>${rrows}</table></details>`;
   }).join("") || `<div class="muted">No entries yet.</div>`;
-  $("#seedBtn").classList.toggle("hidden", !!M.preseed);
-  $("#unseedBtn").classList.toggle("hidden", !M.preseed);
-  $("#seedState").innerHTML = M.preseed ? `<b style="color:var(--ok,#3fb950)">&#10003; Heats seeded</b> &middot; at least 3 swimmers in every heat` : "at least 3 swimmers in every heat";
+  const mmSeeded = MM_SEEDED();
+  $("#seedBtn").classList.toggle("hidden", !!M.preseed || mmSeeded);
+  $("#unseedBtn").classList.toggle("hidden", !M.preseed || mmSeeded);
+  $("#seedState").innerHTML = mmSeeded ? `<b style="color:var(--ok,#3fb950)">&#10003; Heats seeded in Meet Manager</b> &middot; moving a swimmer here changes the meet database` : M.preseed ? `<b style="color:var(--ok,#3fb950)">&#10003; Heats seeded</b> &middot; at least 3 swimmers in every heat` : "at least 3 swimmers in every heat";
   const si = M.seed_info || [];
   const fixed = si.filter(x => x.moved);
-  $("#seedInfo").innerHTML = !M.preseed ? `<div class="muted" style="font-size:13px">Not seeded yet &mdash; click <b>Seed heats</b>, or seed in Meet Manager instead (it can leave a swimmer alone in heat 1).</div>` :
+  $("#seedInfo").innerHTML = mmSeeded ? "" : !M.preseed ? `<div class="muted" style="font-size:13px">Not seeded yet &mdash; click <b>Seed heats</b>, or seed in Meet Manager instead (it can leave a swimmer alone in heat 1).</div>` :
     !si.length ? "" : `<div class="${fixed.length ? "issue warn" : "okbox"}" style="font-size:13px">${si.length} events seeded${fixed.length ? ` &middot; ${fixed.length} would have had a swimmer alone in heat 1 and were fixed: ${fixed.map(x => `Ev ${esc(x.event_no)}`).join(", ")}` : " &middot; no lone swimmers"}</div>
     <details><summary class="muted" style="font-weight:400">Heats per event</summary><table style="font-size:13px"><tr><th>Event</th><th>Entries</th><th>Heats (heat 1 first)</th></tr>` +
     si.map(x => `<tr><td>#${esc(x.event_no)} ${esc(x.event)}</td><td>${x.entries}</td><td>${x.heats.join(" · ")}${x.moved ? ` <span class="muted">(moved ${x.moved} down)</span>` : ""}</td></tr>`).join("") + `</table></details>`;
+  if (mmSeeded && DBH && !DBH.loading) DBH = null;   // pick up changes made in the meet database
   renderHeatSheet();
   $("#order").innerHTML = M.lanes.order.map((t, i) => `<span class="chip">${i + 1}. ${esc(M.teams[t]?.name || t)}
     ${i ? `<a href="#" data-up="${i}" title="Move earlier">▲</a>` : ""}</span>`).join("") || `<span class="muted">Upload entries first.</span>`;

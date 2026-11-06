@@ -2149,6 +2149,41 @@ def update_install():
         raise HTTPException(502, f"Update failed: {e}")
 
 
+@app.get("/static/{name}")
+def static_file(name: str):
+    f = STATIC / Path(name).name
+    if not f.is_file() or f.suffix not in (".js", ".css", ".png", ".ico", ".svg"):
+        raise HTTPException(404)
+    return FileResponse(f)
+
+
+@app.get("/logos/")
+def logos_index():
+    f = DATA_ROOT / "logos" / "index.html"
+    if not f.exists():
+        raise HTTPException(404, "No logos yet")
+    return FileResponse(f)
+
+
+@app.get("/logos/logos.zip")
+def logos_zip():
+    d = DATA_ROOT / "logos"
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for f in sorted(d.glob("*.png")) + [d / "schools.json"]:
+            if f.exists():
+                z.write(f, f.name)
+    return Response(buf.getvalue(), media_type="application/zip", headers={"Content-Disposition": 'attachment; filename="Utah 3A-4A logos.zip"'})
+
+
+@app.get("/logos/{name}")
+def logo_file(name: str):
+    f = DATA_ROOT / "logos" / Path(name).name
+    if not f.is_file():
+        raise HTTPException(404)
+    return FileResponse(f)
+
+
 @app.get("/download/MeetDeck-Windows.zip")
 def windows_app():
     """The stand-alone Windows version (built by windows/build.sh into data/downloads)."""

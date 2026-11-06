@@ -15,7 +15,7 @@ header h1{font-size:17px;margin:0}
 nav{display:flex;gap:4px}
 nav button{background:transparent;color:var(--muted);border:1px solid transparent}
 nav button.on{color:var(--accent);border-color:var(--line);background:var(--bg)}
-main{max-width:1300px;margin:0 auto;padding:14px}
+main{max-width:1900px;margin:0 auto;padding:14px}
 section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
 h2{font-size:15px;margin:0 0 8px}
 button,select,input{font:inherit;color:inherit}
@@ -33,7 +33,7 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 .issue{border-radius:8px;padding:8px 12px;margin-bottom:8px;background:var(--warn-bg);color:var(--warn)}
 .okbox{background:var(--ok-bg);color:var(--ok);border-radius:8px;padding:8px 12px}
 .hidden{display:none!important}
-.split{display:grid;grid-template-columns:270px 1fr;gap:14px;align-items:start}
+.split{display:grid;grid-template-columns:250px minmax(0,1fr);gap:14px;align-items:start}
 @media (max-width:800px){.split{grid-template-columns:1fr}}
 .evlist{max-height:calc(100vh - 170px);overflow:auto;position:sticky;top:64px}
 .evlist button{display:flex;width:100%;text-align:left;background:transparent;color:var(--ink);border-radius:6px;padding:5px 8px;gap:6px}
@@ -41,7 +41,12 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 .evlist .cnt{margin-left:auto;color:var(--muted);font-size:12px}
 .heat{margin-bottom:12px}
 .heat h3{font-size:13px;margin:6px 0 2px;color:var(--muted)}
-td.ln{width:26px;color:var(--muted);text-align:right}
+td.ln{width:22px;color:var(--muted);text-align:right}
+tr.empty td{padding:1px 6px;font-size:12px;line-height:16px;border-bottom-style:dashed}
+td.nm{min-width:240px}td.nm .legs{white-space:normal}
+td.st{min-width:150px;width:38%}td.st .legs{white-space:normal;max-width:360px}
+td.plc,th.plc{text-align:center;width:44px;font-weight:700;font-size:14px}
+td.act{text-align:right;width:1%}
 td input.t{width:78px;text-align:right}
 td select.hl{width:52px}
 .legs{font-size:12px;color:var(--muted)}
@@ -80,6 +85,7 @@ tr.relaybad td{background:rgba(248,81,73,.10)} tr.relaybad td:first-child{box-sh
 .legend{font-size:11.5px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;padding:2px 6px 8px;border-bottom:1px solid var(--line);margin-bottom:6px}
 a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;color:#111;border-radius:2px;padding:0 1px}
 </style>
+<script src="/static/ao.js"></script>
 </head>
 <body>
 <header>
@@ -154,6 +160,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <div class="row" style="margin-bottom:8px"><input id="swFind" placeholder="Find a swimmer" size="26"><select id="swTeam"><option value="">All teams</option></select>
         <span class="grow"></span><button class="ghost small" id="addSwBtn">Add swimmer</button></div>
       <div id="addSw" class="hidden" style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px"></div>
+      <div id="aoSw"></div>
       <div id="swList"></div>
     </section>
 
@@ -307,7 +314,7 @@ function nameCell(e) {
   if (e.kind === "I") { const a = M.athletes[e.ath] || {}; return `${esc(a.last)}, ${esc(a.first)} <span class="muted" style="font-size:12px">${esc(a.yr || "")}</span>`; }
   const bad = relayIssues(e);
   const scrAth = new Set(bad.filter(b => b.ath).map(b => b.ath));
-  return `${esc(M.teams[e.team]?.name || "?")} "${esc(e.ltr)}"<div class="legs">${e.legs.map((x, i) => x ? (scrAth.has(x) ? `<s style="color:var(--err)">${esc(athName(x))}</s>` : esc(athName(x))) : `<i${bad.length ? ' style="color:var(--err)"' : ""}>leg ${i + 1} open</i>`).join(", ")}</div>` +
+  return `<b>${esc(M.teams[e.team]?.short || M.teams[e.team]?.name || "?")} "${esc(e.ltr)}"</b><div class="legs">${e.legs.map((x, i) => `<span style="white-space:nowrap"><span class="muted" style="opacity:.7">${i + 1}</span> ` + (x ? (scrAth.has(x) ? `<s style="color:var(--err)">${esc(athName(x))}</s>` : esc(athName(x))) : `<i${bad.length ? ' style="color:var(--err)"' : ""}>open</i>`) + `</span>`).join(" &nbsp;")}</div>` +
     (bad.length ? `<div class="relaybad">&#9888; Relay not complete &mdash; ${bad.map(b => esc(b.msg)).join("; ")}. Fix it with <b>Swimmers</b>.</div>` : "");
 }
 // A relay is not complete when a declared swimmer has been scratched, or some legs are filled and others left open
@@ -416,22 +423,23 @@ function renderEvent() {
   const maxHeat = Math.max(1, ...heats) + 1, lanes = M.meet.lanes || 8;
   const hsel = (e) => `<select class="hl" data-move="${e.key}" data-part="heat">${Array.from({length: maxHeat + 1}, (_, h) => `<option value="${h}" ${h === e.heat ? "selected" : ""}>${h || "–"}</option>`).join("")}</select>`;
   const lsel = (e) => `<select class="hl" data-move="${e.key}" data-part="lane">${Array.from({length: lanes + 1}, (_, l) => `<option value="${l}" ${l === e.lane ? "selected" : ""}>${l || "–"}</option>`).join("")}</select>`;
-  const row = (e, lane) => !e ? `<tr><td class="ln">${lane}</td><td colspan="${MOVING ? 9 : 8}" class="muted">—</td></tr>` :
-    `<tr class="${e.scr ? "scr" : relayIssues(e).length ? "relaybad" : ""}"><td class="ln">${e.lane || ""}</td><td>${nameCell(e)}${e.exh ? ' <span class="badge">exh</span>' : ""}</td><td>${esc(teamAbbr(e.team))}</td>
+  const row = (e, lane) => !e ? `<tr class="empty"><td class="ln">${lane}</td><td colspan="${MOVING ? 9 : 8}" class="muted">empty</td></tr>` :
+    `<tr class="${e.scr ? "scr" : relayIssues(e).length ? "relaybad" : ""}"><td class="ln">${e.lane || ""}</td><td class="nm">${nameCell(e)}${e.exh ? ' <span class="badge">exh</span>' : ""}</td><td>${esc(teamAbbr(e.team))}</td>
       <td><input class="t" data-seed="${e.key}" value="${esc(fmt(e.seed) || "NT")}" title="Seed time"></td>
       ${MOVING ? `<td style="white-space:nowrap">${e.scr ? "" : hsel(e) + " " + lsel(e)}</td>` : ""}
       <td style="white-space:nowrap">${e.scr ? "" : timerCells(e)}</td>
-      <td style="white-space:nowrap">${e.scr ? "" : (e.stat === "Q" || e.stat === "F") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
+      <td class="plc" data-plc="${e.key}">${e.place || ""} ${(e.stat || "").trim() === "R" ? statBadge(e) : ""}</td>
+      <td class="st" style="white-space:nowrap">${e.scr ? "" : (e.stat === "Q" || e.stat === "F") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
         : `<select data-stat="${e.key}" title="Status"><option value="">OK</option><option value="R" ${e.stat === "R" ? "selected" : ""}>No show</option></select> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>`}
         ${(e.stat === "Q" || e.stat === "F") && e.dq ? `<div class="legs" style="color:var(--err)">${esc(dqText(e))}</div>` : ""}</td>
-      <td data-plc="${e.key}">${e.place || ""} ${(e.stat || "").trim() === "R" ? statBadge(e) : ""}</td>
       <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}">Swimmers</button> ` : ""}<button class="ghost small" data-scr="${e.key}" data-on="${e.scr ? 0 : 1}">${e.scr ? "Un-scratch" : "Scratch"}</button>
         <button class="ghost small danger" data-del="${e.key}" title="Delete this entry">✕</button></td></tr>`;
-  const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th>Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>${TIMERS() === 2 ? "Timers <span class=\"muted\" style=\"font-weight:400\">(1 · 2 → official)</span>" : "Timers"}</th><th>Status</th><th>Place</th><th></th></tr>`;
+  const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th>Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>${TIMERS() === 2 ? "Timers <span class=\"muted\" style=\"font-weight:400\">(1 · 2 → official)</span>" : "Timers"}</th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
   const unseeded = act.filter(e => !e.heat || !e.lane);
   let html = `<div class="row" style="justify-content:flex-end;margin-bottom:6px;font-size:13px"><label>Timers per lane <select id="timersSel" title="How many timers work each lane at this meet"><option value="1" ${TIMERS() === 1 ? "selected" : ""}>1 timer</option><option value="2" ${TIMERS() === 2 ? "selected" : ""}>2 timers</option></select></label></div>
     <div class="row" style="margin-bottom:4px"><h2 style="margin:0">Event ${v.no} &nbsp;${esc(v.label)}</h2><span class="pill ${eventState(v).status}">${eventState(v).label}</span><span class="muted">${act.length} entered${scr.length ? ` · ${scr.length} scratched` : ""}${v.day > 1 ? ` · day ${v.day}` : ""}</span>
     <span class="grow"></span>${scoreBtn(v)}<button class="ghost small${MOVING ? " on" : ""}" id="moveBtn" title="Heats and lanes are locked so they can't be changed by accident">${MOVING ? "Done moving" : "Move swimmers"}</button><button class="ghost small" id="addEntryBtn">Add entry</button></div><div id="addEntry" class="hidden"></div>`;
+  html += `<div class="aorow">${aoTip("timing")}${aoTip("dq")}${aoTip("score")}${v.ind_rel === "R" ? aoTip("relay") : aoTip("swimmer")}</div>`;
   for (const h of heats.filter(h => h)) {
     const inHeat = act.filter(e => e.heat === h);
     const hs = heatState(act.filter(e => e.heat === h));
@@ -481,13 +489,14 @@ function legsDialog(key) {
   const tr = document.querySelector(`[data-legs="${key}"]`).closest("tr");
   const ex = document.getElementById("legEditor"); if (ex) ex.remove();
   tr.insertAdjacentHTML("afterend", `<tr id="legEditor" class="edit"><td></td><td colspan="8"><div class="row">${[0, 1, 2, 3].map(i => `<label>${i + 1} <select data-leg="${i}">${opts(e.legs[i])}</select></label>`).join("")}
-    <button class="small" id="legSave">Save swimmers</button><button class="ghost small" id="legCancel">Cancel</button></div></td></tr>`);
+    <button class="small" id="legSave">Save swimmers</button><button class="ghost small" id="legCancel">Cancel</button></div>${aoTip("relay", true)}</td></tr>`);
   $("#legCancel").onclick = () => $("#legEditor").remove();
   $("#legSave").onclick = () => change("legs", {key, legs: [...document.querySelectorAll("[data-leg]")].map(s => s.value ? +s.value : null)});
 }
 
 // ---------------- swimmers ----------------
 function renderSwimmers() {
+  if ($("#aoSw") && !$("#aoSw").innerHTML) $("#aoSw").innerHTML = aoTip("swimmer") + aoTip("entries");
   const sel = $("#swTeam");
   if (sel.options.length <= 1) Object.values(M.teams).sort((a, b) => a.abbr.localeCompare(b.abbr)).forEach(t => sel.insertAdjacentHTML("beforeend", `<option value="${t.no}">${esc(t.abbr)}</option>`));
   const q = $("#swFind").value.trim().toLowerCase(), tf = +sel.value || 0;
@@ -689,7 +698,8 @@ async function getTimes(h) {
       if (e) preview(e, avail[sel.value] || 0, l.place);
     });
     document.getElementById(`tpNote-${h}`).innerHTML = (flagged ? `<span style="color:var(--warn)"><b>${flagged} lane(s) disagree by more than ${TOL.toFixed(2)}</b> &mdash; check them and choose which time to use.</span> ` : "") +
-      (missing ? `${missing} entered lane(s) have no time and will be marked no-show unless you add a timers time.` : "");
+      (missing ? `${missing} entered lane(s) have no time and will be marked no-show unless you add a timers time.` : "") +
+      (flagged >= 3 ? aoTip("wholeheat", true) : flagged ? aoTip("timing", true) : "") + (missing ? aoTip("missingpad", true) : "");
   };
   box.addEventListener("input", ev => { if (ev.target.dataset.watch) check(); });
   box.addEventListener("change", ev => {
@@ -739,6 +749,7 @@ function dqEditor(key) {
   const opts = (sel, blank) => (blank ? `<option value="">${blank}</option>` : "") + groups.map(g => `<optgroup label="${esc(DQ.groups[g] || g)}">` +
     DQ.codes.filter(c => c.group === g).map(c => `<option value="${c.code}" ${c.code === sel ? "selected" : ""}>${c.code} · ${esc(c.desc)}</option>`).join("") + `</optgroup>`).join("");
   tr.insertAdjacentHTML("afterend", `<tr id="dqEditor" class="edit"><td></td><td colspan="8">
+    ${aoTip("dq", true)}
     <div class="row"><b>Disqualify ${esc(e.kind === "I" ? athName(e.ath) : (M.teams[e.team]?.abbr || "") + ' "' + e.ltr + '" relay')}</b>
       <input id="dqFind" placeholder="Search codes (e.g. kick, 15 m, false start)" size="30"></div>
     <div class="row" style="margin-top:6px"><select id="dqCode" size="8" style="min-width:360px">${opts(e.dq)}</select>

@@ -117,6 +117,7 @@ from ./.env (Bryan sets it; not in code). Tests: tests/make_cl2.py builds an SDI
 ### Rules library (main page → Rules)
 - PDFs kept in `data/rules/`, searchable by page (all words on one page; "quoted phrase"; rule numbers match 6-4-1 or 6.4.1). Results link straight to the page in the PDF.
 - Starting set (official, free, 2026-27): NFHS Swimming & Diving Rules Interpretations, NFHS Rules Changes press release, the full 2026-27 UHSAA Handbook (232 pages), and its swimming section on its own.
+- The 2026-27 UHSAA AO Training slides are in the library as a searchable PDF (one page per slide). Short "AO training" boxes in the event view, DQ editor, relay legs, Swimmers tab, meet checklist, seeding and Send results summarize the slides that apply there and link to them.
 - The full NFHS Rules Book is sold by NFHS (print or the NFHS Digital app) and isn't posted free. Add its PDF via the upload if you have one.
 
 ### Meet checklist (main page tab, formerly "Run the meet")

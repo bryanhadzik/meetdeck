@@ -84,6 +84,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   #ctForm input,#ctForm select{width:100%;box-sizing:border-box}
   #meetFields input,#meetFields select{width:100%;box-sizing:border-box}
 </style>
+<script src="/static/ao.js"></script>
 </head>
 <body>
 <header>
@@ -162,6 +163,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
 
     <section>
       <h2><span class="n">3</span> Rule check</h2>
+      <div id="aoRules"></div>
       <div class="row muted" style="margin-bottom:10px">
         Max individual <input type="number" id="rInd" min="1" style="width:60px">
         Max total (incl. relays) <input type="number" id="rTot" min="1" style="width:60px">
@@ -195,6 +197,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
 
     <section>
       <h2><span class="n">6</span> Seeding</h2>
+      <div id="aoSeed"></div>
       <div class="row">
         <button id="seedBtn" style="padding:10px 22px;font-size:15px;font-weight:600">Seed heats</button>
         <span id="seedState" class="muted">at least 3 swimmers in every heat</span>
@@ -555,22 +558,22 @@ $("#sUrlSave").onclick = async () => {
 const RESULTS_TO = "utahtop50@yahoo.com";
 const RUN = [
   {phase: "Before meet day", items: [
-    {id: "entries", t: "Entries in and checked. Every team's file received, rule check clean, coach messages answered.", go: "meets"},
-    {id: "db", t: "Meet database built and seeded (heats and lanes set, no lone swimmers). Restore the backup in Meet Manager too if you're running MM.", db: true},
+    {id: "entries", ao: "entries", t: "Entries in and checked. Every team's file received, rule check clean, coach messages answered.", go: "meets"},
+    {id: "db", ao: "seeding", t: "Meet database built and seeded (heats and lanes set, no lone swimmers). Restore the backup in Meet Manager too if you're running MM.", db: true},
     {id: "officials", t: "Two certified officials lined up (from the Utah Swim Coaches Association list), or times won't count toward state qualifying.", rule: "UHSAA Handbook, Swimming: Qualifying Meets and Times"},
     {id: "timers", t: "Timers arranged: non-competing, 15 or older. Decide 1 or 2 timers per lane and set it in the meet database.", rule: "UHSAA Handbook, Swimming: Volunteer Timers"},
     {id: "print", t: "Print heat sheets (coaches, announcer, officials), the referee program, and timer sheets (a set per lane).", print: true},
     {id: "fmr", t: "Final Meet Report form on the clipboard: date, location, start time, host team, session, teams attending, plus coach and official sign-in lines."},
   ]},
   {phase: "Meet day, before the first race", items: [
-    {id: "console", t: "Timing console connected (or the simulator checked), events sent to the console, timers per lane set.", db: true},
+    {id: "console", ao: "setup", t: "Timing console connected (or the simulator checked), events sent to the console, timers per lane set.", db: true},
     {id: "signin", t: "Coaches sign the Final Meet Report (name, signature, team). Officials sign with their position (starter, referee, turn judge…). Write the start time."},
     {id: "scratches", t: "Scratches from the coaches' meeting entered in the meet database.", db: true},
   ]},
   {phase: "During the meet", items: [
-    {id: "times", t: "After each heat: Get times, check the amber lanes (pad, buttons and timers disagree), then apply. Collect the timer sheets.", db: true},
-    {id: "dqs", t: "DQ slips from the referee entered on the event (DQ button). Keep every slip."},
-    {id: "score", t: "Score each event once its times and DQs are final.", db: true},
+    {id: "times", ao: "timing", t: "After each heat: Get times, check the amber lanes (pad, buttons and timers disagree), then apply. Collect the timer sheets.", db: true},
+    {id: "dqs", ao: "dq", t: "DQ slips from the referee entered on the event (DQ button). Keep every slip."},
+    {id: "score", ao: "score", t: "Score each event once its times and DQs are final.", db: true},
   ]},
   {phase: "Before leaving the venue", items: [
     {id: "ended", t: "Write the time the meet ended on the Final Meet Report (and below). It goes on the result sheets.", ended: true},
@@ -578,7 +581,7 @@ const RUN = [
     {id: "initial", t: "Send initial results to all coaches. Export results, then email them.", mail: "coaches"},
   ]},
   {phase: "Within 24 hours", deadline: 24, items: [
-    {id: "review", t: "Coaches review the results for errors. Verify every change request with the AO / meet referee before changing anything in the database (every change is logged and can be undone).", db: true},
+    {id: "review", ao: "closing", t: "Coaches review the results for errors. Verify every change request with the AO / meet referee before changing anything in the database (every change is logged and can be undone).", db: true},
   ]},
   {phase: "Within 48 hours", deadline: 48, items: [
     {id: "final", t: `48-hour rule: email the Final Meet Report and the meet results to ${RESULTS_TO}, with the referee, AO and host coach cc'd. Results must be signed by both officials and the head coaches.`, mail: "final"},
@@ -616,7 +619,7 @@ function runRender() {
         <input type="checkbox" data-run="${i.id}" ${run[i.id] ? "checked" : ""} style="margin-top:3px">
         <span style="flex:1"><span style="${run[i.id] ? "text-decoration:line-through;opacity:.6" : ""}">${esc(i.t)}</span>
           ${link(i) ? `<div style="font-size:12.5px;margin-top:2px">${link(i)}</div>` : ""}
-          ${run[i.id] ? `<div class="muted" style="font-size:11.5px">done ${esc(run[i.id])}</div>` : ""}</span></label>`).join("") + `</section>`;
+          ${run[i.id] ? `<div class="muted" style="font-size:11.5px">done ${esc(run[i.id])}</div>` : ""}</span></label>${i.ao ? `<div style="margin:0 0 6px 28px">${aoTip(i.ao)}</div>` : ""}`).join("") + `</section>`;
   }).join("");
 }
 function runMail(kind) {
@@ -1242,6 +1245,8 @@ $("#masterIn").onchange = async e => {
   e.target.value = "";
 };
 
+$("#aoRules").innerHTML = aoTip("entries");
+$("#aoSeed").innerHTML = aoTip("seeding");
 // ---- send results ----
 let SEND = null;
 async function sendRender() {
@@ -1265,7 +1270,7 @@ async function sendRender() {
   const nCoach = (M.coach_emails || []).length;
   const cc = [["Referee", c.referee], ["AO", c.ao], ["Host coach", c.host]];
   const missCc = cc.filter(x => !x[1]).map(x => x[0]);
-  $("#sendBody").innerHTML =
+  $("#sendBody").innerHTML = `<section>${aoTip("closing")}</section>` +
     card(1, "Initial results to all coaches", "before leaving the venue",
       pdf + tm,
       `<button ${dis} onclick="location='${base}/send/coaches.zip'">Download both (zip)</button>

@@ -17,3 +17,5 @@ windows/build/
 windows/dist/
 __pycache__/
 *.pyc
+logos/
+tools/ao_training.json

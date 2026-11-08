@@ -768,6 +768,126 @@ def put_relay_legs(mid: str, body: dict):
     return _state(d)
 
 
+# ---- Changes at the table, straight on the meet database (meets opened from Meet Manager, or already built) ----
+def _tv_key(ath) -> str:
+    return f"A:{ath}"
+
+
+def _table_view(d: Path) -> dict:
+    """The meet database in the same shape the Changes at the table panel uses for entry files,
+    with the same rule check, so the panel works the same either way."""
+    m = meetdb.load(_dbfile(d))
+    meta = _meta(d)
+    rules = {**DEFAULT_RULES, **meta.get("rules", {})}
+    abbr = {}
+    for no, t in sorted(m["teams"].items()):
+        a = t["abbr"] or str(no)
+        abbr[no] = a if a not in abbr.values() else f"{a}{no}"
+    teams = {abbr[no]: {"code": abbr[no], "name": t["name"] or t["abbr"], "no": no} for no, t in m["teams"].items()}
+    swimmers = {_tv_key(n): {"key": _tv_key(n), "first": a["first"], "last": a["last"], "pref": a.get("pref", ""),
+                             "gender": "F" if a["sex"] in ("F", "W", "G") else "M", "class": a.get("yr", ""), "age": a.get("age"),
+                             "team": abbr.get(a["team"], str(a["team"])), "meet_id": str(n)} for n, a in m["athletes"].items()}
+    evs = {v["ptr"]: v for v in m["events"]}
+    evno = lambda v: f"{v['no']}{v.get('ltr') or ''}"
+    entries = []
+    for e in m["entries"]:
+        v = evs.get(e["event"])
+        if not v:
+            continue
+        base = {"id": e["key"], "event_no": evno(v), "event": v["label"], "gender": v["gender"], "removed": bool(e["scr"]),
+                "seed": e["seed"], "seed_fmt": meetdb.fmt_time(e["seed"]) or "NT", "team": abbr.get(e["team"], ""),
+                "exhibition": bool(e.get("exh")), "heat": e["heat"], "lane": e["lane"], "has_result": bool(e["time"] or (e["stat"] or "").strip())}
+        if e["kind"] == "I":
+            entries.append({**base, "kind": "ind", "swimmers": [_tv_key(e["ath"])], "legs": {}})
+        else:
+            legs = {i + 1: _tv_key(a) for i, a in enumerate(e["legs"]) if a}
+            entries.append({**base, "kind": "relay", "relay": e["ltr"] or "A", "legs": legs,
+                            "swimmers": [legs[i] for i in sorted(legs) if i <= 4], "legs_changed": False})
+    removed = {e["id"] for e in entries if e["removed"]}
+    issues = validate(swimmers, entries, removed, rules, {c: t["name"] for c, t in teams.items()})
+    order = [abbr[no] for no in sorted(m["teams"]) if any(s["team"] == abbr[no] for s in swimmers.values())]
+    events = [{"no": evno(v), "name": v["label"], "gender": v["gender"], "kind": "relay" if v["ind_rel"] == "R" else "ind", "ptr": v["ptr"]}
+              for v in m["events"]]
+    return {"id": d.name, "source": "db", "teams": teams, "swimmers": swimmers, "entries": entries, "issues": issues,
+            "rules": rules, "lanes": {"order": order}, "events": events}
+
+
+@app.get("/api/meets/{mid}/table")
+def table_view(mid: str):
+    d = _dir(mid)
+    if not _dbfile(d).exists():
+        raise HTTPException(400, "No meet database yet")
+    return _table_view(d)
+
+
+def _db_apply(d: Path, ops: list, msg: str):
+    db = _dbfile(d)
+    if not ops:
+        return
+    _snapshot(d, "before: " + msg)
+    try:
+        meetdb.apply(db, ops)
+    except RuntimeError as e:
+        if "NonWritable" in str(e) and _jet3(db):
+            raise HTTPException(400, "This meet file is in Meet Manager's older Access 97 format, which MeetDeck can only read on the "
+                                     "server. Open the meet in the MeetDeck Windows app to change it (or save it in Meet Manager 8 format).")
+        raise HTTPException(500, f"Database change failed: {e}")
+    _dblog(d, msg)
+
+
+@app.post("/api/meets/{mid}/table/op")
+def table_op(mid: str, body: dict):
+    """Changes at the table on the meet database. op: event {swimmer, event_no, on, seed} | legs {id, legs}
+    | pull {swimmer} | relay_scratch {id, on} | add_relay {event_no, team, seed}."""
+    d = _dir(mid)
+    if not _dbfile(d).exists():
+        raise HTTPException(400, "No meet database yet")
+    m = meetdb.load(_dbfile(d))
+    evno = lambda v: f"{v['no']}{v.get('ltr') or ''}"
+    ath_of = lambda k: int(str(k).split(":", 1)[1])
+    def ptr_of(no):
+        v = next((v for v in m["events"] if evno(v) == str(no)), None)
+        if not v:
+            raise HTTPException(400, f"No event {no} in the meet database")
+        return v["ptr"]
+    op = body.get("op")
+    try:
+        if op == "event":
+            ptr, ath = ptr_of(body["event_no"]), ath_of(body["swimmer"])
+            e = next((x for x in m["entries"] if x["kind"] == "I" and x["event"] == ptr and x["ath"] == ath), None)
+            if body.get("on"):
+                if e and e["scr"]:
+                    ops, msg = meetdb.op_scratch(m, e["key"], False)
+                elif e:
+                    ops, msg = [], ""
+                else:
+                    ops, msg = meetdb.op_add_entry(m, ptr, ath=ath, seed=body.get("seed") or "")
+            else:
+                ops, msg = meetdb.op_scratch(m, e["key"], True) if e and not e["scr"] else ([], "")
+        elif op == "legs":
+            ops, msg = meetdb.op_legs(m, body["id"], [ath_of(k) if k else None for k in (list(body.get("legs") or []) + [None] * 4)[:4]])
+        elif op == "pull":
+            ops, msg = meetdb.op_scratch_athlete(m, ath_of(body["swimmer"]), True)
+        elif op == "relay_scratch":
+            ops, msg = meetdb.op_scratch(m, body["id"], bool(body.get("on")))
+        elif op == "add_relay":
+            ptr = ptr_of(body["event_no"])
+            team = next((no for no, t in m["teams"].items() if t["abbr"] == body.get("team") or f"{t['abbr']}{no}" == body.get("team")), None)
+            if team is None:
+                raise HTTPException(400, "Unknown team")
+            taken = {x["ltr"] for x in m["entries"] if x["kind"] == "R" and x["event"] == ptr and x["team"] == team}
+            ltr = next((c for c in "ABCDEFGH" if c not in taken), None)
+            if not ltr:
+                raise HTTPException(400, "That team already has relays A-H in this event")
+            ops, msg = meetdb.op_add_entry(m, ptr, team=team, ltr=ltr, seed=body.get("seed") or "")
+        else:
+            raise HTTPException(400, "unknown change")
+    except (KeyError, ValueError) as e:
+        raise HTTPException(400, str(e).strip("'"))
+    _db_apply(d, ops, msg)
+    return _table_view(d)
+
+
 @app.post("/api/meets/{mid}/pull-swimmer")
 def pull_swimmer(mid: str, body: dict):
     """A coach pulls a swimmer: drop their individual events and take them off every relay leg."""

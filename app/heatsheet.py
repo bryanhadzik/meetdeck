@@ -855,3 +855,78 @@ def timeline_pdf(m, licensee="", printed=None) -> bytes:
     sh.c.showPage()
     sh.c.save()
     return sh.buf.getvalue()
+
+
+# ---- soft-touch backup slips --------------------------------------------------------------
+def softtouch_pdf(m, licensee="", printed=None) -> bytes:
+    """Blank log for lanes where the pad didn't register (soft touch): write the event, heat and
+    lane, then the two stopwatch times. Two tables side by side, as many rows as fit a letter page."""
+    reg, bold = _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    W, H = letter
+    c.setTitle(f"{m['meet']['name']} - Soft touch backup times")
+    margin, gap = 27.0, 14.0
+    col_w = (W - 2 * margin - gap) / 2
+    # Event, Heat, Lane, Watch 1, Watch 2 - times get the room
+    fr = [0.15, 0.13, 0.13, 0.295, 0.295]
+    widths = [col_w * f for f in fr]
+    top = H - margin
+    c.setFont(bold, 12.5)
+    c.drawString(margin, top - 11, "Soft touch - backup times")
+    c.setFont(reg, 9.5)
+    meet = (m.get("meet") or {}).get("name", "")
+    date = (m.get("meet") or {}).get("start", "")
+    c.drawRightString(W - margin, top - 11, f"{meet}  {date}".strip())
+    c.setFont(reg, 8.5)
+    c.drawString(margin, top - 24, "Lane didn't register on the pad: write the event, heat and lane, then get both stopwatch times. "
+                 "Official time = average of the two, thousandths dropped.")
+    head_y = top - 32
+    head_h, row_h = 16.0, 24.5
+    bottom = margin + 10
+    rows = int((head_y - head_h - bottom) // row_h)
+    for k in range(2):
+        x0 = margin + k * (col_w + gap)
+        # header
+        c.setFillGray(0.88)
+        c.rect(x0, head_y - head_h, col_w, head_h, stroke=0, fill=1)
+        c.setFillGray(0)
+        c.setFont(bold, 9)
+        x = x0
+        for label, w in zip(("Event", "Heat", "Lane", "Watch 1", "Watch 2"), widths):
+            c.drawCentredString(x + w / 2, head_y - head_h + 4.6, label)
+            x += w
+        # grid
+        y_top, y_bot = head_y, head_y - head_h - rows * row_h
+        c.setLineWidth(0.9)
+        c.rect(x0, y_bot, col_w, y_top - y_bot)
+        c.setLineWidth(0.5)
+        x = x0
+        for w in widths[:-1]:
+            x += w
+            c.line(x, y_top, x, y_bot)
+        c.line(x0, head_y - head_h, x0 + col_w, head_y - head_h)
+        for r in range(1, rows):
+            y = head_y - head_h - r * row_h
+            c.setStrokeGray(0.55)
+            c.line(x0, y, x0 + col_w, y)
+        c.setStrokeGray(0)
+        # light guides in the time boxes: m : ss . hh
+        c.setFont(reg, 11)
+        c.setFillGray(0.72)
+        xt = x0 + sum(widths[:3])
+        for r in range(rows):
+            yb = head_y - head_h - (r + 1) * row_h + 7.5
+            for w in widths[3:]:
+                c.drawString(xt - 0 + w * 0.30, yb, ":")
+                c.drawString(xt + w * 0.66, yb, ".")
+                xt += w
+            xt = x0 + sum(widths[:3])
+        c.setFillGray(0)
+    c.setFont(reg, 7.5)
+    c.drawString(margin, margin - 4, f"{rows * 2} per page")
+    if licensee:
+        c.drawRightString(W - margin, margin - 4, licensee)
+    c.showPage()
+    c.save()
+    return buf.getvalue()

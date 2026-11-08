@@ -923,10 +923,6 @@ def softtouch_pdf(m, licensee="", printed=None) -> bytes:
                 xt += w
             xt = x0 + sum(widths[:3])
         c.setFillGray(0)
-    c.setFont(reg, 7.5)
-    c.drawString(margin, margin - 4, f"{rows * 2} per page")
-    if licensee:
-        c.drawRightString(W - margin, margin - 4, licensee)
     c.showPage()
     c.save()
     return buf.getvalue()

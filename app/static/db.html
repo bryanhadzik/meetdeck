@@ -107,7 +107,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   <div class="menu hidden" id="exportMenu"><button class="small" id="exportBtn">Download / export ▾</button>
     <div class="pop hidden" id="exportPop">
       <button class="small" data-x="backup">Meet Manager backup (.zip) &mdash; restore in MM</button>
-      <button class="ghost small" data-x="hy3">Results for Team Manager (.hy3 + .cl2)</button>
+      <button class="small" data-x="hy3" title="The same zip as Meet Manager's File > Export > Results for Team Manager: Meet Results-&lt;meet&gt;-&lt;date&gt;-001.zip with the .hy3 and .cl2">Utah Top 50 results (.hy3 + .cl2 zip) &mdash; also imports into Team Manager</button>
       <button class="ghost small" data-x="html">Printable results</button>
       <button class="ghost small" data-x="csv">Results spreadsheet (.csv)</button>
       <div class="muted" style="font-size:12px;padding:2px 4px">Backups are also filed in this meet's Google Drive folder.</div>
@@ -124,10 +124,20 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
             <div class="row" style="margin-top:6px"><label class="muted" style="font-size:12.5px">Send events to console slot <select id="tmSlot"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option selected>9</option></select></label>
               <button class="ghost small" id="tmSend">Send events</button>
               <button class="ghost small hidden" id="tmPractice" title="Simulator only: fills it with made-up times for this event's heats">Load practice times</button>
-              <a href="#" id="tmLogBtn" class="muted" style="font-size:12.5px">Console log</a></div>
+              <a href="#" id="tmLogBtn" class="muted" style="font-size:12.5px">Console log</a>
+              <a href="#" id="tmDbgBtn" class="muted" style="font-size:12.5px">Serial debug</a></div>
             <div id="tmNoDb" class="muted hidden" style="font-size:12.5px;margin-top:6px">Build or open this meet's database below to get times into heats and send events. Connecting and the simulator work now.</div>
             <div id="tmMsg" class="muted" style="font-size:12.5px;margin-top:6px"></div>
             <pre id="tmLog" class="hidden" style="max-height:200px;overflow:auto;font-size:11px;background:var(--bg);padding:6px;border-radius:6px"></pre>
+            <div id="tmDbg" class="hidden" style="margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px">
+              <div class="row"><b>Serial debug</b><span class="muted" id="tmDbgWhen"></span><span class="grow"></span>
+                <button class="ghost small" id="tmPing" title="Send the console's identity request once and time the reply">Ping console</button>
+                <button class="ghost small" id="tmListen" title="Read whatever arrives on the line for 5 seconds without sending anything">Listen 5 s</button>
+                <button class="ghost small" id="tmProbe" title="Try every usual baud/parity on the picked port and report each one">Try all settings</button>
+                <button class="ghost small" id="tmCopy" title="Copy everything below, to paste into a message">Copy debug info</button></div>
+              <div id="tmDbgOut" style="margin-top:6px"></div>
+              <div id="tmDbgBody"></div>
+            </div>
           </div></section>
   <section id="start" class="hidden">
     <h2>Open a database for this meet</h2>
@@ -612,6 +622,49 @@ $("#tmSim").onclick = async () => {
 // keep checking for the bridge until it's connected, so starting it after the page loads just works
 setInterval(() => { if (!TM.connected && !document.hidden) tmStatus(); }, 4000);
 $("#tmDisc").onclick = async () => { try { TM = await bridge("/disconnect", {}); tmShow(); tmMsg("Disconnected."); } catch (e) { tmMsg(e.message, true); } };
+// ---- serial debug panel: live port details, line states, traffic counters, probe results ----
+let TMDBG = null, TMDBG_T = null;
+const dPill = (k, v) => `<span class="badge" style="${v === true ? "background:var(--ok-bg);color:var(--ok)" : v === false ? "" : "opacity:.6"}" title="${{cts: "Clear To Send - high when the device on the other end is ready", dsr: "Data Set Ready - high when a device is connected and powered", cd: "Carrier Detect", ri: "Ring Indicator", rts: "Request To Send (ours)", dtr: "Data Terminal Ready (ours)"}[k] || ""}">${k.toUpperCase()} ${v === true ? "on" : v === false ? "off" : "?"}</span>`;
+const dKV = o => Object.entries(o || {}).map(([k, v]) => `<span style="margin-right:12px"><span class="muted">${esc(k)}</span> ${esc(v === null || v === undefined ? "–" : String(v))}</span>`).join("");
+async function tmDbgLoad() {
+  try { TMDBG = await bridge("/debug"); } catch (e) { TMDBG = {err: e.message}; }
+  const el = $("#tmDbgBody"); if (!el) return;
+  const d = TMDBG;
+  $("#tmDbgWhen").textContent = "updated " + new Date().toLocaleTimeString();
+  if (d.err) { el.innerHTML = `<div style="color:var(--err)">Can't reach the bridge at ${esc(tmUrl())}: ${esc(d.err)}</div>`; return; }
+  const ports = (d.ports_detail || []).slice().sort((a, b) => (a.desc === "n/a") - (b.desc === "n/a"));
+  const real = ports.filter(p => p.desc && p.desc !== "n/a"), other = ports.filter(p => !p.desc || p.desc === "n/a");
+  const sel = $("#tmPort").value;
+  const portRow = p => `<tr style="${p.port === sel || p.port === d.port ? "background:var(--sel)" : ""}"><td><b>${esc(p.port)}</b></td><td>${esc(p.desc || "")}</td><td>${esc(p.chip || "")}</td>
+    <td>${p.vid ? esc(p.vid + ":" + p.pid) : ""}</td><td>${esc(p.manufacturer || "")}</td><td>${esc(p.serial_number || "")}</td><td class="muted" style="font-size:11px">${esc(p.hwid || "")}</td></tr>`;
+  const st = d.stats, pr = d.last_probe;
+  el.innerHTML = `
+    <div style="margin:4px 0"><span class="muted">Bridge</span> ${esc(d.bridge)} &middot; <span class="muted">Python</span> ${esc(d.python)} &middot; <span class="muted">pyserial</span> ${esc(d.pyserial)} &middot; <span class="muted">${esc(d.platform)}</span> &middot; <span class="muted">started</span> ${esc(d.bridge_started)}</div>
+    <div style="margin:4px 0"><b>Connection:</b> ${d.connected ? `${esc(d.port)} ${d.sim ? "(simulator)" : ""} &middot; ${esc(d.identity || "")} &middot; since ${esc(d.connected_at || "?")}` : `<span class="muted">not connected</span>`}
+      ${d.last_connect_error ? `<div style="color:var(--err)">Last connect error: ${esc(d.last_connect_error)}</div>` : ""}</div>
+    ${d.serial ? `<div style="margin:4px 0"><b>Port settings:</b> ${dKV({baud: d.serial.baudrate, bits: d.serial.bytesize, parity: d.serial.parity, stop: d.serial.stopbits, timeout: d.serial.timeout, xonxoff: d.serial.xonxoff, rtscts: d.serial.rtscts, dsrdtr: d.serial.dsrdtr, "bytes waiting": d.serial.in_waiting})}</div>
+      <div style="margin:4px 0"><b>Lines:</b> ${["cts", "dsr", "cd", "ri", "rts", "dtr"].map(k => dPill(k, d.serial[k])).join(" ")} <span class="muted">(CTS/DSR off with the console on can mean the wrong cable or a missing null-modem adapter)</span></div>` : ""}
+    ${st ? `<div style="margin:4px 0"><b>Traffic:</b> ${dKV({requests: st.requests, replies: st.replies, "no reply": st.timeouts, "incomplete": st.partial, "bad checksum": st.bad_checksum, "console errors": st.console_errors, "bytes out": st.bytes_out, "bytes in": st.bytes_in, "last sent": st.last_tx, "last received": st.last_rx, "last reply ms": st.last_rtt_ms})}
+      ${st.last_error ? `<div style="color:var(--err)">Last error: ${esc(st.last_error)}</div>` : ""}</div>` : ""}
+    ${pr ? `<div style="margin:6px 0"><b>Last settings probe</b> <span class="muted">${esc(pr.port)} at ${esc(pr.when)}</span><table style="font-size:12px">${pr.attempts.map(a => `<tr><td style="white-space:nowrap">${esc(a.settings)}</td><td style="${/answered/.test(a.result) ? "color:var(--ok)" : ""}">${esc(a.result)}</td><td class="muted">${a.bytes_in !== undefined ? a.bytes_in + " bytes in" : ""}</td><td class="muted">${a.ms !== undefined ? a.ms + " ms" : ""}</td></tr>`).join("")}</table></div>` : ""}
+    <div style="margin:6px 0"><b>Serial ports on this computer</b> ${real.length ? "" : `<span style="color:var(--err)">none with a device &mdash; is the USB-serial adapter plugged in and its driver installed?</span>`}
+      ${real.length ? `<table style="font-size:12px"><tr><th>Port</th><th>Description</th><th>Chip</th><th>VID:PID</th><th>Maker</th><th>Serial #</th><th>Hardware id</th></tr>${real.map(portRow).join("")}</table>` : ""}
+      ${other.length ? `<details><summary class="muted" style="font-weight:400">${other.length} other port(s) with no device</summary><div class="muted">${other.map(p => esc(p.port)).join(", ")}</div></details>` : ""}</div>
+    <div class="muted">Log file on the timing laptop: ${esc(d.log)} (${Math.round((d.log_bytes || 0) / 1024)} KB)</div>`;
+}
+$("#tmDbgBtn").onclick = e => { e.preventDefault(); const p = $("#tmDbg"); p.classList.toggle("hidden");
+  clearInterval(TMDBG_T); if (!p.classList.contains("hidden")) { tmDbgLoad(); TMDBG_T = setInterval(() => { if (!document.hidden) tmDbgLoad(); }, 2500); } };
+const dbgOut = (html, bad) => { $("#tmDbgOut").innerHTML = bad ? `<div style="color:var(--err)">${html}</div>` : html; };
+$("#tmPing").onclick = async () => { dbgOut("Pinging…"); try { const r = await bridge("/ping", {}); dbgOut(`<span style="color:var(--ok)">Answered in ${r.ms} ms:</span> ${esc(r.identity)}`); } catch (e) { dbgOut(esc(e.message), true); } tmDbgLoad(); };
+$("#tmListen").onclick = async () => { const port = $("#tmPort").value; dbgOut("Listening for 5 seconds…");
+  try { const r = await bridge("/listen", {secs: 5, port}); dbgOut(r.bytes ? `<b>${r.bytes} bytes</b> in ${r.secs}s at ${esc(r.serial.baudrate)} ${esc(r.serial.parity)}${esc(r.serial.stopbits)}<pre style="white-space:pre-wrap;font-size:11px;background:var(--bg);padding:6px;border-radius:6px;margin:4px 0">${esc(r.hex)}\n|${esc(r.ascii)}|</pre>`
+      : `Nothing arrived in ${r.secs}s. That's normal when idle (the console only answers requests), but if you expected data, check the cable and port.`); }
+  catch (e) { dbgOut(esc(e.message), true); } tmDbgLoad(); };
+$("#tmProbe").onclick = async () => { const port = $("#tmPort").value; if (!port) return dbgOut("Pick a COM port first.", true); dbgOut(`Trying every setting on ${esc(port)}… (about 2 seconds each)`);
+  try { const r = await bridge("/probe", {port}); const ok = r.attempts.find(a => /answered/.test(a.result)); dbgOut(ok ? `<span style="color:var(--ok)">The console answers at ${esc(ok.settings)}.</span> Click Connect to use it.` : `No setting got an answer &mdash; see the table below.`, !ok); }
+  catch (e) { dbgOut(esc(e.message), true); } tmDbgLoad(); };
+$("#tmCopy").onclick = async () => { try { const log = await bridge("/log?n=80").catch(() => ({lines: []}));
+  await navigator.clipboard.writeText(JSON.stringify({...(TMDBG || {}), recent_log: log.lines}, null, 1)); dbgOut("Copied to the clipboard."); } catch (e) { dbgOut("Couldn't copy: " + esc(e.message), true); } };
 $("#tmLogBtn").onclick = async e => { e.preventDefault(); const p = $("#tmLog"); p.classList.toggle("hidden"); if (!p.classList.contains("hidden")) { try { p.textContent = (await bridge("/log?n=150")).lines.join("\n") || "(empty)"; p.scrollTop = 1e6; } catch (x) { p.textContent = x.message; } } };
 $("#tmSend").onclick = async () => {
   const strokeName = v => v.ind_rel === "R" ? (v.stroke === "E" ? "Medley Relay" : "Free Relay") : ({A: "Free", B: "Back", C: "Breast", D: "Fly", E: "IM"}[v.stroke] || v.stroke);

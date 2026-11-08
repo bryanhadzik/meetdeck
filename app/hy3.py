@@ -287,11 +287,11 @@ def validate(swimmers: dict, entries: list[dict], removed: set[str], rules: dict
             issues.append({"level": "error", "swimmer": None, "entries": [e["id"]], "teams": [e["team"]], "rule": R_RELAY,
                            "msg": f"{e['team']} {e['relay']} relay, event {e['event_no']}: same swimmer on two legs",
                            "coach": f"{_lbl(e)}: {_list(dups)} is listed on more than one leg. Please send four different swimmers."})
-        if e["kind"] == "relay" and 0 < len(e["swimmers"]) < 4:
+        if e["kind"] == "relay" and (0 < len(e["swimmers"]) or e.get("legs_changed")) and len(e["swimmers"]) < 4:
             issues.append({"level": "error", "swimmer": None, "entries": [e["id"]], "teams": [e["team"]], "rule": R_RELAY,
                            "msg": f"{e['team']} {e['relay']} relay, event {e['event_no']}: only {len(e['swimmers'])} swimmer(s) listed",
                            "coach": f"{_lbl(e)} only lists {len(e['swimmers'])} swimmer(s): "
-                                    f"{_list(swimmers.get(k, {}).get('first', '?') + ' ' + swimmers.get(k, {}).get('last', '') for k in e['swimmers'])}. "
+                                    f"{_list(swimmers.get(k, {}).get('first', '?') + ' ' + swimmers.get(k, {}).get('last', '') for k in e['swimmers']) if e['swimmers'] else 'nobody'}. "
                                     f"A relay needs four - please send the rest."})
         if e["kind"] == "relay" and e["gender"] in "FMWBG" and e["gender"] != "X":
             wrong = [swimmers[k] for k in dict.fromkeys(e["swimmers"]) if k in swimmers and swimmers[k].get("gender")

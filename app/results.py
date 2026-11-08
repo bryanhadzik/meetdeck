@@ -120,17 +120,27 @@ def _dq_lines(e, v) -> list:
     return out
 
 
-def hy3(m: dict, db, licensee: str = "") -> bytes:
+def _hm(t) -> str:
+    """Meet Manager's clock: hour padded with a space (" 5:04 PM")."""
+    return f"{t.hour % 12 or 12:2d}:{t.minute:02d} {'AM' if t.hour < 12 else 'PM'}"
+
+
+def _alt(meet) -> str:
+    a = meet.get("altitude")
+    return "" if a is None else str(int(a))
+
+
+def hy3(m: dict, db, licensee: str = "", now=None) -> bytes:
     meet, teams, aths = m["meet"], m["teams"], m["athletes"]
     ev = {e["ptr"]: e for e in m["events"]}
     sp = splits(db)
-    now = dt.datetime.now()
+    now = now or dt.datetime.now()
     out = [_line("A1", [(2, "07", 2), (4, "Results From MM to TM", 25), (29, "Hy-Tek, Ltd", 15), (44, "MM5 8.0Gh", 14),
-                        (58, now.strftime("%m%d%Y"), 8), (67, now.strftime("%I:%M %p"), 8), (75, licensee, 53)]),
+                        (58, now.strftime("%m%d%Y"), 8), (67, _hm(now), 8), (75, licensee, 53)]),
            _line("B1", [(2, meet["name"], 45), (47, meet["location"], 45), (92, _mdy(meet["start"]), 8),
                         (100, _mdy(meet["end"] or meet["start"]), 8), (108, _mdy(meet.get("calc_date") or meet["start"]), 8),
-                        (116, meet.get("altitude") or "", 4, "r")]),
-           _line("B2", [(92, f"01{int(meet.get('mtype') or 1):02d}{int(meet.get('course') or 3):02d}{COURSE.get(meet.get('course'), 'Y')}{meet.get('style') or 1}", 8),
+                        (116, _alt(meet), 4, "r")]),
+           _line("B2", [(92, f"{int(meet.get('idformat') or 1):02d}{int(meet.get('mtype') or 1):02d}{int(meet.get('course') or 3):02d}{COURSE.get(meet.get('course'), 'Y')}{meet.get('style') or 1}", 8),
                         (100, "0.00", 6, "r")])]
     start = dt.date.fromisoformat(meet["start"]) if meet["start"] else dt.date.today()
     day = lambda v: (start + dt.timedelta(days=(v.get("day") or 1) - 1)).strftime("%m%d%Y")
@@ -159,7 +169,7 @@ def hy3(m: dict, db, licensee: str = "") -> bytes:
             for e in (x for x in inds if x["ath"] == a["no"]):      # Meet Manager keeps the entries' database order
                 v = ev[e["event"]]
                 out.append(_line("E1", [(2, a["sex"], 1), (3, a["no"], 5, "r"), (8, a["last"], 5), (13, a["sex"], 1),
-                                        (14, _sex_evt(v["gender"]), 1), (15, v["dist"], 6, "r"), (21, v["stroke"], 1),
+                                        (14, v.get("sex") or _sex_evt(v["gender"]), 1), (15, v["dist"], 6, "r"), (21, v["stroke"], 1),
                                         (22, "0", 3, "r"), (25, "109", 3), (30, "0", 1), (31, sty, 1), (32, "0.00", 6, "r"),
                                         (38, v["no"], 3, "r"), (41, v.get("ltr", ""), 1), (42, _t(e["seed"]), 8, "r"), (50, e.get("seed_crs", "Y"), 1),
                                         (51, _t(e["seed"]), 8, "r"), (59, e.get("seed_crs", "Y"), 1), (60, _t(e["points"]), 8, "r"),
@@ -171,7 +181,7 @@ def hy3(m: dict, db, licensee: str = "") -> bytes:
             v = ev[e["event"]]
             g = "F" if v["gender"] in ("F", "W") else ("X" if v["gender"] == "X" else "M")
             out.append(_line("F1", [(2, tm["abbr"], 5), (7, e["ltr"], 1), (11, "0", 1), (12, e.get("rel_sex") or g, 1), (13, g, 1),
-                                    (14, _sex_evt(v["gender"]), 1), (15, v["dist"], 6, "r"), (21, v["stroke"], 1),
+                                    (14, v.get("sex") or _sex_evt(v["gender"]), 1), (15, v["dist"], 6, "r"), (21, v["stroke"], 1),
                                     (22, "0", 3, "r"), (25, "109", 3), (30, "0", 1), (31, sty, 1), (32, "0.00", 6, "r"),
                                     (38, v["no"], 3, "r"), (41, v.get("ltr", ""), 1), (42, _t(e["seed"]), 8, "r"), (50, e.get("seed_crs", "Y"), 1),
                                     (51, _t(e["seed"]), 8, "r"), (59, e.get("seed_crs", "Y"), 1), (60, _t(e["points"]), 8, "r"),
@@ -250,7 +260,7 @@ def cl2(m: dict, db, export_time=None) -> bytes:
                          (105, now.strftime("%m%d%Y"), 8), (149, "MM40", 4)]),
            _sline("B1", [(2, "9", 1), (11, meet["name"], 30), (41, meet.get("addr1", ""), 22), (63, meet.get("addr2", ""), 22), (85, meet.get("city", ""), 20), (105, meet.get("state", ""), 2),
                          (107, meet.get("zip", ""), 10), (117, meet.get("country") or "USA", 3), (121, _mdy(meet["start"]), 8),
-                         (129, _mdy(meet["end"] or meet["start"]), 8), (137, meet.get("altitude") or "", 4, "r"),
+                         (129, _mdy(meet["end"] or meet["start"]), 8), (137, _alt(meet), 4, "r"),
                          (149, COURSE.get(meet.get("course"), "Y"), 1), (151, "000", 3)])]
     n = {"C": 0, "D": 0, "S": 0, "E": 0, "F": 0, "G": 0}
     active = [e for e in m["entries"] if not e["scr"] and _swum(e)]
@@ -261,7 +271,7 @@ def cl2(m: dict, db, export_time=None) -> bytes:
 
     def result(e):
         st = (e["stat"] or "").strip()
-        return "DQ" if st == "Q" else ("NS" if st in ("R", "F") else _st(e["time"]))
+        return "DQ" if st == "Q" else ("NS" if st in ("R", "F") else ("DNF" if st == "D" else _st(e["time"])))
 
     def g0(nm, lsc, pts, total, reg=""):
         lines = []
@@ -340,7 +350,9 @@ def cl2(m: dict, db, export_time=None) -> bytes:
             per = max(1, total // max(1, len(legs)))
             bynum = dict(sp.get(e["key"], []))
             if final_of(e):
-                if bynum and not bynum[max(bynum)] and not (e["stat"] or "").strip():   # blank last split: MM shows the final there
+                # Meet Manager shows the final in a blank last split if it falls in the last leg
+                # (a blank split in an earlier leg stays blank), and as the race's last split when it's missing
+                if bynum and max(bynum) > total - per and not bynum[max(bynum)] and not (e["stat"] or "").strip():
                     bynum[max(bynum)] = final_of(e)
                 bynum.setdefault(total, final_of(e))
             for k, ano in enumerate(legs):

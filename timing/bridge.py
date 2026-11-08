@@ -26,12 +26,18 @@ import cts  # noqa: E402
 VERSION = "0.1 (untested on hardware)"
 LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cts-log.txt")
 LOCK = threading.Lock()
-STATE = {"console": None, "serial": None, "port": None, "settings": None, "identity": None, "sim": False}
+STATE = {"console": None, "serial": None, "port": None, "settings": None, "identity": None, "sim": False,
+         "last_probe": None, "connected_at": None, "last_connect_error": None}
+STARTED = time.strftime("%Y-%m-%d %H:%M:%S")
 RECENT: list[str] = []
 
 
+def _ascii(data: bytes) -> str:
+    return "".join(chr(b) if 32 <= b < 127 else "." for b in data)
+
+
 def log(direction: str, data: bytes):
-    line = f"{time.strftime('%H:%M:%S')} {direction:7} {data.hex(' ')}"
+    line = f"{time.strftime('%H:%M:%S')} {direction:7} {data.hex(' ')}  |{_ascii(data)}| ({len(data)} B)"
     RECENT.append(line)
     del RECENT[:-400]
     with open(LOG_PATH, "a") as f:
@@ -69,23 +75,129 @@ def connect(body: dict) -> dict:
     port = body.get("port")
     if not port:
         raise ValueError("pick a COM port")
+    info = next((p for p in cts.list_ports(detail=True) if p["port"] == port), None)
+    note(f"connect {port}: {info or 'not in the port list'}")
     if body.get("baudrate"):
         s = {"baudrate": int(body["baudrate"]), "parity": body.get("parity", "N"), "stopbits": float(body.get("stopbits", 1))}
-        ser = cts.open_serial(port, **s)
+        try:
+            ser = cts.open_serial(port, **s)
+        except Exception as e:
+            STATE["last_connect_error"] = cts.explain_open_error(port, e)
+            note(STATE["last_connect_error"])
+            raise ValueError(STATE["last_connect_error"])
         c = cts.Console(ser, log=log)
-        ident = c.who_are_you()
+        try:
+            ident = c.who_are_you()
+        except Exception as e:
+            ser.close()
+            STATE["last_connect_error"] = f"{port} {s}: {e}"
+            note(STATE["last_connect_error"])
+            raise ValueError(STATE["last_connect_error"])
     else:
         note(f"probing {port}")
-        found = cts.probe(port, log=log)
-        if not found or found.get("error"):
-            raise ValueError((found or {}).get("error") or f"the console didn't answer on {port} at any of the usual settings - check the cable is in COM PORT 1 and the console is on")
+        attempts = []
+        found = cts.probe(port, log=log, attempts=attempts)
+        STATE["last_probe"] = {"port": port, "when": time.strftime("%H:%M:%S"), "attempts": attempts}
+        for a in attempts:
+            note(f"probe {port} {a['settings']}: {a['result']}")
+        if not found or "identity" not in found:
+            err = (found or {}).get("error") or (
+                f"the console didn't answer on {port} at any of the usual settings - check the cable is in COM PORT 1 and the console is on. "
+                + ("Some bytes came back, so the line is live but the settings or protocol don't match. " if any(a.get("bytes_in") for a in attempts)
+                   else "Nothing at all came back - usually the wrong port, a loose/unplugged cable, or a cable that needs a null-modem adapter. "))
+            STATE["last_connect_error"] = err
+            raise ValueError(err)
         ser = found.pop("serial")
         ident = found.pop("identity")
+        found.pop("attempts", None)
         s = found
         c = cts.Console(ser, log=log)
-    STATE.update(console=c, serial=ser, port=port, settings=s, identity=ident, sim=False)
-    note(f"connected {port} {s} '{ident}'")
+    STATE.update(console=c, serial=ser, port=port, settings=s, identity=ident, sim=False,
+                 connected_at=time.strftime("%H:%M:%S"), last_connect_error=None)
+    note(f"connected {port} {s} '{ident}' {cts.port_details(ser)}")
     return status()
+
+
+def debug() -> dict:
+    """Everything useful for chasing a serial problem, in one place (Timing console > Serial debug)."""
+    import platform
+    try:
+        import serial
+        pyser = getattr(serial, "__version__", "?")
+    except ImportError:
+        pyser = "NOT INSTALLED (pip install pyserial)"
+    c, ser = STATE["console"], STATE["serial"]
+    real = ser is not None and not STATE["sim"]
+    try:
+        log_size = os.path.getsize(LOG_PATH)
+    except OSError:
+        log_size = 0
+    return {**status(), "python": sys.version.split()[0], "platform": platform.platform(), "pyserial": pyser,
+            "bridge_started": STARTED, "connected_at": STATE["connected_at"], "ports_detail": cts.list_ports(detail=True),
+            "serial": cts.port_details(ser) if real else None, "stats": c.stats if c else None,
+            "last_probe": STATE["last_probe"], "last_connect_error": STATE["last_connect_error"], "log_bytes": log_size}
+
+
+def ping() -> dict:
+    """Send the identity request once and time the answer."""
+    c = need()
+    t0 = time.time()
+    ident = c.who_are_you()
+    return {"identity": ident, "ms": round((time.time() - t0) * 1000), "stats": c.stats}
+
+
+def listen(body: dict) -> dict:
+    """Read whatever arrives on the line for a few seconds, without sending anything. Shows whether the
+    console (or anything) is talking at all, and what it looks like at these settings."""
+    secs = min(max(float(body.get("secs", 5)), 0.5), 30)
+    own = None
+    if STATE["serial"] is not None and not STATE["sim"]:
+        ser = STATE["serial"]
+    elif STATE["sim"]:
+        raise ValueError("the simulator doesn't send anything on its own")
+    else:
+        port = body.get("port")
+        if not port:
+            raise ValueError("pick a COM port")
+        s = {"baudrate": int(body.get("baudrate", 9600)), "parity": body.get("parity", "N"), "stopbits": float(body.get("stopbits", 1))}
+        try:
+            own = ser = cts.open_serial(port, **s)
+        except Exception as e:
+            raise ValueError(cts.explain_open_error(port, e))
+    buf = b""
+    end = time.time() + secs
+    try:
+        while time.time() < end:
+            chunk = ser.read(512)
+            if chunk:
+                buf += chunk
+            else:
+                time.sleep(0.02)
+        lines = cts.port_details(ser)
+    finally:
+        if own:
+            own.close()
+    if buf:
+        log("<listen", buf)
+    note(f"listened {secs:g}s on {lines.get('port')} {lines.get('baudrate')} {lines.get('parity')}{lines.get('stopbits')}: {len(buf)} bytes")
+    return {"secs": secs, "bytes": len(buf), "hex": buf[:600].hex(" "), "ascii": _ascii(buf[:600]), "serial": lines}
+
+
+def probe_only(body: dict) -> dict:
+    """Try every usual setting on a port and report each one; doesn't stay connected."""
+    port = body.get("port")
+    if not port:
+        raise ValueError("pick a COM port")
+    if STATE["port"] == port and not STATE["sim"]:
+        raise ValueError(f"already connected on {port} - disconnect first")
+    attempts = []
+    found = cts.probe(port, log=log, attempts=attempts)
+    if found and found.get("serial"):
+        found["serial"].close()
+    STATE["last_probe"] = {"port": port, "when": time.strftime("%H:%M:%S"), "attempts": attempts}
+    for a in attempts:
+        note(f"probe {port} {a['settings']}: {a['result']}")
+    return STATE["last_probe"]
 
 
 def status() -> dict:
@@ -161,7 +273,8 @@ class Handler(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         routes = {"/status": status, "/races": lambda: need().race_list(), "/race": lambda: get_race(q),
                   "/meet": lambda: need().meet(int(q.get("dir", 0))), "/log": lambda: {"lines": RECENT[-int(q.get("n", 200)):]},
-                  "/sequence": lambda: {"slot": int(q.get("slot", 9)), "title": need().sequence_title(int(q.get("slot", 9)))}}
+                  "/sequence": lambda: {"slot": int(q.get("slot", 9)), "title": need().sequence_title(int(q.get("slot", 9)))},
+                  "/debug": debug}
         if u.path not in routes:
             return self._send(404, {"error": "not found"})
         self._run(routes[u.path])
@@ -172,7 +285,8 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(n) or b"{}") if n else {}
         routes = {"/connect": lambda: connect(body), "/disconnect": lambda: (disconnect(), status())[1],
                   "/download": lambda: need().download_meet(int(body.get("slot", 9)), body["events"], body.get("title")),
-                  "/sim/load": lambda: sim_load(body)}
+                  "/sim/load": lambda: sim_load(body), "/ping": ping, "/listen": lambda: listen(body),
+                  "/probe": lambda: probe_only(body)}
         if u.path not in routes:
             return self._send(404, {"error": "not found"})
         self._run(routes[u.path])

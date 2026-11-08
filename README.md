@@ -205,3 +205,12 @@ from ./.env (Bryan sets it; not in code). Tests: tests/make_cl2.py builds an SDI
 ### Meets already scored in Meet Manager
 - Opening a scored meet keeps Meet Manager's points: the races show as Scored and the Scores tab fills in. Scoring follows the file's own settings (max scorers per team, "score fastest heat only").
 
+### Timing bridge: serial debug
+- Timing console > Serial debug: bridge / Python / pyserial versions, every serial port with chip, VID:PID, maker, serial number and hardware id, the open port's live settings and CTS/DSR/CD/RI lines, traffic counters (requests, replies, no-reply, incomplete, bad checksum, bytes), the last error, and each setting tried by the last probe.
+- Ping console, Listen 5 s (raw bytes in hex and text, without sending anything), Try all settings, Copy debug info. Port-open errors explain the usual cause (port in use, adapter unplugged, driver). The log shows text next to hex.
+
+### Changes at the table (meet setup, step 6, before seeding)
+- Coaches' last-minute changes: pick the team, find the swimmer, add or remove events, or pull the swimmer from the meet (individual events dropped, relay legs left empty so those relays show as problems).
+- Relays: pick the swimmer for each leg and move legs up/down to change the order; add or scratch relays. The checked entry files get a new relay-swimmer line and the Meet Manager database build uses the new legs.
+- The team's problems are listed at the top; click one to jump to it. Every change is re-checked right away, so fixed problems disappear.
+

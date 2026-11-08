@@ -167,6 +167,12 @@ class Console:
         self.port = port
         self.log = log            # callable(direction, bytes) or None
         self.settle = settle
+        # traffic counters for the debug panel
+        self.stats = {"requests": 0, "replies": 0, "timeouts": 0, "bad_checksum": 0, "console_errors": 0, "partial": 0,
+                      "bytes_out": 0, "bytes_in": 0, "last_tx": None, "last_rx": None, "last_rtt_ms": None, "last_error": None}
+
+    def _err(self, text: str):
+        self.stats["last_error"] = f"{time.strftime('%H:%M:%S')} {text}"
 
     # -- low level --
     def request(self, payload: bytes, timeout: float = 2.0) -> bytes:
@@ -178,8 +184,14 @@ class Console:
         if self.log:
             self.log(">", msg)
         self.port.write(msg)
+        self.stats["requests"] += 1
+        self.stats["bytes_out"] += len(msg)
+        self.stats["last_tx"] = time.strftime("%H:%M:%S")
+        t0 = time.time()
         time.sleep(self.settle)
-        return self.read_reply(timeout)
+        r = self.read_reply(timeout)
+        self.stats["last_rtt_ms"] = round((time.time() - t0) * 1000)
+        return r
 
     def send(self, payload: bytes):
         """Write without waiting for a reply (event/label writes may not answer)."""
@@ -187,6 +199,8 @@ class Console:
         if self.log:
             self.log(">", msg)
         self.port.write(msg)
+        self.stats["bytes_out"] += len(msg)
+        self.stats["last_tx"] = time.strftime("%H:%M:%S")
         time.sleep(self.settle)
 
     def read_reply(self, timeout: float = 2.0) -> bytes:
@@ -196,6 +210,8 @@ class Console:
             chunk = self.port.read(512)
             if chunk:
                 buf += chunk
+                self.stats["bytes_in"] += len(chunk)
+                self.stats["last_rx"] = time.strftime("%H:%M:%S")
                 if len(buf) >= 2:
                     n = u16(buf[0], buf[1])
                     if 4 <= n <= 4096 and len(buf) >= n:
@@ -205,15 +221,27 @@ class Console:
                             if extra:
                                 self.log("<extra", extra)
                         if not check_ok(msg):
-                            raise CTSError(f"bad checksum in reply: {msg.hex(' ')}")
+                            self.stats["bad_checksum"] += 1
+                            self._err("bad checksum in reply")
+                            raise CTSError(f"bad checksum in reply: {msg.hex(' ')} (wrong baud/parity, or line noise)")
                         if n == 6:
+                            self.stats["console_errors"] += 1
+                            self._err(f"console error code {u16(msg[2], msg[3])}")
                             raise CTSError(f"console error code {u16(msg[2], msg[3])}")
+                        self.stats["replies"] += 1
                         return msg
             else:
                 time.sleep(0.02)
         if buf and self.log:
             self.log("<partial", buf)
-        raise CTSError("no reply from the console" + (f" (got {len(buf)} bytes: {buf[:40].hex(' ')})" if buf else ""))
+        if buf:
+            self.stats["partial"] += 1
+            self._err(f"incomplete reply ({len(buf)} bytes)")
+            raise CTSError(f"incomplete reply from the console: got {len(buf)} bytes ({buf[:40].hex(' ')}) - "
+                           "garbage bytes usually mean the wrong baud rate or parity")
+        self.stats["timeouts"] += 1
+        self._err(f"no reply within {timeout:g}s")
+        raise CTSError(f"no reply from the console within {timeout:g}s - nothing came back on the serial line")
 
     # -- identity / meets --
     def who_are_you(self) -> str:
@@ -327,25 +355,83 @@ def open_serial(port: str, baudrate=9600, parity="N", stopbits=1, timeout=0.1):
     return serial.Serial(port, baudrate=baudrate, bytesize=8, parity=parity, stopbits=stopbits, timeout=timeout)
 
 
-def list_ports() -> list[dict]:
+def list_ports(detail: bool = False) -> list[dict]:
     try:
         from serial.tools import list_ports as lp
     except ImportError:
         return []
-    return [{"port": p.device, "desc": p.description} for p in lp.comports() if p.description and p.description != "n/a"]
+    out = []
+    for p in lp.comports():
+        if not detail and not (p.description and p.description != "n/a"):
+            continue
+        d = {"port": p.device, "desc": p.description}
+        if detail:
+            d.update(hwid=p.hwid, vid=f"{p.vid:04X}" if p.vid is not None else None, pid=f"{p.pid:04X}" if p.pid is not None else None,
+                     serial_number=p.serial_number, manufacturer=p.manufacturer, product=p.product,
+                     location=p.location, interface=p.interface, chip=usb_chip(p.vid, p.pid))
+        out.append(d)
+    return out
 
 
-def probe(port: str, log=None) -> dict | None:
-    """Try each setting with the identity request; returns the first that answers."""
+USB_CHIPS = {(0x0403, None): "FTDI", (0x067B, None): "Prolific PL2303", (0x10C4, None): "Silicon Labs CP210x",
+             (0x1A86, None): "WCH CH340/CH341", (0x0557, None): "ATEN", (0x2341, None): "Arduino"}
+
+
+def usb_chip(vid, pid) -> str | None:
+    """Name the USB-serial chip from its vendor id (driver problems are usually chip-specific)."""
+    return USB_CHIPS.get((vid, None)) if vid is not None else None
+
+
+def explain_open_error(port: str, e: Exception) -> str:
+    t = f"{type(e).__name__}: {e}"
+    low = t.lower()
+    if "permission" in low or "access is denied" in low or "busy" in low:
+        return f"can't open {port}: it's in use by another program (Meet Manager's timing interface, CTS software, or a second bridge). Close that, then try again. [{t}]"
+    if "filenotfound" in low or ("could not open port" in low and "cannot find" in low) or "no such file" in low:
+        return f"can't open {port}: the computer says the port isn't there - unplug and replug the USB-serial adapter and pick the port again. [{t}]"
+    if "semaphore" in low or "device attached to the system is not functioning" in low:
+        return f"can't open {port}: the adapter's driver isn't working (try another USB port or reinstall the driver). [{t}]"
+    return f"can't open {port}: {t}"
+
+
+def port_details(ser) -> dict:
+    """Live settings and modem lines of an open pyserial port."""
+    d = {}
+    for k in ("port", "baudrate", "bytesize", "parity", "stopbits", "timeout", "write_timeout", "xonxoff", "rtscts", "dsrdtr", "is_open"):
+        try:
+            d[k] = getattr(ser, k)
+        except Exception as e:
+            d[k] = f"? {e}"
+    for k in ("cts", "dsr", "ri", "cd", "rts", "dtr"):     # CTS/DSR high usually means a live device on the other end
+        try:
+            d[k] = bool(getattr(ser, k))
+        except Exception:
+            d[k] = None
+    try:
+        d["in_waiting"] = ser.in_waiting
+    except Exception:
+        d["in_waiting"] = None
+    return d
+
+
+def probe(port: str, log=None, attempts: list | None = None) -> dict | None:
+    """Try each setting with the identity request; returns the first that answers.
+    `attempts` (if given) gets one line per setting tried, for the debug panel."""
+    attempts = attempts if attempts is not None else []
     for s in SETTINGS_TO_TRY:
+        label = f"{s['baudrate']} {s['parity']}{s['stopbits']}"
         try:
             ser = open_serial(port, **s)
         except Exception as e:
-            return {"error": f"can't open {port}: {e}"}
+            attempts.append({"settings": label, "result": explain_open_error(port, e)})
+            return {"error": explain_open_error(port, e), "attempts": attempts}
+        c = Console(ser, log=log)
+        t0 = time.time()
         try:
-            c = Console(ser, log=log)
             ident = c.who_are_you()
-            return {**s, "identity": ident, "serial": ser}
-        except Exception:
+            attempts.append({"settings": label, "result": f"answered: '{ident}'", "ms": round((time.time() - t0) * 1000)})
+            return {**s, "identity": ident, "serial": ser, "attempts": attempts}
+        except Exception as e:
+            attempts.append({"settings": label, "result": str(e), "bytes_in": c.stats["bytes_in"], "ms": round((time.time() - t0) * 1000)})
             ser.close()
-    return None
+    return {"error": None, "attempts": attempts}

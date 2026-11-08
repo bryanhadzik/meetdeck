@@ -49,6 +49,33 @@ th{color:var(--muted);font-weight:600}
 .removed{text-decoration:line-through;opacity:.55}
 .chip{display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:1px 8px;margin:2px 4px 2px 0;font-size:13px}
 .chip.x{text-decoration:line-through;opacity:.5}
+.chip.bad{border-color:var(--err);color:var(--err)}
+#tableSec tr.sw{cursor:pointer}
+#tableSec tr.sw:hover td{background:var(--sel)}
+#tableSec tr.sw.bad td:first-child{box-shadow:inset 3px 0 0 var(--err)}
+#tableSec tr.sw.open td{background:var(--sel)}
+#tableSec .cnt{font:12px ui-monospace,monospace;white-space:nowrap}
+#tableSec .cnt.over{color:var(--err);font-weight:700}
+#tableSec .ed{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+#tableSec .evgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 14px}
+#tableSec .evgrid label{display:flex;align-items:center;gap:6px;font-size:14px;padding:3px 4px;border-radius:6px}
+#tableSec .evgrid label.on{background:var(--ok-bg)}
+#tableSec .evgrid input[type=text]{width:72px;margin-left:auto}
+#tableSec .evgrid .sd{margin-left:auto;font:13px ui-monospace,monospace;color:var(--muted)}
+#tableSec .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:10px}
+#tableSec .rc{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--card)}
+#tableSec .rc.bad{border-color:var(--err);box-shadow:0 0 0 1px var(--err)}
+#tableSec .rc.gone{opacity:.5}
+#tableSec .rc.flash{animation:tbflash 1.2s}
+@keyframes tbflash{from{background:var(--ok-bg)}to{background:var(--card)}}
+#tableSec .rc h4{margin:0 0 6px;font-size:13.5px;display:flex;gap:6px;align-items:center}
+#tableSec .rc h4 button{white-space:nowrap}
+#tableSec .leg{display:flex;align-items:center;gap:6px;margin:3px 0}
+#tableSec .leg .n{width:58px;font-size:12px;color:var(--muted)}
+#tableSec .leg select{flex:1;min-width:0}
+#tableSec .leg button{padding:2px 7px}
+#tableSec .rc .why{font-size:12.5px;color:var(--err);margin-top:4px}
+#tableSec .probs a{color:inherit}
 .chip.new{border-color:var(--ok, #2e7d32);border-style:dashed}
 a.chip.addc{text-decoration:none;color:var(--accent);cursor:pointer}
 .addform{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0;font-size:13px}
@@ -202,8 +229,23 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <div class="muted" style="font-size:13px;margin-top:4px">Pool records always count for every swimmer.</div>
     </section>
 
+    <section id="tableSec">
+      <h2><span class="n">6</span> Changes at the table <span class="muted" style="font-weight:400;font-size:13px">coaches' last-minute changes, before seeding</span></h2>
+      <div class="row" style="margin-bottom:8px">
+        <label class="muted">Team <select id="tbTeam"></select></label>
+        <input id="tbFind" placeholder="Find a swimmer" size="24" autocomplete="off">
+        <span class="muted" style="font-size:13px">Click a swimmer to change their events. Every change is saved and re-checked right away.</span>
+      </div>
+      <div id="tbDbNote"></div>
+      <div id="tbProblems"></div>
+      <div id="tbSwimmers" class="scroll"></div>
+      <h3 style="margin-top:14px">Relays <a class="chip addc" style="font-weight:400" id="tbAddRelay">+ Add relay</a></h3>
+      <div id="tbAddRelayBox"></div>
+      <div id="tbRelays"></div>
+    </section>
+
     <section>
-      <h2><span class="n">6</span> Seeding</h2>
+      <h2><span class="n">7</span> Seeding</h2>
       <div id="aoSeed"></div>
       <div class="row">
         <button id="seedBtn" style="padding:10px 22px;font-size:15px;font-weight:600">Seed heats</button>
@@ -220,7 +262,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     </section>
 
     <section>
-      <h2><span class="n">7</span> Download for Meet Manager</h2>
+      <h2><span class="n">8</span> Download for Meet Manager</h2>
       <div id="dlWarn"></div>
       <div class="row">
         <button id="mmBtn">Download Meet Manager backup</button>
@@ -460,7 +502,7 @@ function renderFiles() {
     `<h3>Meet Manager backups <span class="muted" style="font-weight:400">· every download is kept (newest 15)</span></h3>` +
     tbl(["File", "Built", "Size", ""], S.backups.map(f => `<tr><td>${esc(f.name.replace(/^\S+ \d{4} /, ""))}</td><td>${esc(f.when)}</td><td>${kb(f.size)}</td>
       <td class="act"><button class="ghost small" onclick="location='${sUrl("backups", f.name)}'">Download</button><button class="ghost small" data-sdel="backups|${esc(f.name)}">Delete</button></td></tr>`),
-      "None yet &mdash; they appear here when you download a backup in step 6.") +
+      "None yet &mdash; they appear here when you download a backup in step 8.") +
     `<h3>Documents</h3>` +
     tbl(["File", "Added", "Size", ""], S.docs.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.when)}</td><td>${kb(f.size)}</td>
       <td class="act"><button class="ghost small" onclick="location='${sUrl("docs", f.name)}'">Download</button><button class="ghost small" data-sdel="docs|${esc(f.name)}">Delete</button></td></tr>`),
@@ -1008,9 +1050,159 @@ function render() {
   $("#seedStep").innerHTML = M.preseed ? `<b>Don't run Seeding</b> &mdash; every heat and lane is already set. Print the heat sheet and go. (Re-seeding in Meet Manager can put a swimmer alone in heat 1 again.)`
     : `<b>Seeding &rarr; Select All &rarr; Start Seeding</b>${M.combos.some(c => c.selected && c.fits) ? " (leave the combined events unselected)" : ""}.`;
   $("#dlWarn").innerHTML = (M.has_db ? `<div class="issue warn"><b>This meet has an edited database.</b> The button below rebuilds from the team entries and leaves out changes made there &mdash; to keep them, use <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> &rarr; Download / export.</div>` : "") + (errs ? `<div class="issue error"><b>${errs} rule problem(s) still open.</b> You can download anyway, but those entries go in as-is.</div>` : "");
+  renderTable();
   $("#dl").innerHTML = M.files.length ? `<button onclick="location='/api/meets/${M.id}/download-all'">Download all teams</button>` +
     M.files.map(f => `<button class="ghost" onclick="location='/api/meets/${M.id}/download/${encodeURIComponent(f.name)}'">${esc(f.teams.join(", "))}</button>`).join("") : "";
 }
+
+// ---------------- 6. Changes at the table ----------------
+// Coaches walk up before the meet: pick the team, find the swimmer, fix events and relays.
+// Every change goes to the server, which re-runs the rule check, so problems clear as soon as they're fixed.
+let TB = {team: recall("tbTeam") || "", open: null, flash: null};
+const LEG_MEDLEY = ["Back", "Breast", "Fly", "Free"];
+const tbIssues = () => M.issues.filter(i => i.teams.includes(TB.team) || i.entries.some(id => M.entries.find(e => e.id === id && e.team === TB.team)));
+const swEntries = key => M.entries.filter(e => e.kind === "ind" ? e.swimmers.includes(key) : Object.values(e.legs || {}).includes(key));
+function swCounts(key) {
+  const act = swEntries(key).filter(e => !e.removed);
+  const ind = act.filter(e => e.kind === "ind").length;
+  return {ind, tot: act.length, over: ind > M.rules.max_individual || act.length > M.rules.max_total};
+}
+function relayLegs(e) { return [1, 2, 3, 4].map(i => (e.legs || {})[i] || (e.legs || {})[String(i)] || ""); }
+async function tbCall(url, opts, flash) {
+  try { M = await api(url, opts); TB.flash = flash || null; render(); }
+  catch (x) { alert(x.message); }
+}
+function renderTable() {
+  const sel = $("#tbTeam"), codes = M.lanes.order.length ? M.lanes.order : Object.keys(M.teams);
+  if (!codes.length) { $("#tbSwimmers").innerHTML = `<div class="muted">Upload entries first.</div>`; $("#tbRelays").innerHTML = ""; $("#tbProblems").innerHTML = ""; return; }
+  if (!codes.includes(TB.team)) TB.team = codes[0];
+  const opts = codes.map(c => `<option value="${esc(c)}">${esc(M.teams[c]?.name || c)} (${esc(c)})</option>`).join("");
+  if (sel.dataset.k !== opts) { sel.innerHTML = opts; sel.dataset.k = opts; }
+  sel.value = TB.team;
+  $("#tbDbNote").innerHTML = M.has_db ? `<div class="issue warn" style="font-size:13px">This meet already has a meet database. Changes here update the entries and the next rebuild; to change the running meet use <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> &rarr; Swimmers.</div>` : "";
+  // problems for this team, each one a link to the swimmer or relay to fix
+  const probs = tbIssues();
+  $("#tbProblems").innerHTML = !probs.length ? `<div class="okbox" style="font-size:13px;margin-bottom:8px">No problems for ${esc(M.teams[TB.team]?.name || TB.team)}.</div>` :
+    `<div class="issue error probs" style="font-size:13.5px"><b>${probs.length} problem${probs.length > 1 ? "s" : ""} for ${esc(M.teams[TB.team]?.name || TB.team)}</b> &mdash; click one to fix it<ul style="margin:4px 0 0;padding-left:18px">` +
+    probs.map(i => {
+      const rel = !i.swimmer && i.entries.map(id => M.entries.find(e => e.id === id)).find(e => e && e.kind === "relay");
+      const go = i.swimmer ? `data-tbsw="${esc(i.swimmer)}"` : rel ? `data-tbrel="${esc(rel.id)}"` : "";
+      return `<li><a href="#" ${go}>${esc(i.msg)}</a></li>`;
+    }).join("") + `</ul></div>`;
+  const badSw = new Set(probs.map(i => i.swimmer).filter(Boolean));
+  M.issues.forEach(i => { if (!i.swimmer && /same swimmer on two legs/.test(i.msg)) i.entries.forEach(id => { const e = M.entries.find(x => x.id === id); if (e) relayLegs(e).forEach(k => { if (k && relayLegs(e).filter(x => x === k).length > 1) badSw.add(k); }); }); });
+  // swimmers
+  const q = $("#tbFind").value.trim().toLowerCase();
+  const sws = Object.values(M.swimmers).filter(s => s.team === TB.team && (!q || `${s.first} ${s.last} ${s.pref}`.toLowerCase().includes(q)))
+    .sort((a, b) => a.last.localeCompare(b.last) || a.first.localeCompare(b.first));
+  if (q && sws.length === 1) TB.open = sws[0].key;
+  const evs = meetEvents("ind");
+  $("#tbSwimmers").innerHTML = `<table><tr><th>Swimmer</th><th>Yr</th><th>Events</th><th title="individual / total (limits ${M.rules.max_individual} / ${M.rules.max_total})">Ind / total</th></tr>` + sws.map(s => {
+    const es = swEntries(s.key), c = swCounts(s.key), open = TB.open === s.key;
+    const chips = es.map(e => `<span class="chip ${e.removed ? "x" : ""}">#${esc(e.event_no)}${e.kind === "relay" ? ` relay ${esc(e.relay)}` : ""}</span>`).join("") || `<span class="muted">no events</span>`;
+    let row = `<tr class="sw${badSw.has(s.key) ? " bad" : ""}${open ? " open" : ""}" data-tbsw="${esc(s.key)}"><td><b>${esc(s.last)}, ${esc(s.pref || s.first)}</b> <span class="muted" style="font-size:12px">${esc(s.gender)}</span></td><td>${esc(s.class || s.age || "")}</td><td>${chips}</td>
+      <td class="cnt ${c.over ? "over" : ""}">${c.ind} / ${c.tot}</td></tr>`;
+    if (!open) return row;
+    const mineEv = evs.filter(v => !s.gender || gNorm(v.gender) === s.gender);
+    const grid = mineEv.map(v => {
+      const ent = es.find(e => e.kind === "ind" && e.event_no === v.no && !e.removed) ;
+      const old = es.find(e => e.kind === "ind" && e.event_no === v.no && e.removed);
+      return `<label class="${ent ? "on" : ""}"><input type="checkbox" data-tbev="${esc(v.no)}" data-sw="${esc(s.key)}" ${ent ? "checked" : ""}> #${esc(v.no)} ${esc(v.name.replace(/^(Girls|Boys|Women|Men) /, ""))}` +
+        (ent ? `<span class="sd">${esc(ent.seed_fmt || "NT")}</span>` : old ? `<span class="sd" title="Was entered; ticking puts it back">${esc(old.seed_fmt || "NT")}</span>` : `<input type="text" placeholder="NT" data-tbseed="${esc(v.no)}">`) + `</label>`;
+    }).join("");
+    const rels = es.filter(e => e.kind === "relay" && !e.removed).map(e => {
+      const pos = relayLegs(e).indexOf(s.key) + 1;
+      return `<div class="leg"><span>#${esc(e.event_no)} ${esc(e.event)} <b>${esc(e.relay)}</b>, leg ${pos}</span> <button class="ghost small" data-tboff="${esc(e.id)}" data-sw="${esc(s.key)}">Take off</button> <a href="#" data-tbrel="${esc(e.id)}" style="font-size:13px">open relay</a></div>`;
+    }).join("");
+    return row + `<tr><td colspan="4"><div class="ed">
+      <div class="muted" style="font-size:12px;margin-bottom:4px">INDIVIDUAL EVENTS &mdash; tick to enter, untick to drop</div><div class="evgrid">${grid || `<span class="muted">No individual events in this meet yet.</span>`}</div>
+      <div class="muted" style="font-size:12px;margin:10px 0 4px">RELAYS</div>${rels || `<span class="muted" style="font-size:13px">Not on a relay. Put them on one in the relay cards below.</span>`}
+      <div class="row" style="margin-top:10px"><button class="ghost small danger" data-tbpull="${esc(s.key)}">Pull from the meet</button><span class="muted" style="font-size:12px">drops every event and takes them off their relays</span><span class="grow"></span><button class="ghost small" data-tbclose="1">Close</button></div>
+    </div></td></tr>`;
+  }).join("") + `</table>` + (sws.length ? "" : `<div class="muted">No swimmers match.</div>`);
+  // relays
+  const rels = M.entries.filter(e => e.kind === "relay" && e.team === TB.team).sort((a, b) => (+a.event_no) - (+b.event_no) || (a.relay || "").localeCompare(b.relay || ""));
+  const teamSw = Object.values(M.swimmers).filter(s => s.team === TB.team).sort((a, b) => a.last.localeCompare(b.last) || a.first.localeCompare(b.first));
+  $("#tbRelays").innerHTML = !rels.length ? `<div class="muted">No relays for this team.</div>` : `<div class="rgrid">` + rels.map(e => {
+    const legs = relayLegs(e), why = M.issues.filter(i => i.entries.includes(e.id) && (!i.swimmer || legs.includes(i.swimmer)));
+    const g = gNorm(e.gender), medley = /Medley/.test(e.event);
+    const pool = teamSw.filter(s => !s.gender || g === "X" || s.gender === g);
+    const legRow = (k, i) => {
+      const o = pool.map(s => { const c = swCounts(s.key); return `<option value="${esc(s.key)}" ${s.key === k ? "selected" : ""}>${esc(s.last)}, ${esc(s.pref || s.first)} (${c.ind}/${c.tot})</option>`; }).join("");
+      const extra = k && !pool.find(s => s.key === k) ? `<option value="${esc(k)}" selected>${esc(swName(k))} (other team/gender)</option>` : "";
+      return `<div class="leg"><span class="n">${medley ? LEG_MEDLEY[i] : "Leg " + (i + 1)}</span><select data-tbleg="${esc(e.id)}" data-i="${i}" ${e.removed ? "disabled" : ""}><option value="">&mdash; empty &mdash;</option>${extra}${o}</select>
+        <button class="ghost small" data-tbup="${esc(e.id)}" data-i="${i}" ${i && !e.removed ? "" : "disabled"} title="Swim earlier">&#9650;</button><button class="ghost small" data-tbdn="${esc(e.id)}" data-i="${i}" ${i < 3 && !e.removed ? "" : "disabled"} title="Swim later">&#9660;</button></div>`;
+    };
+    return `<div class="rc${why.length && !e.removed ? " bad" : ""}${e.removed ? " gone" : ""}${TB.flash === e.id ? " flash" : ""}" id="tbrel-${esc(e.id)}"><h4>#${esc(e.event_no)} ${esc(e.event)} &middot; ${esc(e.relay)} <span class="muted" style="font-weight:400">${esc(e.seed_fmt || "NT")}</span><span class="grow"></span>
+      ${e.added ? `<button class="ghost small" data-rmadd="${esc(e.id)}">Delete</button>` : `<button class="ghost small" data-${e.removed ? "rs" : "rm"}="${esc(e.id)}">${e.removed ? "Put back" : "Scratch relay"}</button>`}</h4>
+      ${legs.map(legRow).join("")}${e.removed ? "" : why.map(i => `<div class="why">${esc(i.msg)}</div>`).join("")}</div>`;
+  }).join("") + `</div>`;
+  if (TB.flash) { const el = document.getElementById("tbrel-" + TB.flash); if (el && TB.scroll) el.scrollIntoView({block: "center"}); TB.scroll = false; }
+}
+$("#tbTeam").onchange = e => { TB.team = e.target.value; TB.open = null; store("tbTeam", TB.team); $("#tbFind").value = ""; renderTable(); };
+$("#tbFind").oninput = () => { TB.open = null; renderTable(); };
+$("#tbAddRelay").onclick = () => {
+  const evs = meetEvents("relay");
+  $("#tbAddRelayBox").innerHTML = !evs.length ? `<div class="muted">No relay events in this meet yet.</div>` : `<div class="addform"><select id="tbRelEv">${evs.map(v => `<option value="${esc(v.no)}">#${esc(v.no)} ${esc(v.name)}</option>`).join("")}</select>
+    <input id="tbRelSeed" placeholder="Seed (NT)" size="8"><button class="small" id="tbRelGo">Add relay</button><button class="ghost small" id="tbRelNo">Cancel</button><span class="muted" style="font-size:13px">gets the next free letter; pick the swimmers in its card</span></div>`;
+  if (!evs.length) return;
+  $("#tbRelNo").onclick = () => $("#tbAddRelayBox").innerHTML = "";
+  $("#tbRelGo").onclick = async () => {
+    const before = new Set(M.entries.map(e => e.id));
+    await tbCall(`/api/meets/${M.id}/entries`, J("POST", {event_no: $("#tbRelEv").value, seed: $("#tbRelSeed").value, team: TB.team}));
+    const n = M.entries.find(e => !before.has(e.id)); if (n) { TB.flash = n.id; TB.scroll = true; renderTable(); }
+    $("#tbAddRelayBox").innerHTML = "";
+  };
+};
+document.addEventListener("click", async ev => {
+  const t = ev.target.closest("[data-tbsw],[data-tbrel],[data-tbpull],[data-tbclose],[data-tboff],[data-tbup],[data-tbdn]");
+  if (!t || !t.closest("#tableSec")) return;
+  const d = t.dataset;
+  if (d.tbsw) {
+    if (ev.target.closest("input,button,select")) return;
+    ev.preventDefault();
+    const fromRow = t.tagName === "TR";
+    TB.open = fromRow && TB.open === d.tbsw ? null : d.tbsw;
+    if (!fromRow) $("#tbFind").value = "";
+    renderTable();
+    if (!fromRow) document.querySelector(`#tbSwimmers tr[data-tbsw="${CSS.escape(d.tbsw)}"]`)?.scrollIntoView({block: "center"});
+    return;
+  }
+  if (d.tbrel) { ev.preventDefault(); TB.flash = d.tbrel; TB.scroll = true; renderTable(); return; }
+  if (d.tbclose) { TB.open = null; renderTable(); return; }
+  if (d.tbpull) {
+    if (!confirm(`Pull ${swName(d.tbpull)} from the meet? Their individual events are dropped and they come off every relay (those relays will need a new swimmer).`)) return;
+    return tbCall(`/api/meets/${M.id}/pull-swimmer`, J("POST", {swimmer: d.tbpull}));
+  }
+  const rel = M.entries.find(e => e.id === (d.tboff || d.tbup || d.tbdn));
+  if (!rel) return;
+  const legs = relayLegs(rel), i = +d.i;
+  if (d.tboff) legs[legs.indexOf(d.sw)] = "";
+  else if (d.tbup) [legs[i - 1], legs[i]] = [legs[i], legs[i - 1]];
+  else if (d.tbdn) [legs[i + 1], legs[i]] = [legs[i], legs[i + 1]];
+  tbCall(`/api/meets/${M.id}/relay-legs`, J("PUT", {id: rel.id, legs}), rel.id);
+});
+document.addEventListener("change", async ev => {
+  const t = ev.target, d = t.dataset || {};
+  if (d.tbleg) {
+    const rel = M.entries.find(e => e.id === d.tbleg), legs = relayLegs(rel);
+    legs[+d.i] = t.value;
+    return tbCall(`/api/meets/${M.id}/relay-legs`, J("PUT", {id: rel.id, legs}), rel.id);
+  }
+  if (d.tbev) {
+    const key = d.sw, no = d.tbev, es = swEntries(key).filter(e => e.kind === "ind" && e.event_no === no);
+    const live = es.find(e => !e.removed), old = es.find(e => e.removed);
+    if (!t.checked && live) {
+      if (live.added) return tbCall(`/api/meets/${M.id}/entries/${encodeURIComponent(live.id)}`, {method: "DELETE"});
+      return tbCall(`/api/meets/${M.id}/state`, J("PUT", {removed: [...removedIds(), live.id]}));
+    }
+    if (t.checked && old) return tbCall(`/api/meets/${M.id}/state`, J("PUT", {removed: removedIds().filter(x => x !== old.id)}));
+    if (t.checked) {
+      const seed = document.querySelector(`#tableSec [data-tbseed="${CSS.escape(no)}"]`)?.value || "";
+      return tbCall(`/api/meets/${M.id}/entries`, J("POST", {event_no: no, seed, swimmer: key}));
+    }
+  }
+});
 
 document.addEventListener("click", async ev => {
   const t = ev.target;
@@ -1375,7 +1567,7 @@ async function sendRender() {
   const file = (label, href, note = "") => `<div class="row" style="gap:8px;padding:5px 0;border-top:1px solid var(--line)"><span style="flex:1;min-width:220px">${label}${note ? `<div class="muted" style="font-size:12px">${note}</div>` : ""}</span>${href}</div>`;
   const dis = S.has_db ? "" : "disabled";
   const pdf = file("<b>Results</b> (PDF, laid out like Meet Manager's)", `<a class="small" href="${base}/db/report/results.pdf" target="_blank">Open</a> <button class="ghost small" ${dis} onclick="location='${base}/db/report/results.pdf?download=1'">Download</button>`);
-  const tm = file("<b>Team Manager results</b> (.hy3 + .cl2 in a zip)", `<button class="ghost small" ${dis} onclick="location='${base}/db/export/hy3'">Download</button>`, "Coaches import this into Team Manager / SwimTopia");
+  const tm = file("<b>Utah Top 50 / Team Manager results</b> (.hy3 + .cl2 in a zip, same as Meet Manager's export)", `<button class="ghost small" ${dis} onclick="location='${base}/db/export/hy3'">Download</button>`, "Utah Top 50 takes this zip; coaches import it into Team Manager / SwimTopia");
   const mark = (id, label) => `<label style="font-size:13.5px"><input type="checkbox" data-sendmark="${id}" ${sent[id] ? "checked" : ""}> ${label}</label>${sent[id] ? ` <span class="muted" style="font-size:12px">${esc(sent[id])}</span>` : ""}`;
   const card = (n, title, when, body, foot) => `<section style="${foot.includes("checked") ? "opacity:.75" : ""}"><h2><span class="n">${n}</span> ${title} <span class="muted" style="font-weight:400;font-size:13px">${when}</span></h2>${body}
     <div class="row" style="margin-top:8px;gap:10px">${foot}</div></section>`;

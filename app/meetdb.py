@@ -127,7 +127,7 @@ def load(db) -> dict:
     t = {k: v["rows"] for k, v in read(db).items()}
     meet = t["Meet"][0] if t.get("Meet") else {}
     teams = {r["Team_no"]: {"no": r["Team_no"], "abbr": _s(r["Team_abbr"]), "name": _s(r["Team_name"]),
-                            "short": _s(r["Team_short"]), "lsc": _s(r.get("Team_lsc")), "city": _s(r.get("Team_city")),
+                            "short": _s(r["Team_short"]), "lsc": _s(r.get("Team_lsc") or r.get("team_lsc")), "city": _s(r.get("Team_city")),
                             "state": _s(r.get("Team_statenew") or r.get("Team_state")), "zip": _s(r.get("Team_zip")),
                             "country": _s(r.get("Team_cntry")), "addr1": _s(r.get("Team_addr1")), "addr2": _s(r.get("Team_addr2")),
                             "head": _s(r.get("Team_head")), "asst": _s(r.get("Team_asst")), "day_tel": _s(r.get("Team_daytele")),
@@ -182,7 +182,7 @@ def load(db) -> dict:
                      "end": (meet.get("Meet_end") or "")[:10], "location": _s(meet.get("Meet_location")),
                      "calc_date": (meet.get("Calc_date") or "")[:10], "city": _s(meet.get("Meet_city")), "state": _s(meet.get("Meet_state")),
                      "zip": _s(meet.get("Meet_zip")), "country": _s(meet.get("Meet_country")), "addr1": _s(meet.get("Meet_addr1")), "addr2": _s(meet.get("Meet_addr2")),
-                     "header1": _s(meet.get("Meet_header1")), "header2": _s(meet.get("Meet_header2")), "altitude": meet.get("Meet_altitude") or 0,
+                     "header1": _s(meet.get("Meet_header1")), "header2": _s(meet.get("Meet_header2")), "altitude": meet.get("Meet_altitude"), "idformat": meet.get("Meet_idformat") or 1,
                      "style": meet.get("meet_meetstyle") or 1, "course": meet.get("Meet_course") or 3, "mtype": meet.get("Meet_meettype") or 1,
                      "lanes": meet.get("meet_numlanes") or 8, "style": meet.get("meet_meetstyle") or 1,
                      "ind_max": meet.get("indmax_perath") or 0, "total_max": meet.get("entrymax_total") or 0,

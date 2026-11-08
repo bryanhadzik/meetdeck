@@ -132,6 +132,7 @@ def _state(d: Path) -> dict:
                       "source": sc.get("source", "upload"), "received": sc.get("received", ""),
                       "warnings": sc.get("warnings", [])})
     entries.extend(_added_entries(meta, swimmers))
+    _apply_legs(meta, entries)
     valid_ids = {e["id"] for e in entries}
     removed = set(meta.get("removed", [])) & valid_ids
     rules = {**DEFAULT_RULES, **meta.get("rules", {})}
@@ -691,24 +692,105 @@ def put_state(mid: str, body: dict):
 def _clean_file(d: Path, f: Path, removed: set[str]) -> bytes:
     data = f.read_bytes()
     p = parse_hy3(data, f.name)
-    drop = set()
+    meta = _meta(d)
+    over = meta.get("legs", {})
+    sw = {k: v for q in _parsed(d) for k, v in q["swimmers"].items()} if over else {}
+    lines = data.splitlines(keepends=True)
+    eol = b"\r\n" if lines and lines[0].endswith(b"\r\n") else b"\n"
+    drop, repl = set(), {}
+    ins: dict[int, list[bytes]] = {}
     for e in p["entries"]:
         if e["id"] in removed:
             drop.update(e["lines"])
-    adds = [a for a in _meta(d).get("added", []) if a["file"] == f.name and a["id"] not in removed]
-    if not adds:
+        elif e["kind"] == "relay" and e["id"] in over:      # relay legs changed here: new F3 line
+            legs = {int(k): v for k, v in over[e["id"]].items() if v}
+            f3 = [i for i in e["lines"] if lines[i][:2] == b"F3"]
+            new = _f3_line(legs, sw, e["gender"]).encode("latin-1") + eol
+            if f3:
+                repl[f3[0]] = new
+                drop.update(f3[1:])
+            else:
+                ins.setdefault(e["lines"][0], []).append(new)
+    adds = [a for a in meta.get("added", []) if a["file"] == f.name and a["id"] not in removed]
+    if not adds and not repl and not ins:
         return clean_hy3(data, drop)
-    lines = data.splitlines(keepends=True)
-    eol = b"\r\n" if lines and lines[0].endswith(b"\r\n") else b"\n"
-    ins: dict[int, list[bytes]] = {}
     for a in adds:
-        ins.setdefault(_insert_at(lines, a), []).extend(l.encode("latin-1") + eol for l in a["lines"])
+        al = list(a["lines"])
+        if a["id"] in over:
+            legs = {int(k): v for k, v in over[a["id"]].items() if v}
+            al = [al[0], _f3_line(legs, sw, al[0][13:14])]
+        ins.setdefault(_insert_at(lines, a), []).extend(l.encode("latin-1") + eol for l in al)
     out = []
     for i, l in enumerate(lines):
         if i not in drop:
-            out.append(l)
+            out.append(repl.get(i, l))
         out.extend(ins.get(i, []))
     return b"".join(out)
+
+
+# ---- relay legs changed here (meta["legs"]: entry id -> {"1": swimmer key or "", ...}) ----
+def _apply_legs(meta: dict, entries: list[dict]):
+    over = meta.get("legs", {})
+    for e in entries:
+        o = over.get(e["id"])
+        if e["kind"] == "relay" and o is not None:
+            e["legs"] = {int(k): v for k, v in sorted(o.items(), key=lambda kv: int(kv[0])) if v}
+            e["swimmers"] = [v for k, v in e["legs"].items() if k <= 4]
+            e["legs_changed"] = True
+
+
+def _f3_line(legs: dict, swimmers: dict, gender: str) -> str:
+    """Team Manager F3 line (relay swimmers): 13-column slots of sex, meet id, 5 letters of the last name, round, leg."""
+    body = "F3"
+    for leg in sorted(legs):
+        s = swimmers.get(legs[leg])
+        if not s:
+            continue
+        body += (s.get("gender") or gender or " ")[:1] + s["meet_id"].rjust(5)[:5] + s["last"][:5].ljust(5) + "F" + str(leg)
+    return _hline(body)
+
+
+@app.put("/api/meets/{mid}/relay-legs")
+def put_relay_legs(mid: str, body: dict):
+    """body: {id, legs: [swimmer key or "", ... 4 legs, in swimming order]}. Same call reorders a relay."""
+    d = _dir(mid)
+    st = _state(d)
+    e = next((x for x in st["entries"] if x["id"] == body.get("id") and x["kind"] == "relay"), None)
+    if not e:
+        raise HTTPException(400, "Unknown relay")
+    legs = [str(k or "") for k in (body.get("legs") or [])][:4]
+    for k in legs:
+        if k and k not in st["swimmers"]:
+            raise HTTPException(400, "Unknown swimmer")
+    meta = _meta(d)
+    meta.setdefault("legs", {})[e["id"]] = {str(i + 1): k for i, k in enumerate(legs)}
+    _save(d, meta)
+    return _state(d)
+
+
+@app.post("/api/meets/{mid}/pull-swimmer")
+def pull_swimmer(mid: str, body: dict):
+    """A coach pulls a swimmer: drop their individual events and take them off every relay leg."""
+    d = _dir(mid)
+    key = body.get("swimmer", "")
+    st = _state(d)
+    if key not in st["swimmers"]:
+        raise HTTPException(400, "Unknown swimmer")
+    meta = _meta(d)
+    removed = set(meta.get("removed", []))
+    added = {a["id"] for a in meta.get("added", [])}
+    for e in st["entries"]:
+        if e["kind"] == "ind" and key in e["swimmers"]:
+            if e["id"] in added:
+                meta["added"] = [a for a in meta["added"] if a["id"] != e["id"]]
+            else:
+                removed.add(e["id"])
+        elif e["kind"] == "relay" and key in e["legs"].values():
+            legs = {str(i): ("" if e["legs"].get(i) == key else e["legs"].get(i, "")) for i in range(1, 5)}
+            meta.setdefault("legs", {})[e["id"]] = legs
+    meta["removed"] = sorted(removed)
+    _save(d, meta)
+    return _state(d)
 
 
 # ---- entries added here (kept in meta, never written into the coach's file) ----
@@ -1870,10 +1952,11 @@ def db_export(mid: str, fmt: str):
     if fmt == "hy3":
         info = _dbinfo(d)
         seq = int(info.get("result_exports", 0)) + 1          # Meet Manager numbers its exports -001, -002 ...
-        data, name = results_mod.hy3_zip(m, db, (info.get("hyb") or "")[28:78].strip(), seq)
+        # the licensee goes in the .hy3 header; a meet opened from a bare .mdb borrows it from another meet
+        data, name = results_mod.hy3_zip(m, db, (info.get("hyb") or "")[28:78].strip() or _any_licensee(), seq)
         info["result_exports"] = seq
         (_dbdir(d) / "info.json").write_text(json.dumps(info))
-        _dblog(d, f"Exported results for Team Manager ({name})", "export")
+        _dblog(d, f"Exported results for Utah Top 50 / Team Manager ({name})", "export")
         return Response(data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{name}"'})
     if fmt == "csv":
         return Response(results_mod.results_csv(m), media_type="text/csv",
@@ -1963,7 +2046,10 @@ def _any_licensee() -> str:
                 return lic
         except Exception:
             pass
-    return ""
+    try:
+        return (_hyb_default() or "")[28:78].strip()        # the host's master Meet Manager backup
+    except Exception:
+        return ""
 
 
 @app.get("/api/meets/{mid}/db/report/{kind}.pdf")
@@ -2098,7 +2184,7 @@ def send_zip(mid: str, group: str):
         raise HTTPException(400, "No meet database yet - open Run the meet first")
     import heatsheet
     m = meetdb.load(_dbfile(d))
-    lic = (_dbinfo(d).get("hyb") or "")[28:78].strip()
+    lic = (_dbinfo(d).get("hyb") or "")[28:78].strip() or _any_licensee()
     stem = _stem(m["meet"]["name"])
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:

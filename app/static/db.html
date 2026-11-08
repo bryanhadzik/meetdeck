@@ -56,6 +56,7 @@ tr.relaybad td{background:rgba(248,81,73,.10)} tr.relaybad td:first-child{box-sh
 .scr td.act{opacity:1;text-decoration:none}
 .badge{display:inline-block;font-size:11px;border-radius:9px;padding:0 6px;background:var(--bg);border:1px solid var(--line)}
 .badge.dq{background:var(--err-bg);color:var(--err);border-color:transparent}
+.badge.ok{color:#2ea043;border-color:#2ea043}.badge.bad{background:var(--err-bg);color:var(--err);border-color:transparent}
 .prow{display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:13px}.menu .pop .prow button{width:auto;flex:none;margin:0}.prow span{flex:1;white-space:nowrap}.prow select{font-size:12px}
 .mf{display:flex;flex-direction:column;gap:3px;font-size:13px;min-width:0}.mf span{color:var(--muted)}
 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-bottom:10px}
@@ -114,6 +115,11 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     </div></div>
 </header>
 <main>
+  <section id="mbBox" class="hidden" style="margin-bottom:14px"><div class="row"><b>Meet board</b><span id="mbState" class="badge"></span>
+      <span class="muted" style="font-size:12.5px" id="mbUrl"></span><span class="grow"></span>
+      <label class="muted" style="font-size:12.5px" title="Send again by itself after scratches, lane moves, relay swimmer or name changes"><input type="checkbox" id="mbAuto"> auto</label>
+      <button class="small" id="mbSend">Send start lists</button></div>
+    <div id="mbMsg" class="muted" style="font-size:12.5px;margin-top:4px"></div></section>
   <section id="timing" style="margin-bottom:14px"><div class="row"><b>Timing console</b><span id="tmState" class="badge">not connected</span><span class="grow"></span>
           <button class="ghost small" id="tmToggle">Hide</button></div>
           <div id="tmBody" style="margin-top:8px">
@@ -215,7 +221,8 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&
 const MID = new URLSearchParams(location.search).get("meet");
 const API = `/api/meets/${MID}/db`;
 let S = null, M = null, EV = null, TAB = "events", EDIT_SW = null, TOL = 0.30;
-fetch("/api/settings").then(r => r.json()).then(st => { if (st.time_tolerance) TOL = st.time_tolerance; }).catch(() => {});
+let MB = {url: "", auto: false, sig: null, timer: null, busy: false};
+fetch("/api/settings").then(r => r.json()).then(st => { if (st.time_tolerance) TOL = st.time_tolerance; MB.url = st.meetboard_url || ""; MB.auto = !!st.meetboard_auto; mbShow(); }).catch(() => {});
 try { EV = +sessionStorage.getItem("db-ev-" + MID) || null; } catch (e) {}
 
 async function api(url, opt) {
@@ -248,6 +255,7 @@ function show() {
   const last = S.log.find(l => l.kind === "change");
   $("#undoBtn").disabled = !S.versions.length;
   $("#undoBtn").title = S.versions.length ? "Undo: " + (S.versions[0].label || "").replace(/^before: /, "") : "Nothing to undo";
+  mbShow(); mbWatch();
   $("#problems").innerHTML = scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "");
   render();
 }
@@ -266,6 +274,64 @@ function printPdf(url) {
   f.src = url;
   document.body.appendChild(f);
 }
+// ---- meet-board: start lists to the pool's spectator TVs / stream overlay --------------
+function mbShow() {
+  const on = !!(MB.url && S && S.exists);
+  $("#mbBox").classList.toggle("hidden", !S || !S.exists);
+  $("#mbUrl").innerHTML = MB.url ? esc(MB.url.replace(/^https?:\/\//, "")) : `not set &mdash; <a href="/#setup">add its address in Setup</a>`;
+  $("#mbSend").disabled = !on || MB.busy;
+  $("#mbAuto").checked = MB.auto; $("#mbAuto").disabled = !MB.url;
+}
+// What the board shows: who swims in which heat and lane. Times and scoring don't count.
+function mbSig() {
+  if (!M) return null;
+  const a = M.athletes, t = M.teams;
+  return JSON.stringify(M.entries.filter(e => !e.scr && e.heat && e.lane).map(e => [e.key, e.heat, e.lane, Math.round((e.seed || 0) * 100),
+    e.kind === "R" ? [e.ltr, (e.legs || []).map(x => x && a[x] ? a[x].last : "")] : (a[e.ath] ? [a[e.ath].first, a[e.ath].pref, a[e.ath].last] : ""),
+    t[e.team]?.abbr]).sort()) + JSON.stringify(M.events.map(v => [v.ptr, v.no, v.order]));
+}
+function mbWatch() {
+  const sig = mbSig();
+  if (MB.sig !== null && sig !== MB.sig && MB.auto && MB.url) {
+    clearTimeout(MB.timer); MB.timer = setTimeout(() => mbSend(true), 1500);
+    $("#mbMsg").textContent = "Start lists changed - sending to the meet board…";
+  }
+  MB.sig = sig;
+}
+async function mbSend(auto) {
+  if (!MB.url) { toast("Add the meet-board address in Setup first"); return; }
+  if (MB.busy) { clearTimeout(MB.timer); MB.timer = setTimeout(() => mbSend(auto), 1500); return; }
+  MB.busy = true; mbShow();
+  const st = $("#mbState"), msg = $("#mbMsg");
+  st.className = "badge"; st.textContent = "sending…";
+  let doc, got, via = "";
+  try {
+    doc = await api(`/api/meets/${MID}/meetboard.json`);
+    const sum = doc.summary; delete doc.summary;
+    try {   // straight from this browser: it's the one on the pool network
+      const r = await fetch(MB.url + "/api/startlists", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(doc)});
+      got = await r.json().catch(() => ({}));
+      if (!r.ok || !got.ok) throw Object.assign(new Error(got.error || (r.status === 404 ? "this meet-board is too old to take start lists - update it" : `meet-board answered ${r.status}`)), {fromBoard: true});
+    } catch (e) {
+      if (e.fromBoard) throw e;
+      got = await api(`/api/meets/${MID}/meetboard/send`, {method: "POST"}); via = " (sent by MeetDeck)";
+    }
+    st.className = "badge ok"; st.textContent = "sent " + new Date().toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+    msg.textContent = `${sum.events} events, ${sum.heats} heats` + (sum.relays ? `, ${sum.relays_with_swimmers} of ${sum.relays} relays with swimmers' names` : "") + via +
+      (sum.relays > sum.relays_with_swimmers ? " · relays without swimmers show the team name only" : "");
+    if (!auto) toast("Start lists sent to the meet board");
+  } catch (e) {
+    st.className = "badge bad"; st.textContent = "not sent";
+    msg.textContent = /Failed to fetch|NetworkError|Can't reach/i.test(e.message) ? `Can't reach the meet board at ${MB.url}. Is this computer on the pool network and meet-board running?` : e.message;
+    if (!auto) toast("Not sent: " + msg.textContent);
+  } finally { MB.busy = false; mbShow(); }
+}
+$("#mbSend").onclick = () => mbSend(false);
+$("#mbAuto").onchange = async () => {
+  try { const st = await api("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({meetboard_auto: $("#mbAuto").checked})}); MB.auto = !!st.meetboard_auto; MB.sig = mbSig(); }
+  catch (e) { toast(e.message); }
+  mbShow();
+};
 async function change(op, args) {
   try { S = await api(`${API}/op`, J({op, args})); toast(S.log[0]?.msg || "Saved"); show(); }
   catch (e) { toast("Not changed: " + e.message); }

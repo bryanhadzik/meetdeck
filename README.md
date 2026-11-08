@@ -216,3 +216,8 @@ from ./.env (Bryan sets it; not in code). Tests: tests/make_cl2.py builds an SDI
 - Drag and drop on the relay cards: drag a leg up/down to change the order, onto another relay to swap the two swimmers, or drag a swimmer from the list onto a leg. The arrows still work (and on touch screens).
 - Works on the meet database too (a meet opened from a Meet Manager file, or one whose database is already built): changes go straight into the database, are logged and can be undone in Run the meet > Changes. Entries added this way have no heat yet - place them in Seeding.
 
+## Meet board (2026-11-08)
+- Setup -> Meet board: address of the pool PC running meet-board (github.com/bryanhadzik/meet-board), e.g. http://192.168.8.243:5000 (port 5000 added if left off). Save & test checks it from the browser, then from MeetDeck.
+- Database page -> Meet board -> **Send start lists** posts the meet database's start lists (`/api/meets/<id>/meetboard.json`, app/meetboard.py) to meet-board's `POST /api/startlists`: events, heats, lanes, seeds, ages, team names and each relay's swimmers' last names in leg order. Scratched and unseeded entries are left out.
+- Sent from the browser first (the timing laptop is on the pool network even when MeetDeck runs on plex); if the browser can't reach it, MeetDeck sends it itself (`/meetboard/send`).
+- "auto" (also in Setup) re-sends 1.5 s after anything the board shows changes: scratches, lane moves, added/deleted entries, relay swimmers, names, seeds. Times and scoring don't trigger it.

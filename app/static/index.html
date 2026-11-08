@@ -375,6 +375,13 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     <div id="sPlan" style="margin-top:8px"></div>
   </section>
   <section>
+    <h2>Meet board</h2>
+    <div class="muted" style="font-size:13px">The pool PC running <b>meet-board</b> (spectator TVs and the stream overlay). MeetDeck sends it the start lists from the meet database, relay swimmers' last names included &mdash; on the meet database page, <b>Send start lists</b>.</div>
+    <div class="row" style="margin-top:8px"><label>Address <input id="sMb" placeholder="http://192.168.8.243:5000" style="width:260px"></label>
+      <button class="small" id="sMbSave">Save &amp; test</button><span class="muted" id="sMbMsg" style="font-size:13px"></span></div>
+    <label class="row" style="margin-top:6px;font-size:13.5px"><input type="checkbox" id="sMbAuto"> Send again automatically after scratches, lane moves, relay swimmer and name changes</label>
+  </section>
+  <section>
     <h2>Timing</h2>
     <div class="row"><label>Highlight a lane when pad, backup and timers times differ by more than
       <input id="sTol" type="number" step="0.01" min="0.01" max="5" style="width:80px"> seconds</label>
@@ -567,6 +574,8 @@ async function loadSetup() {
   }
   $("#sUrl").value = SET.drive_url || "";
   $("#sTol").value = (SET.time_tolerance ?? 0.30).toFixed(2);
+  $("#sMb").value = SET.meetboard_url || "";
+  $("#sMbAuto").checked = !!SET.meetboard_auto;
   $("#sWriteState").innerHTML = !SET.drive_folder ? `<span class="muted">Save the folder first.</span>` : SET.drive_write ? `<span class="badge ok">Set up</span> <span class="muted" style="font-size:13px">Backups you download are also filed into Drive.</span>` : `<span class="badge no">Not set up</span>`;
   loadPlan();
   const g = await api("/api/gmail/status");
@@ -808,6 +817,29 @@ fontShow();
 $("#sTolSave").onclick = async () => {
   try { SET = await api("/api/settings", J("PUT", {time_tolerance: +$("#sTol").value})); $("#sTol").value = SET.time_tolerance.toFixed(2); $("#sTolMsg").textContent = `Saved: ${Math.round(SET.time_tolerance * 1000)} ms`; }
   catch (e) { $("#sTolMsg").textContent = e.message; }
+};
+$("#sMbSave").onclick = async () => {
+  const msg = $("#sMbMsg"); msg.textContent = "Saving…";
+  try { SET = await api("/api/settings", J("PUT", {meetboard_url: $("#sMb").value})); $("#sMb").value = SET.meetboard_url || ""; }
+  catch (e) { msg.textContent = e.message; return; }
+  if (!SET.meetboard_url) { msg.textContent = "Cleared"; return; }
+  msg.textContent = "Saved. Testing…";
+  // the browser is what usually talks to the meet-board (it's on the pool network), so test from here first
+  try {
+    const r = await fetch(SET.meetboard_url + "/api/startlists", {cache: "no-store"});
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || `answered ${r.status}`);
+    msg.textContent = `Connected: meet-board ${j.version}` + (j.schedule ? ` · showing ${j.schedule}` : " · no start lists loaded yet");
+    return;
+  } catch (e) { /* try from MeetDeck itself */ }
+  try {
+    const j = await api("/api/meetboard/test", J("POST", {}));
+    msg.textContent = `Connected (from MeetDeck): meet-board ${j.version}` + (j.schedule ? ` · showing ${j.schedule}` : "");
+  } catch (e) { msg.textContent = `Saved, but not reachable right now: ${e.message}. That's fine away from the pool.`; }
+};
+$("#sMbAuto").onchange = async () => {
+  try { SET = await api("/api/settings", J("PUT", {meetboard_auto: $("#sMbAuto").checked})); $("#sMbMsg").textContent = SET.meetboard_auto ? "Auto-send on" : "Auto-send off"; }
+  catch (e) { $("#sMbMsg").textContent = e.message; }
 };
 $("#sScan").onclick = async () => { await api("/api/drive/inventory", {method: "POST"}); loadPlan(); };
 $("#sCopy").onclick = async () => {

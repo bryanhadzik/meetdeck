@@ -293,6 +293,14 @@ def put_settings(body: dict):
         if not 0 < v <= 5:
             raise HTTPException(400, "Pick a tolerance between 0.01 and 5 seconds")
         st["time_tolerance"] = v
+    if "meetboard_url" in body:
+        import meetboard as _mb
+        try:
+            st["meetboard_url"] = _mb.normalize_url(body["meetboard_url"] or "")
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+    if "meetboard_auto" in body:
+        st["meetboard_auto"] = bool(body["meetboard_auto"])
     if "drive_url" in body:
         u = (body["drive_url"] or "").strip()
         if u and not re.match(r"https://script\.google\.com/(?:a/macros/[\w.-]+|macros)/s/[\w-]+/exec", u):
@@ -2293,6 +2301,58 @@ def send_mark(mid: str, body: dict):
         sent.pop(body["item"], None)
     _save(d, meta)
     return {"sent": sent}
+
+
+# ---- meet-board (spectator TVs + stream overlay at the pool) ----------------
+import meetboard
+
+
+def _meetboard_doc(mid: str) -> dict:
+    d = _dir(mid)
+    if not _dbfile(d).exists():
+        raise HTTPException(400, "No meet database yet - open Run the meet first")
+    import updater as _up
+    return meetboard.startlist(meetdb.load(_dbfile(d)), f"MeetDeck {_up.version()}")
+
+
+@app.get("/api/meets/{mid}/meetboard.json")
+def meetboard_json(mid: str):
+    """The start lists in meet-board's format. The database page posts this to the meet-board from the
+    browser (the timing laptop is on the pool network even when MeetDeck runs on the server)."""
+    doc = _meetboard_doc(mid)
+    return {**doc, "summary": meetboard.summary(doc)}
+
+
+@app.post("/api/meets/{mid}/meetboard/send")
+def meetboard_send(mid: str):
+    """Send from MeetDeck itself - used when the browser can't reach the meet-board directly."""
+    url = _settings().get("meetboard_url")
+    if not url:
+        raise HTTPException(400, "Set the meet-board address in Setup first")
+    doc = _meetboard_doc(mid)
+    try:
+        got = meetboard.send(url, doc)
+    except OSError as e:
+        raise HTTPException(502, f"Can't reach the meet-board at {url} ({getattr(e, 'reason', e)})")
+    except RuntimeError as e:
+        raise HTTPException(502, f"meet-board: {e}")
+    return {**got, "summary": meetboard.summary(doc), "via": "server"}
+
+
+@app.post("/api/meetboard/test")
+def meetboard_test(body: dict):
+    try:
+        url = meetboard.normalize_url(body.get("url") or _settings().get("meetboard_url") or "")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not url:
+        raise HTTPException(400, "Enter the meet-board address first")
+    try:
+        return {"url": url, **meetboard.ping(url)}
+    except OSError as e:
+        raise HTTPException(502, f"Can't reach {url} from MeetDeck ({getattr(e, 'reason', e)})")
+    except RuntimeError as e:
+        raise HTTPException(502, str(e))
 
 
 @app.get("/api/meets/{mid}/send/{group}.zip")

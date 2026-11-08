@@ -43,6 +43,12 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 .heat h3{font-size:13px;margin:6px 0 2px;color:var(--muted)}
 td.ln{width:22px;color:var(--muted);text-align:right}
 tr.empty td{padding:1px 6px;font-size:12px;line-height:16px;border-bottom-style:dashed}
+tr[draggable=true]{cursor:grab} tr[draggable=true] td{user-select:none}
+tr.dragging{opacity:.35}
+tr.dropto td{background:var(--sel,rgba(56,139,253,.18))} tr.dropto td:first-child{box-shadow:inset 3px 0 0 var(--accent,#388bfd)}
+tr.dropto.swap td:first-child{box-shadow:inset 3px 0 0 var(--warn,#d29922)}
+.grip{color:var(--muted);margin-right:4px;font-size:12px}
+.newheat table{opacity:.85;border-style:dashed}
 td.nm{min-width:240px}td.nm .legs{white-space:normal}
 td.st{min-width:150px;width:38%}td.st .legs{white-space:normal;max-width:360px}
 td.plc,th.plc{text-align:center;width:44px;font-weight:700;font-size:14px}
@@ -332,6 +338,33 @@ $("#mbAuto").onchange = async () => {
   catch (e) { toast(e.message); }
   mbShow();
 };
+// ---- drag and drop in Move swimmers ----
+let DRAG = null;
+document.addEventListener("dragstart", ev => {
+  const tr = ev.target.closest && ev.target.closest("#evDetail tr[data-dkey]");
+  if (!tr) return;
+  DRAG = tr.dataset.dkey; tr.classList.add("dragging");
+  ev.dataTransfer.effectAllowed = "move";
+  try { ev.dataTransfer.setData("text/plain", DRAG); } catch (e) {}
+});
+document.addEventListener("dragend", () => { DRAG = null; document.querySelectorAll("#evDetail .dragging,#evDetail .dropto").forEach(x => x.classList.remove("dragging", "dropto", "swap")); });
+document.addEventListener("dragover", ev => {
+  const tr = DRAG && ev.target.closest && ev.target.closest("#evDetail tr[data-dto]");
+  if (!tr || tr.dataset.dkey === DRAG) return;
+  ev.preventDefault(); ev.dataTransfer.dropEffect = "move";
+  document.querySelectorAll("#evDetail .dropto").forEach(x => x !== tr && x.classList.remove("dropto", "swap"));
+  tr.classList.add("dropto"); tr.classList.toggle("swap", !!tr.dataset.dkey);
+});
+document.addEventListener("dragleave", ev => { const tr = ev.target.closest && ev.target.closest("#evDetail tr[data-dto]"); if (tr && !tr.contains(ev.relatedTarget)) tr.classList.remove("dropto", "swap"); });
+document.addEventListener("drop", ev => {
+  const tr = DRAG && ev.target.closest && ev.target.closest("#evDetail tr[data-dto]");
+  if (!tr) return;
+  ev.preventDefault();
+  const key = DRAG; DRAG = null;
+  if (tr.dataset.dkey === key) return;
+  const [heat, lane] = tr.dataset.dto.split("|").map(Number);
+  change("move", {key, heat, lane});      // onto a swimmer = swap
+});
 async function change(op, args) {
   try { S = await api(`${API}/op`, J({op, args})); toast(S.log[0]?.msg || "Saved"); show(); }
   catch (e) { toast("Not changed: " + e.message); }
@@ -501,8 +534,11 @@ function renderEvent() {
   const maxHeat = Math.max(1, ...heats) + 1, lanes = M.meet.lanes || 8;
   const hsel = (e) => `<select class="hl" data-move="${e.key}" data-part="heat">${Array.from({length: maxHeat + 1}, (_, h) => `<option value="${h}" ${h === e.heat ? "selected" : ""}>${h || "–"}</option>`).join("")}</select>`;
   const lsel = (e) => `<select class="hl" data-move="${e.key}" data-part="lane">${Array.from({length: lanes + 1}, (_, l) => `<option value="${l}" ${l === e.lane ? "selected" : ""}>${l || "–"}</option>`).join("")}</select>`;
-  const row = (e, lane) => !e ? `<tr class="empty"><td class="ln">${lane}</td><td colspan="${MOVING ? 9 : 8}" class="muted">empty</td></tr>` :
-    `<tr class="${e.scr ? "scr" : relayIssues(e).length ? "relaybad" : ""}"><td class="ln">${e.lane || ""}</td><td class="nm">${nameCell(e)}${e.exh ? ' <span class="badge">exh</span>' : ""}</td><td>${esc(teamAbbr(e.team))}</td>
+  // Move mode: drag a row onto any lane (an empty one, or another swimmer to swap); the selects still work
+  const dto = (h, l) => MOVING && h && l ? ` data-dto="${h}|${l}"` : "";
+  const grip = e => MOVING && !e.scr ? `<span class="grip" title="Drag to another lane or heat">&#10303;</span>` : "";
+  const row = (e, lane, h) => !e ? `<tr class="empty"${dto(h, lane)}><td class="ln">${lane}</td><td colspan="${MOVING ? 9 : 8}" class="muted">${MOVING ? "empty &middot; drop here" : "empty"}</td></tr>` :
+    `<tr class="${e.scr ? "scr" : relayIssues(e).length ? "relaybad" : ""}"${MOVING && !e.scr ? ` draggable="true" data-dkey="${e.key}"` : ""}${e.scr ? "" : dto(e.heat, e.lane <= lanes ? e.lane : 0)}><td class="ln">${grip(e)}${e.lane || ""}</td><td class="nm">${nameCell(e)}${e.exh ? ' <span class="badge">exh</span>' : ""}</td><td>${esc(teamAbbr(e.team))}</td>
       <td><input class="t" data-seed="${e.key}" value="${esc(fmt(e.seed) || "NT")}" title="Seed time"></td>
       ${MOVING ? `<td style="white-space:nowrap">${e.scr ? "" : hsel(e) + " " + lsel(e)}</td>` : ""}
       <td style="white-space:nowrap">${e.scr ? "" : timerCells(e)}</td>
@@ -521,8 +557,12 @@ function renderEvent() {
     const inHeat = act.filter(e => e.heat === h);
     const hs = heatState(act.filter(e => e.heat === h));
     const hpill = hs.cls === "done" ? `<span class="pill timed">Timed</span>` : hs.cls === "part" ? `<span class="pill prog">${hs.r} of ${hs.n} lanes</span>` : `<span class="pill none">Waiting</span>`;
-    html += `<div class="heat"><h3>Heat ${h} of ${heats.filter(x => x).length} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button></h3><div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1)).join("")}
+    html += `<div class="heat"><h3>Heat ${h} of ${heats.filter(x => x).length} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button></h3><div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1, h)).join("")}
       ${inHeat.filter(e => !e.lane || e.lane > lanes).map(e => row(e)).join("")}</table></div>`;
+  }
+  if (MOVING) {   // an empty heat to drag swimmers into
+    const nh = Math.max(0, ...heats) + 1;
+    html += `<div class="heat newheat"><h3>New heat ${nh} <span class="muted" style="font-weight:400;font-size:12.5px">&middot; drag a swimmer here to start another heat</span></h3><table>${head}${Array.from({length: lanes}, (_, i) => row(null, i + 1, nh)).join("")}</table></div>`;
   }
   if (unseeded.length) html += `<div class="heat"><h3>Not in a heat yet ${MOVING ? "" : '<span class="muted" style="font-weight:400;font-size:12.5px">&middot; press Move swimmers to place them</span>'}</h3><table>${head}${unseeded.filter(e => !e.heat).map(e => row(e)).join("")}</table></div>`;
   if (scr.length) html += `<div class="heat"><h3>Scratched</h3><table>${head}${scr.map(e => row(e)).join("")}</table></div>`;

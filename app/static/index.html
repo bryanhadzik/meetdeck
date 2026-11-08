@@ -51,6 +51,11 @@ th{color:var(--muted);font-weight:600}
 .chip.x{text-decoration:line-through;opacity:.5}
 .chip.bad{border-color:var(--err);color:var(--err)}
 #tableSec tr.sw{cursor:pointer}
+#tableSec .leg[draggable=true]{cursor:grab}
+#tableSec .leg .grip{color:var(--muted);cursor:grab;padding:0 2px;user-select:none;font-size:14px;line-height:1}
+#tableSec .leg.dragging{opacity:.35}
+#tableSec .leg.dropto{outline:2px dashed var(--accent);outline-offset:1px;border-radius:6px;background:var(--sel)}
+#tableSec .leg.dropto.swap{outline-color:var(--warn)}
 #tableSec tr.sw:hover td{background:var(--sel)}
 #tableSec tr.sw.bad td:first-child{box-shadow:inset 3px 0 0 var(--err)}
 #tableSec tr.sw.open td{background:var(--sel)}
@@ -1118,7 +1123,7 @@ function renderTable() {
   $("#tbSwimmers").innerHTML = `<table><tr><th>Swimmer</th><th>Yr</th><th>Events</th><th title="individual / total (limits ${TD().rules.max_individual} / ${TD().rules.max_total})">Ind / total</th></tr>` + sws.map(s => {
     const es = swEntries(s.key), c = swCounts(s.key), open = TB.open === s.key;
     const chips = es.map(e => `<span class="chip ${e.removed ? "x" : ""}">#${esc(e.event_no)}${e.kind === "relay" ? ` relay ${esc(e.relay)}` : ""}</span>`).join("") || `<span class="muted">no events</span>`;
-    let row = `<tr class="sw${badSw.has(s.key) ? " bad" : ""}${open ? " open" : ""}" data-tbsw="${esc(s.key)}"><td><b>${esc(s.last)}, ${esc(s.pref || s.first)}</b> <span class="muted" style="font-size:12px">${esc(s.gender)}</span></td><td>${esc(s.class || s.age || "")}</td><td>${chips}</td>
+    let row = `<tr class="sw${badSw.has(s.key) ? " bad" : ""}${open ? " open" : ""}" data-tbsw="${esc(s.key)}" draggable="true" title="Click to change events, or drag onto a relay leg"><td><b>${esc(s.last)}, ${esc(s.pref || s.first)}</b> <span class="muted" style="font-size:12px">${esc(s.gender)}</span></td><td>${esc(s.class || s.age || "")}</td><td>${chips}</td>
       <td class="cnt ${c.over ? "over" : ""}">${c.ind} / ${c.tot}</td></tr>`;
     if (!open) return row;
     const mineEv = evs.filter(v => !s.gender || gNorm(v.gender) === s.gender);
@@ -1148,7 +1153,7 @@ function renderTable() {
     const legRow = (k, i) => {
       const o = pool.map(s => { const c = swCounts(s.key); return `<option value="${esc(s.key)}" ${s.key === k ? "selected" : ""}>${esc(s.last)}, ${esc(s.pref || s.first)} (${c.ind}/${c.tot})</option>`; }).join("");
       const extra = k && !pool.find(s => s.key === k) ? `<option value="${esc(k)}" selected>${esc(tbName(k))} (other team/gender)</option>` : "";
-      return `<div class="leg"><span class="n">${medley ? LEG_MEDLEY[i] : "Leg " + (i + 1)}</span><select data-tbleg="${esc(e.id)}" data-i="${i}" ${e.removed ? "disabled" : ""}><option value="">&mdash; empty &mdash;</option>${extra}${o}</select>
+      return `<div class="leg" ${e.removed ? "" : `draggable="true"`} data-dleg="${esc(e.id)}|${i}" title="Drag to change the order, or onto another relay to swap"><span class="grip">&#10303;</span><span class="n">${medley ? LEG_MEDLEY[i] : "Leg " + (i + 1)}</span><select data-tbleg="${esc(e.id)}" data-i="${i}" ${e.removed ? "disabled" : ""}><option value="">&mdash; empty &mdash;</option>${extra}${o}</select>
         <button class="ghost small" data-tbup="${esc(e.id)}" data-i="${i}" ${i && !e.removed ? "" : "disabled"} title="Swim earlier">&#9650;</button><button class="ghost small" data-tbdn="${esc(e.id)}" data-i="${i}" ${i < 3 && !e.removed ? "" : "disabled"} title="Swim later">&#9660;</button></div>`;
     };
     return `<div class="rc${why.length && !e.removed ? " bad" : ""}${e.removed ? " gone" : ""}${TB.flash === e.id ? " flash" : ""}" id="tbrel-${esc(e.id)}"><h4>#${esc(e.event_no)} ${esc(e.event)} &middot; ${esc(e.relay)} <span class="muted" style="font-weight:400">${esc(e.seed_fmt || "NT")}</span><span class="grow"></span>
@@ -1157,6 +1162,62 @@ function renderTable() {
   }).join("") + `</div>`;
   if (TB.flash) { const el = document.getElementById("tbrel-" + TB.flash); if (el && TB.scroll) el.scrollIntoView({block: "center"}); TB.scroll = false; }
 }
+// ---- drag and drop on the relay cards ----
+// leg -> leg on the same relay: moves it to that spot (the others shift); leg -> another relay: swaps the two swimmers;
+// swimmer row -> leg: puts them on that leg (if already on this relay, the two swap).
+let TBDRAG = null;
+async function tbSaveLegs(rel, legs) {
+  if (TD() !== M) return tbDb("legs", {id: rel.id, legs}, rel.id);
+  return tbCall(`/api/meets/${M.id}/relay-legs`, J("PUT", {id: rel.id, legs}), rel.id);
+}
+document.addEventListener("dragstart", ev => {
+  const leg = ev.target.closest && ev.target.closest("#tableSec [data-dleg]");
+  const sw = ev.target.closest && ev.target.closest("#tableSec tr[data-tbsw]");
+  if (leg) { const [id, i] = leg.dataset.dleg.split("|"); TBDRAG = {kind: "leg", id, i: +i}; leg.classList.add("dragging"); }
+  else if (sw) TBDRAG = {kind: "sw", key: sw.dataset.tbsw};
+  else return;
+  ev.dataTransfer.effectAllowed = "move";
+  try { ev.dataTransfer.setData("text/plain", JSON.stringify(TBDRAG)); } catch (e) {}
+});
+document.addEventListener("dragend", () => { document.querySelectorAll("#tableSec .dragging,#tableSec .dropto").forEach(x => x.classList.remove("dragging", "dropto", "swap")); TBDRAG = null; });
+document.addEventListener("dragover", ev => {
+  const leg = TBDRAG && ev.target.closest && ev.target.closest("#tableSec [data-dleg]");
+  if (!leg || !leg.getAttribute("draggable")) return;
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = "move";
+  document.querySelectorAll("#tableSec .dropto").forEach(x => x !== leg && x.classList.remove("dropto", "swap"));
+  leg.classList.add("dropto");
+  leg.classList.toggle("swap", TBDRAG.kind === "leg" && leg.dataset.dleg.split("|")[0] !== TBDRAG.id);
+});
+document.addEventListener("dragleave", ev => { const leg = ev.target.closest && ev.target.closest("#tableSec [data-dleg]"); if (leg && !leg.contains(ev.relatedTarget)) leg.classList.remove("dropto", "swap"); });
+document.addEventListener("drop", async ev => {
+  const leg = TBDRAG && ev.target.closest && ev.target.closest("#tableSec [data-dleg]");
+  if (!leg) return;
+  ev.preventDefault();
+  const drag = TBDRAG; TBDRAG = null;
+  const [tid, ti] = leg.dataset.dleg.split("|"), j = +ti;
+  const dst = TD().entries.find(e => e.id === tid); if (!dst) return;
+  const dl = relayLegs(dst);
+  if (drag.kind === "sw") {
+    const was = dl.indexOf(drag.key);
+    if (was === j) return;
+    if (was >= 0) dl[was] = dl[j];
+    dl[j] = drag.key;
+    return tbSaveLegs(dst, dl);
+  }
+  if (drag.id === tid) {                       // same relay: move to the new spot
+    if (drag.i === j) return;
+    const [k] = dl.splice(drag.i, 1); dl.splice(j, 0, k);
+    return tbSaveLegs(dst, dl);
+  }
+  const src = TD().entries.find(e => e.id === drag.id); if (!src) return;   // another relay: swap the two swimmers
+  const sl = relayLegs(src), a = sl[drag.i], b = dl[j];
+  if (a && dl.includes(a) && dl.indexOf(a) !== j) return alert(`${tbName(a)} is already on ${dst.event} ${dst.relay}.`);
+  if (b && sl.includes(b) && sl.indexOf(b) !== drag.i) return alert(`${tbName(b)} is already on ${src.event} ${src.relay}.`);
+  sl[drag.i] = b || ""; dl[j] = a || "";
+  await tbSaveLegs(src, sl);
+  await tbSaveLegs(dst, dl);
+});
 $("#tbTeam").onchange = e => { TB.team = e.target.value; TB.open = null; store("tbTeam", TB.team); $("#tbFind").value = ""; renderTable(); };
 $("#tbFind").oninput = () => { TB.open = null; renderTable(); };
 $("#tbAddRelay").onclick = () => {

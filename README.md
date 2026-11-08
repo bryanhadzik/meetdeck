@@ -213,5 +213,6 @@ from ./.env (Bryan sets it; not in code). Tests: tests/make_cl2.py builds an SDI
 - Coaches' last-minute changes: pick the team, find the swimmer, add or remove events, or pull the swimmer from the meet (individual events dropped, relay legs left empty so those relays show as problems).
 - Relays: pick the swimmer for each leg and move legs up/down to change the order; add or scratch relays. The checked entry files get a new relay-swimmer line and the Meet Manager database build uses the new legs.
 - The team's problems are listed at the top; click one to jump to it. Every change is re-checked right away, so fixed problems disappear.
+- Drag and drop on the relay cards: drag a leg up/down to change the order, onto another relay to swap the two swimmers, or drag a swimmer from the list onto a leg. The arrows still work (and on touch screens).
 - Works on the meet database too (a meet opened from a Meet Manager file, or one whose database is already built): changes go straight into the database, are logged and can be undone in Run the meet > Changes. Entries added this way have no heat yet - place them in Seeding.
 

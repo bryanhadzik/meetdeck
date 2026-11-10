@@ -217,16 +217,36 @@ def main():
     ap.add_argument("--lanes", type=int, default=8)
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
+    interactive = not a.port and sys.stdin and sys.stdin.isatty()
     if a.list or not a.port:
-        for p in cts.list_ports(detail=True):
-            print(p)
-        if not a.port:
+        ports = cts.list_ports(detail=True)
+        print("COM ports on this PC:")
+        for p in ports:
+            print("  %-6s %s" % (p.get("port") or p.get("device") or "", p.get("description") or p.get("desc") or ""))
+        if not ports:
+            print("  (none - plug in the USB-serial adapters or set up the com0com pair first)")
+        if a.list:
+            return
+        if not interactive:
             print("\nUsage: python emulator.py COM6   (see the top of this file for hook-up)")
-        return
+            return
+        # double-clicked / started with no port: ask instead of closing straight away
+        print("\nThe emulator takes ONE end of the pair; point Meet Manager at the OTHER end.")
+        a.port = input("COM port for the emulator (e.g. COM6): ").strip().upper()
+        if not a.port:
+            return
+        if a.port.isdigit():
+            a.port = "COM" + a.port
+        a.practice = a.practice or input("Load practice races so 'get times' has something to read? [Y/n]: ").strip().lower() != "n"
+        par = input("Parity N, E or O [N]: ").strip().upper()[:1]
+        if par in ("E", "O"):
+            a.parity = par
     try:
         ser = cts.open_serial(a.port, baudrate=a.baud, parity=a.parity, stopbits=a.stopbits, timeout=0.02)
     except Exception as e:
         print(cts.explain_open_error(a.port, e))
+        if interactive:
+            input("\nPress Enter to close.")
         sys.exit(1)
     sim = SimConsole(lanes=a.lanes)
     if a.practice:
@@ -249,7 +269,13 @@ def main():
         emu.feed(b"", time.time() + 1)
         emu.save()
         rec.line("Stopped. Commands seen: %s" % (emu.counts or "none"))
+        rec.line("Send these two files: %s and %s" % (LOG, CAPTURE))
         ser.close()
+        if interactive:
+            try:
+                input("\nPress Enter to close.")
+            except (EOFError, KeyboardInterrupt):
+                pass
 
 
 if __name__ == "__main__":

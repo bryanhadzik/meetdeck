@@ -27,7 +27,7 @@ printf 'python312.zip\n.\nLib\\site-packages\n..\\app\nimport site\n' > "$PTH"
 # the app
 cp app/*.py app/mmdb_profile.json "$B/MeetDeck/app/"
 cp -r app/static "$B/MeetDeck/app/static"
-mkdir -p "$B/MeetDeck/app/timing" && cp timing/*.py timing/README.txt "$B/MeetDeck/app/timing/"
+mkdir -p "$B/MeetDeck/app/timing" && cp timing/*.py timing/README.txt "timing/Console emulator.bat" "$B/MeetDeck/app/timing/"
 cp windows/launcher.py "$B/MeetDeck/app/launcher.py"
 cp "$SP/certifi/cacert.pem" "$B/MeetDeck/app/cacert.pem"     # CA list for HTTPS (updates); travels with app updates
 cp windows/start.py "$B/MeetDeck/start.py"
@@ -45,6 +45,7 @@ PY
 cp windows/README.txt "$B/MeetDeck/README.txt"
 printf '@echo off\r\nstart "" "%%~dp0python\\pythonw.exe" -X utf8 "%%~dp0start.py"\r\n' > "$B/MeetDeck/MeetDeck.bat"
 printf '@echo off\r\n"%%~dp0python\\python.exe" -X utf8 "%%~dp0start.py" --console\r\npause\r\n' > "$B/MeetDeck/MeetDeck (show log).bat"
+printf '@echo off\r\ncd /d "%%~dp0app\\timing"\r\n"%%~dp0python\\python.exe" -X utf8 emulator.py %%*\r\n' > "$B/MeetDeck/CTS console emulator.bat"
 VER=$(cat app/VERSION)
 cp app/VERSION "$B/MeetDeck/app/VERSION"
 # the update package: just the app folder (what GitHub releases carry)

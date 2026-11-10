@@ -19,3 +19,5 @@ __pycache__/
 *.pyc
 logos/
 tools/ao_training.json
+timing/emulator-log.txt
+timing/emulator-capture.json

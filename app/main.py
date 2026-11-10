@@ -2587,11 +2587,15 @@ def bridge_zip():
     """Everything the timing laptop needs (Python + pyserial)."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for f in ("cts.py", "sim.py", "bridge.py", "README.txt"):
+        for f in ("cts.py", "sim.py", "bridge.py", "emulator.py", "README.txt"):
             if (TIMING / f).exists():
                 z.write(TIMING / f, f"timing-bridge/{f}")
         z.writestr("timing-bridge/start-bridge.bat", "@echo off\r\ncd /d %~dp0\r\npython -m pip install --quiet pyserial\r\npython bridge.py\r\npause\r\n")
         z.writestr("timing-bridge/start-simulator.bat", "@echo off\r\ncd /d %~dp0\r\npython bridge.py --sim\r\npause\r\n")
+        z.writestr("timing-bridge/start-emulator.bat",
+                   "@echo off\r\ncd /d %~dp0\r\npython -m pip install --quiet pyserial\r\npython emulator.py --list\r\n"
+                   "echo.\r\nset /p P=COM port the EMULATOR uses (Meet Manager gets the other end), e.g. COM6: \r\n"
+                   "python emulator.py %P%\r\npause\r\n")
     return Response(buf.getvalue(), media_type="application/zip",
                     headers={"Content-Disposition": 'attachment; filename="timing-bridge.zip"'})
 

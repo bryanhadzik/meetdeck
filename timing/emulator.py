@@ -114,8 +114,9 @@ def describe(cmd: bytes) -> str:
 
 
 class Emulator:
-    def __init__(self, ser, rec: Recorder, listen_only=False, sim=None):
+    def __init__(self, ser, rec: Recorder, listen_only=False, sim=None, delay_ms=0, pace_baud=0):
         self.ser, self.rec, self.listen_only = ser, rec, listen_only
+        self.delay_ms, self.pace_baud = delay_ms, pace_baud     # act like a real console: think, then send at line speed
         self.sim = sim or SimConsole()
         self.buf = b""
         self.last_rx = 0.0
@@ -166,7 +167,16 @@ class Emulator:
         reply = self.sim.read(1 << 16)
         if reply:
             meaning = "error reply" if len(reply) == 6 else "reply"
-            self.ser.write(reply)
+            if self.delay_ms:
+                time.sleep(self.delay_ms / 1000.0)
+            if self.pace_baud:                  # one byte at a time, ~10 bits each, like a real 9600 line
+                gap = 10.0 / self.pace_baud
+                for b in reply:
+                    self.ser.write(bytes((b,)))
+                    self.ser.flush()
+                    time.sleep(gap)
+            else:
+                self.ser.write(reply)
             self.rec.msg(">>", reply, meaning)
         else:
             self.rec.line("%s    (no reply - the real console doesn't answer this one, as far as we know)" % ts())
@@ -215,6 +225,8 @@ def main():
     ap.add_argument("--listen-only", action="store_true", help="record but never answer")
     ap.add_argument("--practice", action="store_true", help="preload stored races (events 1-4, heats 1-2)")
     ap.add_argument("--lanes", type=int, default=8)
+    ap.add_argument("--delay", type=int, default=40, help="ms to wait before answering (a real console isn't instant)")
+    ap.add_argument("--no-pace", action="store_true", help="send replies in one burst instead of at line speed")
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
     interactive = not a.port and sys.stdin and sys.stdin.isatty()
@@ -252,7 +264,13 @@ def main():
     if a.practice:
         practice(sim)
     rec = Recorder()
-    emu = Emulator(ser, rec, listen_only=a.listen_only, sim=sim)
+    emu = Emulator(ser, rec, listen_only=a.listen_only, sim=sim, delay_ms=a.delay,
+                   pace_baud=0 if a.no_pace else a.baud)
+    try:
+        rec.line("Lines from the other side: CTS=%s DSR=%s CD=%s (all True on a null-modem cable/pair)"
+                 % (ser.cts, ser.dsr, ser.cd))
+    except Exception:
+        pass
     rec.line("CTS System 6 emulator on %s %d %s-%d%s%s" % (a.port, a.baud, a.parity, a.stopbits,
              " (listen only)" if a.listen_only else "", " with %d practice races" % len(sim.races) if a.practice else ""))
     rec.line("Point Meet Manager / the bridge at the OTHER end of the cable or com0com pair. Ctrl+C to stop.")

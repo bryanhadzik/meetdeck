@@ -10,6 +10,8 @@ was sent to it (event sequences, label tables, titles) is saved as a capture.
     python emulator.py COM6 --practice         preload a few stored races to read back
     python emulator.py COM6 --listen-only      never answer; just record what arrives
     python emulator.py --list                  list COM ports
+    python emulator.py COM1 --forward COM5     TAP: Meet Manager on COM2 talks THROUGH this to the
+                                               real console on COM5; both directions are recorded
 
 Hooking it up (the program on the other side needs a COM port too):
   * two USB-serial adapters joined by a NULL-MODEM cable (or a null-modem adapter), or
@@ -208,6 +210,67 @@ class Emulator:
             json.dump(out, f, indent=1)
 
 
+class Framer:
+    """Splits one direction of traffic into console messages (or raw chunks) and records them."""
+    def __init__(self, rec, arrow, describe_fn):
+        self.rec, self.arrow, self.describe = rec, arrow, describe_fn
+        self.buf, self.last = b"", 0.0
+        self.messages = []
+
+    def feed(self, data: bytes, now: float):
+        if data:
+            self.buf += data
+            self.last = now
+        while len(self.buf) >= 2:
+            n = cts.u16(self.buf[0], self.buf[1])
+            if n < 5 or n > 4096 or (len(self.buf) < n and now - self.last > 0.5):
+                break
+            if len(self.buf) < n:
+                return
+            msg, self.buf = self.buf[:n], self.buf[n:]
+            what = self.describe(msg) if cts.check_ok(msg) else "BAD CHECKSUM"
+            self.rec.msg(self.arrow, msg, what)
+            self.messages.append({"t": ts(), "dir": self.arrow, "hex": msg.hex(" "), "what": what})
+        if self.buf and now - self.last > 0.15:
+            self.rec.msg(self.arrow, self.buf, "NOT A CONSOLE MESSAGE")
+            self.messages.append({"t": ts(), "dir": self.arrow, "hex": self.buf.hex(" "), "what": "raw"})
+            self.buf = b""
+
+
+def tap(a, rec):
+    """Sit between Meet Manager and the REAL console: pass every byte through, record both directions."""
+    mm = cts.open_serial(a.port, baudrate=a.baud, parity=a.parity, stopbits=a.stopbits, timeout=0)
+    con = cts.open_serial(a.forward, baudrate=a.baud, parity=a.parity, stopbits=a.stopbits, timeout=0)
+    to_con = Framer(rec, "MM>", lambda m: describe(m[2:-2]))
+    to_mm = Framer(rec, "<CTS", lambda m: ("error reply %d" % cts.u16(m[2], m[3])) if len(m) == 6 else "console reply (%d bytes)" % len(m))
+    rec.line("TAP: Meet Manager side %s  <->  real console %s  (%d %s-%d). Ctrl+C to stop."
+             % (a.port, a.forward, a.baud, a.parity, a.stopbits))
+    path = os.path.join(HERE, "tap-capture.json")
+    try:
+        while True:
+            x = mm.read(4096)
+            if x:
+                con.write(x)
+            y = con.read(4096)
+            if y:
+                mm.write(y)
+            now = time.time()
+            to_con.feed(x, now)
+            to_mm.feed(y, now)
+            if not x and not y:
+                time.sleep(0.002)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        to_con.feed(b"", time.time() + 1); to_mm.feed(b"", time.time() + 1)
+        msgs = sorted(to_con.messages + to_mm.messages, key=lambda m: m["t"])
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"saved": time.strftime("%Y-%m-%d %H:%M:%S"), "settings": "%d %s-%d" % (a.baud, a.parity, a.stopbits),
+                       "messages": msgs}, f, indent=1)
+        rec.line("Stopped. %d messages. Send %s and %s" % (len(msgs), LOG, path))
+        mm.close(); con.close()
+
+
 def practice(sim: SimConsole):
     import random
     rng = random.Random(3)
@@ -228,6 +291,8 @@ def main():
     ap.add_argument("--delay", type=int, default=40, help="ms to wait before answering (a real console isn't instant)")
     ap.add_argument("--no-pace", action="store_true", help="send replies in one burst instead of at line speed")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--forward", metavar="CONSOLE_PORT",
+                    help="TAP mode: pass everything through to the REAL console on this port and record both ways")
     a = ap.parse_args()
     interactive = not a.port and sys.stdin and sys.stdin.isatty()
     if a.list or not a.port:
@@ -253,6 +318,14 @@ def main():
         par = input("Parity N, E or O [N]: ").strip().upper()[:1]
         if par in ("E", "O"):
             a.parity = par
+    if a.forward:
+        try:
+            tap(a, Recorder())
+        except Exception as e:
+            print(cts.explain_open_error(a.forward, e) if "could not open" in str(e) else e)
+        if interactive:
+            input("\nPress Enter to close.")
+        return
     try:
         ser = cts.open_serial(a.port, baudrate=a.baud, parity=a.parity, stopbits=a.stopbits, timeout=0.02)
     except Exception as e:

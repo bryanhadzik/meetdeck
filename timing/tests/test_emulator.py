@@ -92,3 +92,37 @@ def test_unknown_command_is_logged_and_kept(rig):
     port.write(frame(b"ZQ\x01\x02"))
     time.sleep(0.4)
     assert emu.unknown and emu.counts.get("UNKNOWN ZQ") == 1
+
+
+def test_tap_passes_through_and_records(tmp_path, monkeypatch):
+    """Meet Manager -> tap -> real console (here: the simulator on a second pty pair)."""
+    import tty, types
+    from sim import SimConsole
+    monkeypatch.setattr(emulator, "HERE", str(tmp_path))
+    mmm, mms = os.openpty(); cm, cs = os.openpty()
+    for fd in (mmm, mms, cm, cs):
+        tty.setraw(fd)
+    sim = SimConsole(); sim.add_race(1, 1, {3: 60.12})
+    stop = threading.Event()
+
+    def console():                       # the "real console" answering on the far side
+        port = FdPort(cm)
+        buf = b""
+        while not stop.is_set():
+            buf += port.read(4096)
+            if len(buf) >= 2 and len(buf) >= cts.u16(buf[0], buf[1]):
+                n = cts.u16(buf[0], buf[1]); msg, buf = buf[:n], buf[n:]
+                sim.write(msg); port.write(sim.read(1 << 16))
+    threading.Thread(target=console, daemon=True).start()
+    a = types.SimpleNamespace(port=os.ttyname(mms), forward=os.ttyname(cs), baud=9600, parity="N", stopbits=1)
+    rec = emulator.Recorder(str(tmp_path / "log.txt"))
+    import _thread
+    th = threading.Thread(target=lambda: emulator.tap(a, rec), daemon=True); th.start()
+    time.sleep(0.3)
+    con = Console(FdPort(mmm))
+    assert "System 6" in con.who_are_you()
+    assert con.race_by_heat(1, 1).event == 1
+    time.sleep(0.3)
+    log = open(tmp_path / "log.txt").read()
+    assert "MM>" in log and "WHO ARE YOU" in log and "<CTS" in log and "console reply" in log
+    stop.set()

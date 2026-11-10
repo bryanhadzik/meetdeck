@@ -21,3 +21,4 @@ logos/
 tools/ao_training.json
 timing/emulator-log.txt
 timing/emulator-capture.json
+timing/tap-capture.json

@@ -93,7 +93,7 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
 </header>
 <main id="main"><div class="empty">Loading results…</div></main>
 <section class="card" id="yt" style="max-width:720px;margin:0 auto 10px;width:calc(100% - 24px)"><h2>Watch &amp; follow on YouTube</h2>
-  <div style="padding:2px 14px 12px;font-size:14px;color:var(--mute)">Subscribe to the pool's channel for every meet, or just your school's.</div>
+  <div style="padding:2px 14px 12px;font-size:14px;color:var(--mute)">Every meet streams on the pool's channel. Each school has a playlist of its meets there.</div>
   <div class="ytl"></div></section>
 <footer id="foot">Updates on its own every 30 seconds. ▼ = time dropped from the seed time, ▲ = added.</footer>
 <script>
@@ -258,12 +258,14 @@ $("#share").addEventListener("click", () => {
     }
   });
 });
-// the pool's channel and each school's (subscribe links ask YouTube to confirm the subscription)
-const CHANNELS = [["@PrattAquaticCenter", "Tooele County Pratt Aquatic Center", "Every meet at the pool", "#0b5cab"],
-  ["@TooeleHighSwim", "Tooele High Swimming", "Buffaloes", "#9B5DE5"], ["@StansburySwim", "Stansbury High Swimming", "Stallions", "#3D7FF0"],
-  ["@GrantsvilleSwim", "Grantsville High Swimming", "Cowboys", "#E5383B"], ["@DeseretPeakSwim", "Deseret Peak Golden Eagles Swimming", "Golden Eagles", "#C9B45C"]];
-document.querySelector(".ytl").innerHTML = CHANNELS.map(([h, n, s, c]) => `<a href="https://www.youtube.com/${h}?sub_confirmation=1" target="_blank" rel="noopener">
-  <span class="dot" style="background:${c}"></span><span class="nm">${esc(n)}<small>${esc(s)} &middot; ${esc(h)}</small></span><span class="sub">Subscribe</span></a>`).join("");
+// one channel for every meet, plus a playlist per school on it
+const CHANNELS = [["https://www.youtube.com/@PrattAquaticCenter?sub_confirmation=1", "Tooele County Pratt Aquatic Center", "Every meet at the pool \u00b7 @PrattAquaticCenter", "#0b5cab", "Subscribe"],
+  ["https://www.youtube.com/playlist?list=PLPJ9Iplo8Mks", "Tooele High Swimming", "Buffaloes \u00b7 this season's meets", "#9B5DE5", "Playlist"],
+  ["https://www.youtube.com/playlist?list=PLbamkCWBGuA8", "Stansbury High Swimming", "Stallions \u00b7 this season's meets", "#3D7FF0", "Playlist"],
+  ["https://www.youtube.com/playlist?list=PLV1401o6lJEg", "Grantsville High Swimming", "Cowboys \u00b7 this season's meets", "#E5383B", "Playlist"],
+  ["https://www.youtube.com/playlist?list=PLUt1eDeuyxoc", "Deseret Peak Swimming", "Golden Eagles \u00b7 this season's meets", "#C9B45C", "Playlist"]];
+document.querySelector(".ytl").innerHTML = CHANNELS.map(([u, n, s, c, b]) => `<a href="${u}" target="_blank" rel="noopener">
+  <span class="dot" style="background:${c}"></span><span class="nm">${esc(n)}<small>${esc(s)}</small></span><span class="sub">${b}</span></a>`).join("");
 load();
 setInterval(load, 30000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });

@@ -368,7 +368,7 @@ def op_heat_results(m, ptr, heat, lanes, overwrite=True):
         use = ln.get("use") or "pad"
         final = {"pad": pad, "backup": backup, "watch": watch}.get(use, pad) or 0
         if use != "pad" and final:
-            used.append(f"lane {e['lane']} {'backup' if use == 'backup' else 'timers'}")
+            used.append(f"lane {e['lane']} {'backup button' if use == 'backup' else 'timers'}")
         stat = "R" if not final else ("Q" if int(ln.get("place") or 0) == -1 else "")
         # keep every time the console and the timers gave, so the official time can be changed later:
         # each button in Fin_back1-3 (the console's backup when it sent no buttons), both watches

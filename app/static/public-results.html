@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b5cab">
+<title>Swim results</title>
+<style>
+:root{--bg:#f3f5f8;--card:#fff;--ink:#111827;--mute:#5b6472;--line:#e3e7ee;--acc:#0b5cab;--acc2:#e8f1fb;--ok:#0a7a3d;--bad:#b42318;--star:#c58a00}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--card:#161b22;--ink:#e6edf3;--mute:#8b949e;--line:#2a313a;--acc:#58a6ff;--acc2:#132235;--ok:#3fb950;--bad:#f85149;--star:#e3b341}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+header{background:var(--acc);color:#fff;padding:14px 16px 12px;position:sticky;top:0;z-index:5}
+@media (prefers-color-scheme:dark){header{background:#0b3a6e}}
+header h1{margin:0;font-size:19px;line-height:1.2}
+header .sub{font-size:13px;opacity:.85;margin-top:2px}
+.bar{display:flex;gap:8px;margin-top:10px}
+.bar input{flex:1;min-width:0;border:0;border-radius:10px;padding:10px 12px;font-size:16px;background:#fff;color:#111}
+.bar button{border:0;border-radius:10px;padding:0 12px;font-size:14px;background:rgba(255,255,255,.18);color:#fff}
+.bar button.on{background:#fff;color:var(--acc)}
+main{padding:12px;max-width:720px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:10px;overflow:hidden}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);margin:0;padding:10px 14px 4px}
+.scores{display:grid;grid-template-columns:1fr auto auto auto;gap:2px 14px;padding:4px 14px 12px;font-variant-numeric:tabular-nums}
+.scores .h{font-size:12px;color:var(--mute)}
+.scores .n{text-align:right}
+.scores b{font-size:17px}
+.ev{display:flex;align-items:center;gap:10px;padding:12px 14px;width:100%;background:none;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.ev .no{flex:0 0 34px;height:34px;border-radius:9px;background:var(--acc2);color:var(--acc);font-weight:700;display:grid;place-items:center;font-size:15px}
+.ev .t{flex:1;min-width:0}
+.ev .t div:first-child{font-weight:600}
+.ev .meta{font-size:13px;color:var(--mute)}
+.ev .chev{color:var(--mute);transition:transform .15s}
+.open .ev .chev{transform:rotate(90deg)}
+.pill{display:inline-block;font-size:11px;font-weight:600;border-radius:99px;padding:1px 8px;margin-left:6px;vertical-align:1px}
+.pill.new{background:var(--ok);color:#fff}
+.pill.wait{background:var(--line);color:var(--mute)}
+.rows{display:none;border-top:1px solid var(--line)}
+.open .rows{display:block}
+.r{display:grid;grid-template-columns:30px 1fr auto;gap:2px 10px;padding:9px 14px;border-bottom:1px solid var(--line);align-items:start}
+.r:last-child{border-bottom:0}
+.r .pl{font-weight:700;font-size:17px;color:var(--acc);text-align:center}
+.r .nm{font-weight:600}
+.r .nm small{font-weight:400;color:var(--mute)}
+.r .tm{font-size:13px;color:var(--mute)}
+.r .legs{font-size:13px;color:var(--mute)}
+.r .res{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:17px}
+.r .pts{text-align:right;font-size:12px;color:var(--mute)}
+.r .dq{color:var(--bad)}
+.r.me{background:color-mix(in srgb,var(--star) 14%,transparent)}
+.star{background:none;border:0;padding:0 0 0 4px;font-size:16px;color:var(--mute);cursor:pointer;vertical-align:-1px}
+.star.on{color:var(--star)}
+.empty{padding:28px 16px;text-align:center;color:var(--mute)}
+footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="mname">Swim results</h1>
+  <div class="sub" id="msub">Loading…</div>
+  <div class="bar"><input id="q" type="search" placeholder="Find a swimmer or team" autocomplete="off" enterkeyhint="search"><button id="mine" title="Show only swimmers you starred">★ Mine</button></div>
+</header>
+<main id="main"><div class="empty">Loading results…</div></main>
+<footer id="foot">Updates on its own every 30 seconds.</footer>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } },
+                set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+let PREV = null, FRESH = new Set(), D = null, OPEN = new Set(store.get("open", [])), STARS = new Set(store.get("stars", [])), MINE = false;
+
+function ago(iso) {
+  const s = (Date.now() - Date.parse(iso)) / 1000;
+  if (!isFinite(s)) return "";
+  if (s < 90) return "just now";
+  if (s < 3600) return Math.round(s / 60) + " min ago";
+  return new Date(iso).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+}
+
+async function load() {
+  try {
+    const r = await fetch("results.json?t=" + Date.now(), {cache: "no-store"});
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    if (!D || d.updated !== D.updated) {
+      if (D) { const old = Object.fromEntries((D.events || []).map(v => [v.no, v.sig])); for (const v of d.events || []) if (v.sig && old[v.no] !== v.sig) FRESH.add(String(v.no)); }
+      D = d; render();
+    }
+    else $("#msub").textContent = sub();
+  } catch (e) {
+    if (!D) $("#main").innerHTML = `<div class="empty">No results posted yet. This page fills in once the meet starts.</div>`;
+  }
+}
+
+function sub() {
+  const m = D.meet || {};
+  return [m.location, m.date, D.updated ? "updated " + ago(D.updated) : ""].filter(Boolean).join(" · ");
+}
+
+function match(row, q) {
+  if (!q) return true;
+  return (row.name + " " + row.team + " " + (row.legs || "") + " " + (row.team_name || "")).toLowerCase().includes(q);
+}
+const starKey = r => r.name + "|" + r.team;
+
+function render() {
+  const m = D.meet || {};
+  document.title = (m.name || "Swim") + " – results";
+  $("#mname").textContent = m.name || "Swim results";
+  $("#msub").textContent = sub();
+  const q = $("#q").value.trim().toLowerCase();
+  const out = [];
+  if (D.scores && D.scores.length && !q && !MINE) {
+    out.push(`<div class="card"><h2>Team scores${D.scored ? ` · after ${D.scored} event${D.scored == 1 ? "" : "s"}` : ""}</h2><div class="scores">
+      <span class="h">Team</span><span class="h n">Girls</span><span class="h n">Boys</span><span class="h n">Total</span>
+      ${D.scores.map(s => `<span>${esc(s.name)}</span><span class="n">${s.F}</span><span class="n">${s.M}</span><span class="n"><b>${s.total}</b></span>`).join("")}</div></div>`);
+  }
+  // newest results first, then the events still to come
+  const all = D.events || [], swum = all.filter(v => v.rows && v.rows.length).reverse(), todo = all.filter(v => !(v.rows && v.rows.length));
+  const evs = swum.concat(todo);
+  let shown = 0;
+  for (const v of evs) {
+    const done = v.rows && v.rows.length;
+    const rows = (v.rows || []).filter(r => match(r, q) && (!MINE || STARS.has(starKey(r))));
+    if ((q || MINE) && !rows.length) continue;
+    shown++;
+    const isNew = done && (FRESH.has(String(v.no)) || D.latest == v.no);
+    const open = OPEN.has(String(v.no)) || (!OPEN.size && D.latest == v.no) || !!q || MINE;
+    const winner = done ? v.rows.find(r => r.place == 1) : null;
+    const meta = done ? (winner ? `1st ${esc(winner.name)} ${esc(winner.result)}` : `${v.rows.length} results`) : "Not swum yet";
+    out.push(`<div class="card ${open ? "open" : ""}" data-ev="${esc(v.no)}">
+      <button class="ev" data-tog="${esc(v.no)}"><span class="no">${esc(v.no)}</span>
+        <span class="t"><div>${esc(v.label)}${isNew ? `<span class="pill new">${D.latest == v.no ? "LATEST" : "NEW"}</span>` : done ? "" : `<span class="pill wait">upcoming</span>`}</div><div class="meta">${meta}</div></span>
+        <span class="chev">›</span></button>
+      <div class="rows">${done ? rows.map(r => rowHtml(r)).join("") : `<div class="empty" style="padding:14px">No results yet.</div>`}</div></div>`);
+  }
+  if (!shown) out.push(`<div class="empty">${MINE ? "Tap ☆ next to a swimmer to follow them here." : q ? "No one matches that." : "No events yet."}</div>`);
+  $("#main").innerHTML = out.join("");
+}
+
+function rowHtml(r) {
+  const k = starKey(r), on = STARS.has(k), dq = /^(DQ|NS)/.test(r.result || "");
+  return `<div class="r ${on ? "me" : ""}"><div class="pl">${esc(r.place || "–")}</div>
+    <div><div class="nm">${esc(r.name)}${r.yr ? ` <small>${esc(r.yr)}</small>` : ""}${r.exh ? ` <small>(exh)</small>` : ""}<button class="star ${on ? "on" : ""}" data-star="${esc(k)}" aria-label="follow">${on ? "★" : "☆"}</button></div>
+      <div class="tm">${esc(r.team_name || r.team)}</div>${r.legs ? `<div class="legs">${esc(r.legs)}</div>` : ""}${r.dqtxt ? `<div class="legs dq">${esc(r.dqtxt)}</div>` : ""}</div>
+    <div><div class="res ${dq ? "dq" : ""}">${esc(r.result || "")}</div>${r.points ? `<div class="pts">${esc(r.points)} pts</div>` : ""}</div></div>`;
+}
+
+document.addEventListener("click", e => {
+  const s = e.target.closest("[data-star]");
+  if (s) { const k = s.dataset.star; STARS.has(k) ? STARS.delete(k) : STARS.add(k); store.set("stars", [...STARS]); render(); return; }
+  const t = e.target.closest("[data-tog]");
+  if (t) {
+    const no = t.dataset.tog, v = (D.events || []).find(x => String(x.no) === no);
+    OPEN.has(no) ? OPEN.delete(no) : OPEN.add(no);
+    FRESH.delete(no);
+    store.set("open", [...OPEN]); render();
+  }
+});
+$("#q").addEventListener("input", () => D && render());
+$("#mine").addEventListener("click", () => { MINE = !MINE; $("#mine").classList.toggle("on", MINE); D && render(); });
+load();
+setInterval(load, 30000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>

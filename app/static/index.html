@@ -383,6 +383,19 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     <label class="row" style="margin-top:6px;font-size:13.5px"><input type="checkbox" id="sMbAuto"> Send again automatically after scratches, lane moves, relay swimmer and name changes</label>
   </section>
   <section>
+    <h2>Phone results</h2>
+    <div class="muted" style="font-size:13px">A public, phone-friendly results page for spectators (no login, works on cellular). MeetDeck publishes it to
+      a GitHub Pages site after each scored race &mdash; at most every 6 minutes, because GitHub Pages rebuilds about 10 times an hour. Put the address on the board.</div>
+    <div class="row" style="margin-top:8px"><label>GitHub repository <input id="sPubRepo" placeholder="bryanhadzik/swim-results" style="width:220px"></label>
+      <label>Short address <input id="sPubDom" placeholder="swim.example.org (optional)" style="width:200px"></label></div>
+    <div class="row" style="margin-top:6px"><label>GitHub token <input id="sPubTok" type="password" placeholder="github_pat_…" style="width:260px" autocomplete="off"></label>
+      <button class="small" id="sPubSave">Save</button><span class="muted" id="sPubMsg" style="font-size:13px"></span></div>
+    <div class="muted" style="font-size:12.5px;margin-top:4px">Token: GitHub &rarr; Settings &rarr; Developer settings &rarr; Fine-grained tokens &rarr; only this repository,
+      permissions <b>Contents: read and write</b> (and <b>Pages: read and write</b> for the first publish). It stays on this computer.</div>
+    <label class="row" style="margin-top:6px;font-size:13.5px"><input type="checkbox" id="sPubAuto"> Publish automatically after each scored race</label>
+    <div class="row" style="margin-top:4px;font-size:13.5px">Spectators go to: <a id="sPubUrl" target="_blank" rel="noopener"></a></div>
+  </section>
+  <section>
     <h2>Timing</h2>
     <div class="row"><label>Highlight a lane when pad, backup and timers times differ by more than
       <input id="sTol" type="number" step="0.01" min="0.01" max="5" style="width:80px"> seconds</label>
@@ -577,6 +590,11 @@ async function loadSetup() {
   $("#sTol").value = (SET.time_tolerance ?? 0.30).toFixed(2);
   $("#sMb").value = SET.meetboard_url || "";
   $("#sMbAuto").checked = !!SET.meetboard_auto;
+  $("#sPubRepo").value = SET.public_repo || "";
+  $("#sPubDom").value = SET.public_domain || "";
+  $("#sPubTok").value = ""; $("#sPubTok").placeholder = SET.public_token_set ? "saved (type to replace)" : "github_pat_…";
+  $("#sPubAuto").checked = !!SET.public_auto;
+  $("#sPubUrl").textContent = $("#sPubUrl").href = SET.public_url || "";
   $("#sWriteState").innerHTML = !SET.drive_folder ? `<span class="muted">Save the folder first.</span>` : SET.drive_write ? `<span class="badge ok">Set up</span> <span class="muted" style="font-size:13px">Backups you download are also filed into Drive.</span>` : `<span class="badge no">Not set up</span>`;
   loadPlan();
   const g = await api("/api/gmail/status");
@@ -841,6 +859,17 @@ $("#sMbSave").onclick = async () => {
 $("#sMbAuto").onchange = async () => {
   try { SET = await api("/api/settings", J("PUT", {meetboard_auto: $("#sMbAuto").checked})); $("#sMbMsg").textContent = SET.meetboard_auto ? "Auto-send on" : "Auto-send off"; }
   catch (e) { $("#sMbMsg").textContent = e.message; }
+};
+$("#sPubSave").onclick = async () => {
+  const body = {public_repo: $("#sPubRepo").value, public_domain: $("#sPubDom").value};
+  if ($("#sPubTok").value.trim()) body.public_token = $("#sPubTok").value.trim();
+  try { SET = await api("/api/settings", J("PUT", body)); $("#sPubMsg").textContent = "Saved"; $("#sPubTok").value = "";
+    $("#sPubTok").placeholder = SET.public_token_set ? "saved (type to replace)" : "github_pat_…"; $("#sPubUrl").textContent = $("#sPubUrl").href = SET.public_url; }
+  catch (e) { $("#sPubMsg").textContent = e.message; }
+};
+$("#sPubAuto").onchange = async () => {
+  try { SET = await api("/api/settings", J("PUT", {public_auto: $("#sPubAuto").checked})); $("#sPubMsg").textContent = SET.public_auto ? "Auto-publish on" : "Auto-publish off"; }
+  catch (e) { $("#sPubMsg").textContent = e.message; }
 };
 $("#sScan").onclick = async () => { await api("/api/drive/inventory", {method: "POST"}); loadPlan(); };
 $("#sCopy").onclick = async () => {

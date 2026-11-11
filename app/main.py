@@ -270,7 +270,10 @@ def get_settings():
     cur = season_of()
     y = int(cur[:4])
     seasons = {f"{y + i}-{(y + i + 1) % 100:02d}" for i in (-1, 0, 1)} | {m["season"] for m in list_meets()} | {st["season"]}
-    pub = {k: v for k, v in st.items() if k != "drive_token"}
+    pub = {k: v for k, v in st.items() if k not in ("drive_token", "public_token")}
+    pub.setdefault("public_repo", public_results.DEFAULT_REPO)
+    pub["public_token_set"] = bool(st.get("public_token"))
+    pub["public_url"] = public_results.site_url(pub["public_repo"], st.get("public_domain", ""))
     return {**pub, "current": cur, "seasons": sorted(seasons, reverse=True), "drive_write": bool(st.get("drive_url"))}
 
 
@@ -301,6 +304,20 @@ def put_settings(body: dict):
             raise HTTPException(400, str(e))
     if "meetboard_auto" in body:
         st["meetboard_auto"] = bool(body["meetboard_auto"])
+    if "public_repo" in body:
+        r = (body["public_repo"] or "").strip().removeprefix("https://github.com/").strip("/")
+        if r and not re.fullmatch(r"[\w.-]+/[\w.-]+", r):
+            raise HTTPException(400, "The repository looks like owner/name, e.g. bryanhadzik/swim-results")
+        st["public_repo"] = r or public_results.DEFAULT_REPO
+    if "public_token" in body and body["public_token"] != "":
+        st["public_token"] = (body["public_token"] or "").strip()
+    if "public_domain" in body:
+        dom = (body["public_domain"] or "").strip().lower().removeprefix("https://").removeprefix("http://").strip("/")
+        if dom and not re.fullmatch(r"[a-z0-9.-]+\.[a-z]{2,}", dom):
+            raise HTTPException(400, "Enter just the address, e.g. swim.example.org")
+        st["public_domain"] = dom
+    if "public_auto" in body:
+        st["public_auto"] = bool(body["public_auto"])
     if "drive_url" in body:
         u = (body["drive_url"] or "").strip()
         if u and not re.match(r"https://script\.google\.com/(?:a/macros/[\w.-]+|macros)/s/[\w-]+/exec", u):
@@ -2004,6 +2021,7 @@ def db_score(mid: str, body: dict):
     info["scoring"] = summary
     (_dbdir(d) / "info.json").write_text(json.dumps(info))
     _dblog(d, msg, "score")
+    _public_auto(mid)
     return db_get(mid)
 
 
@@ -2092,6 +2110,65 @@ def db_export(mid: str, fmt: str):
     if fmt == "html":
         return Response(results_mod.results_html(m, _dbinfo(d).get("scoring")), media_type="text/html")
     raise HTTPException(404)
+
+
+# ---- public phone results (GitHub Pages) ----
+import public_results  # noqa: E402
+
+
+def _public_doc(mid: str) -> dict:
+    d = _dir(mid)
+    db = _dbfile(d)
+    if not db.exists():
+        raise HTTPException(400, "No meet database yet - open Run the meet first")
+    return public_results.build(meetdb.load(db), _dbinfo(d).get("scoring"))
+
+
+def _public_job(mid: str):
+    st = _settings()
+    if not st.get("public_token"):
+        raise RuntimeError("Add a GitHub token in Setup > Phone results first")
+    doc = _public_doc(mid)
+    out = public_results.publish(doc, st.get("public_repo") or public_results.DEFAULT_REPO, st["public_token"], st.get("public_domain", ""))
+    _dblog(_dir(mid), f"Published phone results ({sum(1 for e in doc['events'] if e['rows'])} events) to {out['url']}", "export")
+    return out
+
+
+def _public_auto(mid: str):
+    st = _settings()
+    if st.get("public_auto") and st.get("public_token"):
+        try:
+            public_results.PUBLISHER.request(mid, lambda: _public_job(mid))
+        except Exception as x:
+            print("public results:", x)
+
+
+@app.get("/api/meets/{mid}/public/results.json")
+def public_preview_json(mid: str):
+    return _public_doc(mid)
+
+
+@app.get("/api/meets/{mid}/public/")
+def public_preview_page(mid: str):
+    return Response(public_results.PAGE.read_text(encoding="utf-8"), media_type="text/html")
+
+
+@app.post("/api/meets/{mid}/public/publish")
+def public_publish(mid: str):
+    _public_doc(mid)                                      # fail early when there is no database
+    out = public_results.PUBLISHER.request(mid, lambda: _public_job(mid), force=True)
+    if out.get("ok") is False:
+        raise HTTPException(502, out["error"])
+    return out
+
+
+@app.get("/api/meets/{mid}/public/status")
+def public_status(mid: str):
+    st = _settings()
+    t = public_results.PUBLISHER.timer.get(mid)
+    return {"last": public_results.PUBLISHER.status.get(mid), "queued": bool(t), "auto": bool(st.get("public_auto")),
+            "token": bool(st.get("public_token")),
+            "url": public_results.site_url(st.get("public_repo") or public_results.DEFAULT_REPO, st.get("public_domain", ""))}
 
 
 # ---- rules library ----

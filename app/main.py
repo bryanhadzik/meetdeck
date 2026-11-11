@@ -2128,12 +2128,28 @@ def db_export(mid: str, fmt: str):
 import public_results  # noqa: E402
 
 
+def _stream_link() -> dict | None:
+    """The meet's live stream (YouTube channel /live link + whether OBS is streaming), from the meet-board."""
+    url = _settings().get("meetboard_url")
+    if not url:
+        return None
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url.rstrip("/") + "/api/stream_link", timeout=3) as r:
+            j = json.loads(r.read())
+        return {"url": j["url"], "live": bool(j.get("live"))} if j.get("url") else None
+    except Exception:
+        return None
+
+
 def _public_doc(mid: str) -> dict:
     d = _dir(mid)
     db = _dbfile(d)
     if not db.exists():
         raise HTTPException(400, "No meet database yet - open Run the meet first")
-    return public_results.build(meetdb.load(db), _dbinfo(d).get("scoring"))
+    doc = public_results.build(meetdb.load(db), _dbinfo(d).get("scoring"))
+    doc["stream"] = _stream_link()
+    return doc
 
 
 def _public_job(mid: str):

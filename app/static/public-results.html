@@ -23,6 +23,10 @@ header h1{margin:0;font-size:19px;line-height:1.2;padding-right:92px}
 .sheet a,.sheet button{display:block;width:100%;text-align:left;padding:13px 4px;font-size:16px;color:var(--ink);background:none;border:0;
   border-bottom:1px solid var(--line);text-decoration:none;cursor:pointer}
 .sheet .x{color:var(--mute);text-align:center;border:0}
+.sheet h3{margin:2px 4px 4px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}
+.live{display:inline-flex;align-items:center;gap:6px;margin-top:8px;background:#e5252a;color:#fff;border-radius:99px;padding:3px 11px;font-size:13px;font-weight:700;text-decoration:none}
+.live::before{content:"";width:8px;height:8px;border-radius:50%;background:#fff;animation:pulse 1.4s infinite}
+@keyframes pulse{50%{opacity:.3}}
 header .sub{font-size:13px;opacity:.85;margin-top:2px}
 .bar{display:flex;gap:8px;margin-top:10px}
 .bar input{flex:1;min-width:0;border:0;border-radius:10px;padding:10px 12px;font-size:16px;background:#fff;color:#111}
@@ -73,6 +77,7 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
   <button class="share" id="share" aria-label="Send this page to someone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 3v13"/><path d="m7 8 5-5 5 5"/></svg>Share</button>
   <h1 id="mname">Swim results</h1>
   <div class="sub" id="msub">Loading…</div>
+  <a class="live hide" id="liveBtn" target="_blank" rel="noopener">LIVE &middot; Watch the stream</a>
   <div class="bar"><input id="q" type="search" placeholder="Find a swimmer or team" autocomplete="off" enterkeyhint="search"><button id="mine" title="Show only swimmers you starred">★ Mine</button></div>
 </header>
 <main id="main"><div class="empty">Loading results…</div></main>
@@ -123,6 +128,9 @@ function render() {
   document.title = (m.name || "Swim") + " – results";
   $("#mname").textContent = m.name || "Swim results";
   $("#msub").textContent = sub();
+  const lb = $("#liveBtn"), st = D.stream;
+  lb.classList.toggle("hide", !(st && st.url && st.live));
+  if (st && st.url) lb.href = st.url;
   const q = $("#q").value.trim().toLowerCase();
   const out = [];
   if (D.scores && D.scores.length && !q && !MINE) {
@@ -182,27 +190,40 @@ document.addEventListener("click", e => {
 $("#q").addEventListener("input", () => D && render());
 $("#mine").addEventListener("click", () => { MINE = !MINE; $("#mine").classList.toggle("on", MINE); D && render(); });
 // Share: the phone's own share sheet (Messages, email, ...) when it has one; otherwise text / copy
-function shareText() { return "Live results" + (D && D.meet && D.meet.name ? " for " + D.meet.name : "") + ": " + location.href.split("#")[0].split("?")[0]; }
-$("#share").addEventListener("click", async () => {
-  const url = location.href.split("#")[0].split("?")[0];
-  if (navigator.share) {
-    try { await navigator.share({title: document.title, text: shareText().replace(": " + url, ""), url}); return; }
-    catch (e) { if (e && e.name === "AbortError") return; }
-  }
+$("#share").addEventListener("click", () => {
+  const url = location.href.split("#")[0].split("?")[0], st = D && D.stream && D.stream.url ? D.stream : null;
   const old = document.getElementById("sheet"); if (old) old.remove();
-  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent), body = encodeURIComponent(shareText());
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent), sms = t => `sms:${ios ? "&" : "?"}body=${encodeURIComponent(t)}`;
+  const name = D && D.meet && D.meet.name ? D.meet.name : "";
+  const resText = "Live results" + (name ? " for " + name : "") + ": " + url;
+  const strText = "Watch " + (name || "the meet") + " live: " + (st ? st.url : "");
   const el = document.createElement("div");
   el.className = "sheet"; el.id = "sheet";
-  el.innerHTML = `<a href="sms:${ios ? "&" : "?"}body=${body}">💬 Text it to someone</a>
-    <a href="mailto:?subject=${encodeURIComponent(document.title)}&body=${body}">✉️ Email it</a>
-    <button id="copyLink">🔗 Copy the link</button><button class="x" id="closeSheet">Close</button>`;
+  el.innerHTML = `<h3>Results</h3>
+    <a href="${sms(resText)}">💬 Text the results link</a>
+    ${navigator.share ? `<button data-native="res">📤 More ways to send it…</button>` : `<a href="mailto:?subject=${encodeURIComponent(document.title)}&body=${encodeURIComponent(resText)}">✉️ Email it</a>`}
+    <button data-copy="${esc(url)}">🔗 Copy the results link</button>
+    ${st ? `<h3 style="margin-top:12px">Live stream${st.live ? " &middot; on now" : ""}</h3>
+    <a href="${esc(st.url)}" target="_blank" rel="noopener">▶️ Watch the stream</a>
+    <a href="${sms(strText)}">💬 Text the stream link</a>
+    ${navigator.share ? `<button data-native="str">📤 More ways to send it…</button>` : ""}
+    <button data-copy="${esc(st.url)}">🔗 Copy the stream link</button>` : ""}
+    <button class="x" id="closeSheet">Close</button>`;
   document.body.appendChild(el);
-  el.querySelector("#closeSheet").onclick = () => el.remove();
-  el.querySelector("#copyLink").onclick = async () => {
-    try { await navigator.clipboard.writeText(url); el.querySelector("#copyLink").textContent = "✓ Link copied"; }
-    catch (e) { prompt("Copy this link:", url); }
-    setTimeout(() => el.remove(), 900);
-  };
+  el.addEventListener("click", async ev => {
+    const t = ev.target.closest("button"); if (!t) return;
+    if (t.id === "closeSheet") return el.remove();
+    if (t.dataset.native) {
+      const isStr = t.dataset.native === "str";
+      try { await navigator.share({title: isStr ? "Live stream" + (name ? ": " + name : "") : document.title, url: isStr ? st.url : url}); el.remove(); } catch (e) {}
+      return;
+    }
+    if (t.dataset.copy) {
+      try { await navigator.clipboard.writeText(t.dataset.copy); t.textContent = "✓ Copied"; }
+      catch (e) { prompt("Copy this link:", t.dataset.copy); }
+      setTimeout(() => el.remove(), 900);
+    }
+  });
 });
 load();
 setInterval(load, 30000);

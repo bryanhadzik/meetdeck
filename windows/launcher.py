@@ -115,12 +115,20 @@ def _lnk_args(lnk) -> str:
         return ""
 
 
+LAUNCHER_CMD = ('@echo off\r\nrem Start/stop MeetDeck and the CTS console tools.\r\n'
+                'start "" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden '
+                '-File "%~dp0app\\tools\\MeetDeck-Launcher.ps1"\r\n')
+
+
 def refresh_start():
-    """An update may bring a newer start.py; keep the MeetDeck folder's copy current."""
+    """An update may bring a newer start.py (and the launcher); keep the MeetDeck folder's copies current."""
     try:
         src, dst = APP / "start.py", ROOT / "start.py"
         if src.exists() and (not dst.exists() or src.read_bytes() != dst.read_bytes()):
             shutil.copy2(src, dst)
+        cmd = ROOT / "MeetDeck Launcher.cmd"
+        if (APP / "tools" / "MeetDeck-Launcher.ps1").exists() and (not cmd.exists() or cmd.read_text(errors="ignore") != LAUNCHER_CMD):
+            cmd.write_text(LAUNCHER_CMD, newline="")
     except Exception:
         log("start.py: " + traceback.format_exc())
 

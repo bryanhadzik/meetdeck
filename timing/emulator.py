@@ -246,6 +246,14 @@ def tap(a, rec):
     rec.line("TAP: Meet Manager side %s  <->  real console %s  (%d %s-%d). Ctrl+C to stop."
              % (a.port, a.forward, a.baud, a.parity, a.stopbits))
     path = os.path.join(HERE, "tap-capture.json")
+
+    def write():
+        msgs = sorted(to_con.messages + to_mm.messages, key=lambda m: m["t"])
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"saved": time.strftime("%Y-%m-%d %H:%M:%S"), "settings": "%d %s-%d" % (a.baud, a.parity, a.stopbits),
+                       "messages": msgs}, f, indent=1)
+        return msgs
+    last_save, seen = 0.0, 0
     try:
         while True:
             x = mm.read(4096)
@@ -257,16 +265,16 @@ def tap(a, rec):
             now = time.time()
             to_con.feed(x, now)
             to_mm.feed(y, now)
+            n = len(to_con.messages) + len(to_mm.messages)
+            if n != seen and now - last_save > 2:
+                write(); last_save, seen = now, n
             if not x and not y:
                 time.sleep(0.002)
     except KeyboardInterrupt:
         pass
     finally:
         to_con.feed(b"", time.time() + 1); to_mm.feed(b"", time.time() + 1)
-        msgs = sorted(to_con.messages + to_mm.messages, key=lambda m: m["t"])
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump({"saved": time.strftime("%Y-%m-%d %H:%M:%S"), "settings": "%d %s-%d" % (a.baud, a.parity, a.stopbits),
-                       "messages": msgs}, f, indent=1)
+        msgs = write()
         rec.line("Stopped. %d messages. Send %s and %s" % (len(msgs), LOG, path))
         mm.close(); con.close()
 
@@ -348,10 +356,15 @@ def main():
              " (listen only)" if a.listen_only else "", " with %d practice races" % len(sim.races) if a.practice else ""))
     rec.line("Point Meet Manager / the bridge at the OTHER end of the cable or com0com pair. Ctrl+C to stop.")
     rec.line("Log: %s   Capture: %s" % (LOG, CAPTURE))
+    last_save, seen = 0.0, None
     try:
         while True:
             data = ser.read(4096)
-            emu.feed(data, time.time())
+            now = time.time()
+            emu.feed(data, now)
+            if now - last_save > 2 and seen != (sum(emu.counts.values()), len(emu.garbage)):
+                # saved as it goes, so stopping it from the launcher (a hard stop) keeps everything
+                emu.save(); last_save = now; seen = (sum(emu.counts.values()), len(emu.garbage))
             if not data:
                 time.sleep(0.01)
     except KeyboardInterrupt:

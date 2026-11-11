@@ -29,6 +29,7 @@ cp app/*.py app/mmdb_profile.json "$B/MeetDeck/app/"
 cp -r app/static "$B/MeetDeck/app/static"
 mkdir -p "$B/MeetDeck/app/timing" && cp timing/*.py timing/README.txt "timing/Console emulator.bat" "$B/MeetDeck/app/timing/"
 cp windows/launcher.py "$B/MeetDeck/app/launcher.py"
+mkdir -p "$B/MeetDeck/app/tools" && cp windows/MeetDeck-Launcher.ps1 "$B/MeetDeck/app/tools/"
 cp "$SP/certifi/cacert.pem" "$B/MeetDeck/app/cacert.pem"     # CA list for HTTPS (updates); travels with app updates
 cp windows/start.py "$B/MeetDeck/start.py"
 cp windows/start.py "$B/MeetDeck/app/start.py"      # updates carry it; the launcher refreshes the root copy
@@ -46,6 +47,7 @@ cp windows/README.txt "$B/MeetDeck/README.txt"
 printf '@echo off\r\nstart "" "%%~dp0python\\pythonw.exe" -X utf8 "%%~dp0start.py"\r\n' > "$B/MeetDeck/MeetDeck.bat"
 printf '@echo off\r\n"%%~dp0python\\python.exe" -X utf8 "%%~dp0start.py" --console\r\npause\r\n' > "$B/MeetDeck/MeetDeck (show log).bat"
 printf '@echo off\r\ncd /d "%%~dp0app\\timing"\r\n"%%~dp0python\\python.exe" -X utf8 emulator.py %%*\r\n' > "$B/MeetDeck/CTS console emulator.bat"
+printf '@echo off\r\nrem Start/stop MeetDeck and the CTS console tools.\r\nstart "" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%%~dp0app\\tools\\MeetDeck-Launcher.ps1"\r\n' > "$B/MeetDeck/MeetDeck Launcher.cmd"
 VER=$(cat app/VERSION)
 cp app/VERSION "$B/MeetDeck/app/VERSION"
 # the update package: just the app folder (what GitHub releases carry)

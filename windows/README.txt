@@ -1,7 +1,9 @@
 MeetDeck for Windows
 ====================
 
-Start:   double-click MeetDeck.bat (the first start also puts a MeetDeck shortcut on the desktop).
+Start:   double-click MeetDeck.exe (or MeetDeck.bat). The first start also puts MeetDeck and
+         MeetDeck Launcher shortcuts on the desktop. MeetDeck Launcher.exe opens the start / stop /
+         update / console-tools window.
          MeetDeck opens in your web browser. A blue "MD" icon sits in the tray (bottom-right, by the
          clock): Open MeetDeck / Open data folder / Quit MeetDeck.
 

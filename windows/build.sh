@@ -30,6 +30,11 @@ cp -r app/static "$B/MeetDeck/app/static"
 mkdir -p "$B/MeetDeck/app/timing" && cp timing/*.py timing/README.txt "timing/Console emulator.bat" "$B/MeetDeck/app/timing/"
 cp windows/launcher.py "$B/MeetDeck/app/launcher.py"
 mkdir -p "$B/MeetDeck/app/tools" && cp windows/MeetDeck-Launcher.ps1 "$B/MeetDeck/app/tools/"
+# "MeetDeck Launcher.exe": a tiny stub with the MeetDeck icon that opens the launcher script
+# (source: windows/launcher-exe/launcher.c). Updates carry it in app/tools; the launcher copies it to the root.
+cp "windows/launcher-exe/MeetDeck Launcher.exe" "$B/MeetDeck/MeetDeck Launcher.exe"
+cp "windows/launcher-exe/MeetDeck Launcher.exe" "$B/MeetDeck/app/tools/MeetDeck Launcher.exe"
+cp windows/launcher-exe/MeetDeck.exe "$B/MeetDeck/MeetDeck.exe" && cp windows/launcher-exe/MeetDeck.exe "$B/MeetDeck/app/tools/MeetDeck.exe"
 cp "$SP/certifi/cacert.pem" "$B/MeetDeck/app/cacert.pem"     # CA list for HTTPS (updates); travels with app updates
 cp windows/start.py "$B/MeetDeck/start.py"
 cp windows/start.py "$B/MeetDeck/app/start.py"      # updates carry it; the launcher refreshes the root copy

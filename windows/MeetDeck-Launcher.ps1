@@ -112,10 +112,15 @@ function Set-LauncherShortcuts {
             if (-not (Test-Path $dir)) { continue }
             $sh = New-Object -ComObject WScript.Shell
             $lnk = $sh.CreateShortcut((Join-Path $dir 'MeetDeck Launcher.lnk'))
-            $lnk.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-            $lnk.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $ps1 + '"'
+            $exe = Join-Path $Root 'MeetDeck Launcher.exe'
+            if (Test-Path $exe) {
+                $lnk.TargetPath = $exe; $lnk.Arguments = ''; $lnk.IconLocation = $exe + ',0'
+            } else {
+                $lnk.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+                $lnk.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $ps1 + '"'
+                if (Test-Path $ico) { $lnk.IconLocation = $ico + ',0' }
+            }
             $lnk.WorkingDirectory = $Root
-            if (Test-Path $ico) { $lnk.IconLocation = $ico + ',0' }
             $lnk.Description = 'Start, stop and update MeetDeck'
             $lnk.Save()
         } catch { }

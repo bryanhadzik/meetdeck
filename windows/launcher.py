@@ -94,13 +94,11 @@ def shortcut():
                        Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs"):
             if not folder.exists():
                 continue
-            lp = folder / "MeetDeck Launcher.lnk"      # the launcher window, with the MeetDeck icon (not PowerShell's)
-            if not lp.exists():
-                ps1 = APP / "tools" / "MeetDeck-Launcher.ps1"
-                ps = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{lp}');"
-                      f"$s.TargetPath=(Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\powershell.exe');"
-                      f"$s.Arguments='-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \\\"{ps1}\\\"';$s.WorkingDirectory='{ROOT}';"
-                      + (f"$s.IconLocation='{icon},0';" if icon.exists() else "") + "$s.Description='Start, stop and update MeetDeck';$s.Save()")
+            lp = folder / "MeetDeck Launcher.lnk"      # the launcher window: MeetDeck Launcher.exe (has the icon)
+            lexe = ROOT / "MeetDeck Launcher.exe"
+            if lexe.exists() and (not lp.exists() or str(lexe) not in _lnk_target(lp)):
+                ps = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{lp}');$s.TargetPath='{lexe}';"
+                      f"$s.WorkingDirectory='{ROOT}';$s.IconLocation='{lexe},0';$s.Description='Start, stop and update MeetDeck';$s.Save()")
                 import subprocess
                 subprocess.run(["powershell", "-NoProfile", "-Command", ps], creationflags=0x08000000, timeout=30)
             lnk = folder / "MeetDeck.lnk"
@@ -113,6 +111,28 @@ def shortcut():
             subprocess.run(["powershell", "-NoProfile", "-Command", ps], creationflags=0x08000000, timeout=30)
     except Exception:
         log("shortcut: " + traceback.format_exc())
+
+
+def _lnk_target(lnk) -> str:
+    try:
+        import subprocess
+        r = subprocess.run(["powershell", "-NoProfile", "-Command",
+                            f"(New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}').TargetPath"],
+                           capture_output=True, text=True, creationflags=0x08000000, timeout=20)
+        return r.stdout
+    except Exception:
+        return ""
+
+
+def launcher_exe():
+    """Copy app/tools/MeetDeck Launcher.exe (updates bring it) to the MeetDeck folder when it's new or changed."""
+    try:
+        for name in ("MeetDeck Launcher.exe", "MeetDeck.exe"):
+            src, dst = APP / "tools" / name, ROOT / name
+            if src.exists() and (not dst.exists() or dst.read_bytes() != src.read_bytes()):
+                shutil.copy2(src, dst)
+    except Exception:
+        log("launcher exe: " + traceback.format_exc())
 
 
 def _lnk_args(lnk) -> str:
@@ -216,6 +236,7 @@ def main():
         return
     log("starting MeetDeck")
     first_run()
+    launcher_exe()
     load_env()
     os.environ["MEETDECK_DATA"] = str(DATA)
     os.environ.setdefault("FONT_DIR", fonts())

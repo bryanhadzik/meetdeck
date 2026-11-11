@@ -147,14 +147,8 @@ function render() {
   if (st && st.url) lb.href = st.url;
   const q = $("#q").value.trim().toLowerCase();
   const out = [];
-  if (D.scores && D.scores.length && !q && !MINE) {
-    out.push(`<div class="card"><h2>Team scores${D.scored ? ` · after ${D.scored} event${D.scored == 1 ? "" : "s"}` : ""}</h2><div class="scores">
-      <span class="h">Team</span><span class="h n">Girls</span><span class="h n">Boys</span><span class="h n">Total</span>
-      ${D.scores.map(s => `<span>${esc(s.name)}</span><span class="n">${s.F}</span><span class="n">${s.M}</span><span class="n"><b>${s.total}</b></span>`).join("")}</div></div>`);
-  }
-  // newest results first, then the events still to come
-  const all = D.events || [], swum = all.filter(v => v.rows && v.rows.length).reverse(), todo = all.filter(v => !(v.rows && v.rows.length));
-  const evs = swum.concat(todo);
+  // meet order: event 1, 2, 3 ... (the latest one is marked LATEST and opened)
+  const evs = D.events || [];
   let shown = 0;
   for (const v of evs) {
     const done = v.rows && v.rows.length;
@@ -170,6 +164,12 @@ function render() {
         <span class="t"><div>${esc(v.label)}${isNew ? `<span class="pill new">${D.latest == v.no ? "LATEST" : "NEW"}</span>` : done ? "" : `<span class="pill wait">upcoming</span>`}</div><div class="meta">${meta}</div></span>
         <span class="chev">›</span></button>
       <div class="rows">${done ? stateLines(v) + rows.map(r => rowHtml(r)).join("") : `<div class="empty" style="padding:14px">No results yet.</div>`}</div></div>`);
+  }
+  // team scores at the bottom
+  if (D.scores && D.scores.length && !q && !MINE) {
+    out.push(`<div class="card"><h2>Team scores${D.scored ? ` · after ${D.scored} event${D.scored == 1 ? "" : "s"}` : ""}</h2><div class="scores">
+      <span class="h">Team</span><span class="h n">Girls</span><span class="h n">Boys</span><span class="h n">Total</span>
+      ${D.scores.map(s => `<span>${esc(s.name)}</span><span class="n">${s.F}</span><span class="n">${s.M}</span><span class="n"><b>${s.total}</b></span>`).join("")}</div></div>`);
   }
   if (!shown) out.push(`<div class="empty">${MINE ? "Tap ☆ next to a swimmer to follow them here." : q ? "No one matches that." : "No events yet."}</div>`);
   $("#main").innerHTML = out.join("");

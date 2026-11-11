@@ -14,7 +14,15 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
 header{background:var(--acc);color:#fff;padding:14px 16px 12px;position:sticky;top:0;z-index:5}
 @media (prefers-color-scheme:dark){header{background:#0b3a6e}}
-header h1{margin:0;font-size:19px;line-height:1.2}
+header h1{margin:0;font-size:19px;line-height:1.2;padding-right:92px}
+.share{position:absolute;top:12px;right:12px;border:0;border-radius:10px;padding:7px 12px;font-size:14px;font-weight:600;
+  background:rgba(255,255,255,.18);color:#fff;display:flex;align-items:center;gap:6px;cursor:pointer}
+.share svg{width:17px;height:17px}
+.sheet{position:fixed;inset:auto 0 0 0;z-index:20;background:var(--card);color:var(--ink);border-top:1px solid var(--line);
+  border-radius:16px 16px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.25)}
+.sheet a,.sheet button{display:block;width:100%;text-align:left;padding:13px 4px;font-size:16px;color:var(--ink);background:none;border:0;
+  border-bottom:1px solid var(--line);text-decoration:none;cursor:pointer}
+.sheet .x{color:var(--mute);text-align:center;border:0}
 header .sub{font-size:13px;opacity:.85;margin-top:2px}
 .bar{display:flex;gap:8px;margin-top:10px}
 .bar input{flex:1;min-width:0;border:0;border-radius:10px;padding:10px 12px;font-size:16px;background:#fff;color:#111}
@@ -59,6 +67,7 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
 </head>
 <body>
 <header>
+  <button class="share" id="share" aria-label="Send this page to someone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 3v13"/><path d="m7 8 5-5 5 5"/></svg>Share</button>
   <h1 id="mname">Swim results</h1>
   <div class="sub" id="msub">Loading…</div>
   <div class="bar"><input id="q" type="search" placeholder="Find a swimmer or team" autocomplete="off" enterkeyhint="search"><button id="mine" title="Show only swimmers you starred">★ Mine</button></div>
@@ -162,6 +171,29 @@ document.addEventListener("click", e => {
 });
 $("#q").addEventListener("input", () => D && render());
 $("#mine").addEventListener("click", () => { MINE = !MINE; $("#mine").classList.toggle("on", MINE); D && render(); });
+// Share: the phone's own share sheet (Messages, email, ...) when it has one; otherwise text / copy
+function shareText() { return "Live results" + (D && D.meet && D.meet.name ? " for " + D.meet.name : "") + ": " + location.href.split("#")[0].split("?")[0]; }
+$("#share").addEventListener("click", async () => {
+  const url = location.href.split("#")[0].split("?")[0];
+  if (navigator.share) {
+    try { await navigator.share({title: document.title, text: shareText().replace(": " + url, ""), url}); return; }
+    catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  const old = document.getElementById("sheet"); if (old) old.remove();
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent), body = encodeURIComponent(shareText());
+  const el = document.createElement("div");
+  el.className = "sheet"; el.id = "sheet";
+  el.innerHTML = `<a href="sms:${ios ? "&" : "?"}body=${body}">💬 Text it to someone</a>
+    <a href="mailto:?subject=${encodeURIComponent(document.title)}&body=${body}">✉️ Email it</a>
+    <button id="copyLink">🔗 Copy the link</button><button class="x" id="closeSheet">Close</button>`;
+  document.body.appendChild(el);
+  el.querySelector("#closeSheet").onclick = () => el.remove();
+  el.querySelector("#copyLink").onclick = async () => {
+    try { await navigator.clipboard.writeText(url); el.querySelector("#copyLink").textContent = "✓ Link copied"; }
+    catch (e) { prompt("Copy this link:", url); }
+    setTimeout(() => el.remove(), 900);
+  };
+});
 load();
 setInterval(load, 30000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });

@@ -274,7 +274,8 @@ def get_settings():
     pub = {k: v for k, v in st.items() if k not in ("drive_token", "public_token")}
     pub.setdefault("public_repo", public_results.DEFAULT_REPO)
     pub["public_token_set"] = bool(st.get("public_token"))
-    pub["public_url"] = public_results.site_url(pub["public_repo"], st.get("public_domain", ""))
+    pub.setdefault("public_domain", public_results.DEFAULT_DOMAIN)
+    pub["public_url"] = public_results.site_url(pub["public_repo"], pub["public_domain"])
     return {**pub, "current": cur, "seasons": sorted(seasons, reverse=True), "drive_write": bool(st.get("drive_url"))}
 
 
@@ -2140,7 +2141,7 @@ def _public_job(mid: str):
     if not st.get("public_token"):
         raise RuntimeError("Add a GitHub token in Setup > Phone results first")
     doc = _public_doc(mid)
-    out = public_results.publish(doc, st.get("public_repo") or public_results.DEFAULT_REPO, st["public_token"], st.get("public_domain", ""))
+    out = public_results.publish(doc, st.get("public_repo") or public_results.DEFAULT_REPO, st["public_token"], st.get("public_domain", public_results.DEFAULT_DOMAIN))
     _dblog(_dir(mid), f"Published phone results ({sum(1 for e in doc['events'] if e['rows'])} events) to {out['url']}", "export")
     return out
 
@@ -2179,7 +2180,7 @@ def public_status(mid: str):
     t = public_results.PUBLISHER.timer.get(mid)
     return {"last": public_results.PUBLISHER.status.get(mid), "queued": bool(t), "auto": bool(st.get("public_auto")),
             "token": bool(st.get("public_token")),
-            "url": public_results.site_url(st.get("public_repo") or public_results.DEFAULT_REPO, st.get("public_domain", ""))}
+            "url": public_results.site_url(st.get("public_repo") or public_results.DEFAULT_REPO, st.get("public_domain", public_results.DEFAULT_DOMAIN))}
 
 
 # ---- rules library ----

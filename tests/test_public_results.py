@@ -27,7 +27,7 @@ def test_files_and_url():
     f = pr.files({"meet": {"name": "x"}, "updated": "now"}, "swim.example.org")
     assert set(f) == {"index.html", "results.json", ".nojekyll", "robots.txt", "CNAME"} and f["CNAME"] == "swim.example.org\n"
     assert "Disallow: /" in f["robots.txt"] and 'name="robots" content="noindex' in f["index.html"]
-    assert pr.site_url("bryanhadzik/swim-results") == "https://bryanhadzik.github.io/swim-results/"
+    assert pr.site_url("bryanhadzik/swim-results") == "https://bryanhadzik.github.io/swim-results/" and pr.DEFAULT_DOMAIN == "swim.hadzik.org"
     assert pr.site_url("a/b", "swim.example.org") == "https://swim.example.org/"
 
 
@@ -42,6 +42,7 @@ def test_publish_has_no_history(monkeypatch):
     assert commit["parents"] == []
     ref = next(b for m, p, b in calls if m == "PATCH")
     assert ref["force"] is True
+    assert ("POST", "/repos/o/r/dispatches", {"event_type": "publish"}) in calls      # Actions deploy
 
 
 def test_throttle(monkeypatch):

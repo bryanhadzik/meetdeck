@@ -829,7 +829,7 @@ async function pubStatus() {
     if (!p.token) { st.className = "badge no"; st.textContent = "not set up"; $("#pubMsg").innerHTML = `Add a GitHub token in <a href="/#setup">Setup &rarr; Phone results</a>.`; return; }
     st.className = "badge " + (p.last && !p.last.ok ? "no" : "ok");
     st.textContent = p.queued ? "update queued" : p.last ? (p.last.ok ? "published " + p.last.at : "failed") : p.auto ? "auto" : "manual";
-    $("#pubMsg").textContent = p.last && !p.last.ok ? p.last.error : p.queued ? "The next update goes out within 6 minutes (GitHub Pages limit)." : p.auto ? "Publishes by itself after each scored race." : "";
+    $("#pubMsg").textContent = p.last && !p.last.ok ? p.last.error : p.queued ? "The next update goes out within a minute." : p.auto ? "Publishes by itself after each scored race." : "";
   } catch (e) {}
 }
 $("#pubSend").onclick = async () => {

@@ -20,7 +20,8 @@ import results as results_mod
 PAGE = Path(__file__).parent / "static" / "public-results.html"
 BRANCH = "gh-pages"
 DEFAULT_REPO = "bryanhadzik/swim-results"
-MIN_GAP = 360          # GitHub Pages rebuilds ~10 times an hour at most, so publish at most every 6 minutes
+MIN_GAP = 45           # a GitHub Actions deploy takes ~30-40 s; changes inside the gap go out together after it
+DEFAULT_DOMAIN = "swim.hadzik.org"
 
 
 def _date(s: str) -> str:
@@ -124,6 +125,7 @@ def publish(doc: dict, repo: str, token: str, domain: str = "") -> dict:
             raise
         _api(token, "POST", f"/repos/{repo}/git/refs", {"ref": f"refs/heads/{BRANCH}", "sha": commit["sha"]})
     _ensure_pages(repo, token, domain)
+    _api(token, "POST", f"/repos/{repo}/dispatches", {"event_type": "publish"})
     return {"url": site_url(repo, domain), "commit": commit["sha"][:7], "updated": doc["updated"]}
 
 
@@ -132,9 +134,9 @@ def _ensure_pages(repo: str, token: str, domain: str):
         _api(token, "GET", f"/repos/{repo}/pages")
     except RuntimeError:
         try:
-            _api(token, "POST", f"/repos/{repo}/pages", {"source": {"branch": BRANCH, "path": "/"}})
+            _api(token, "POST", f"/repos/{repo}/pages", {"build_type": "workflow"})
         except RuntimeError:
-            pass        # a token without Pages permission: turn Pages on once in the repo settings
+            pass        # a token without Pages permission: turn Pages on (Source: GitHub Actions) in the repo settings
 
 
 # ---- throttled auto-publish --------------------------------------------------------

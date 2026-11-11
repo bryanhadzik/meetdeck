@@ -385,13 +385,13 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   <section>
     <h2>Phone results</h2>
     <div class="muted" style="font-size:13px">A public, phone-friendly results page for spectators (no login, works on cellular). MeetDeck publishes it to
-      a GitHub Pages site after each scored race &mdash; at most every 6 minutes, because GitHub Pages rebuilds about 10 times an hour. Put the address on the board.</div>
+      a GitHub Pages site after each scored race; phones see it about a minute later. Put the address on the board.</div>
     <div class="row" style="margin-top:8px"><label>GitHub repository <input id="sPubRepo" placeholder="bryanhadzik/swim-results" style="width:220px"></label>
       <label>Short address <input id="sPubDom" placeholder="swim.example.org (optional)" style="width:200px"></label></div>
     <div class="row" style="margin-top:6px"><label>GitHub token <input id="sPubTok" type="password" placeholder="github_pat_…" style="width:260px" autocomplete="off"></label>
       <button class="small" id="sPubSave">Save</button><span class="muted" id="sPubMsg" style="font-size:13px"></span></div>
     <div class="muted" style="font-size:12.5px;margin-top:4px">Token: GitHub &rarr; Settings &rarr; Developer settings &rarr; Fine-grained tokens &rarr; only this repository,
-      permissions <b>Contents: read and write</b> (and <b>Pages: read and write</b> for the first publish). It stays on this computer.</div>
+      permission <b>Contents: read and write</b>. It stays on this computer.</div>
     <label class="row" style="margin-top:6px;font-size:13.5px"><input type="checkbox" id="sPubAuto"> Publish automatically after each scored race</label>
     <div class="row" style="margin-top:4px;font-size:13.5px">Spectators go to: <a id="sPubUrl" target="_blank" rel="noopener"></a></div>
   </section>

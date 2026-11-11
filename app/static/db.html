@@ -514,7 +514,7 @@ function usedSource(e) {
   const tm = [e.watch, e.watch2].filter(x => +x > 0);
   const tavg = tm.length ? Math.floor(tm.reduce((a, b) => a + Math.round(b * 100), 0) / tm.length) / 100 : 0;
   if (same(+e.pad, t)) return "Pad";
-  if (btn.some(b => same(+b, t)) || same(avg, t)) return "Button";
+  if (btn.some(b => same(+b, t)) || (avg && Math.abs(avg - t) < 0.015)) return "Button";
   if (tm.some(w => same(+w, t)) || same(tavg, t)) return "Timers";
   return "Manual";
 }
@@ -524,8 +524,37 @@ function usedBadge(e) {
   const parts = [["Pad", e.pad], ["Button", [e.backup, e.back2, e.back3].filter(x => +x > 0).map(fmt).join(" / ")], ["Timers", [e.watch, e.watch2].filter(x => +x > 0).map(fmt).join(" / ")]]
     .map(([k, v]) => `${k}: ${typeof v === "number" ? (v ? fmt(v) : "—") : (v || "—")}`).join(" · ");
   const col = {Pad: "var(--ok)", Button: "var(--accent)", Timers: "var(--warn)", Manual: "var(--muted)"}[src];
-  return ` <span class="used" title="${esc(parts)}${src === "Manual" ? " · typed in by hand" : ""}" style="display:inline-block;min-width:44px;font-size:11.5px;color:${col};border:1px solid currentColor;border-radius:9px;padding:0 6px;text-align:center">${src}</span>`;
+  return ` <span class="used" data-usedpick="${e.key}" title="${esc(parts)}${src === "Manual" ? " · typed in by hand" : ""} · click to use a different saved time" style="cursor:pointer;display:inline-block;min-width:44px;font-size:11.5px;color:${col};border:1px solid currentColor;border-radius:9px;padding:0 6px;text-align:center">${src} ▾</span>`;
 }
+// every saved time for an entry, to switch the official time later without retyping
+function savedTimes(e) {
+  const btn = [e.backup, e.back2, e.back3].filter(x => +x > 0), tm = [e.watch, e.watch2].filter(x => +x > 0);
+  const avg = a => a.length ? Math.floor(a.reduce((x, y) => x + Math.round(y * 100), 0) / a.length) / 100 : 0;
+  const out = [];
+  if (+e.pad) out.push(["Pad", +e.pad]);
+  if (btn.length) out.push([btn.length > 1 ? `Backup (avg of ${btn.length} buttons)` : "Backup", avg(btn)]);
+  btn.length > 1 && btn.forEach((b, i) => out.push([`Button ${i + 1} only`, +b]));
+  if (tm.length) out.push([tm.length > 1 ? "Watches (avg)" : "Watch", avg(tm)]);
+  return out;
+}
+function usedPicker(key, anchor) {
+  const e = M.entries.find(x => x.key === key); if (!e) return;
+  document.getElementById("usedPop")?.remove();
+  const opts = savedTimes(e);
+  if (!opts.length) return toast("No pad, button or watch times are saved for this swimmer - type the time in.");
+  const pop = document.createElement("div");
+  pop.id = "usedPop";
+  pop.style.cssText = "position:absolute;z-index:50;background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);padding:4px;font-size:13px";
+  pop.innerHTML = `<div class="muted" style="padding:4px 8px;font-size:12px">Official time (now ${esc(fmt(e.time) || "none")})</div>` +
+    opts.map(([k, t]) => `<button class="ghost small" data-usedset="${t}" style="display:block;width:100%;text-align:left${Math.abs(t - e.time) < 0.005 ? ";font-weight:700" : ""}">${esc(k)} &nbsp;<b>${esc(fmt(t))}</b></button>`).join("");
+  const r = anchor.getBoundingClientRect();
+  pop.style.left = (r.left + scrollX) + "px"; pop.style.top = (r.bottom + scrollY + 4) + "px";
+  document.body.appendChild(pop);
+  pop.onclick = ev => { const b = ev.target.closest("[data-usedset]"); if (!b) return; pop.remove();
+    change("result", {key, time_s: fmt(+b.dataset.usedset), stat: e.stat === "R" ? "" : e.stat, dq: e.dq}); };
+  setTimeout(() => document.addEventListener("click", function off(ev) { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener("click", off); } }), 0);
+}
+document.addEventListener("click", ev => { const u = ev.target.closest("[data-usedpick]"); if (u) { ev.stopPropagation(); usedPicker(u.dataset.usedpick, u); } }, true);
 function timerCells(e) {
   if (TIMERS() === 1) return `<input class="t" data-time="${e.key}" value="${esc(fmt(e.time))}" placeholder="time" title="Finals time">${usedBadge(e)}`;
   // two timers: keep both watch times; official = average with thousandths dropped (NFHS 6-4-1b)
@@ -952,10 +981,10 @@ async function getTimes(h) {
     const lanes = r.lanes.map(l => {
       const w = parseT((box.querySelector(`[data-watch="${h}-${l.lane}"]`) || {}).value), w2 = parseT((box.querySelector(`[data-watch2="${h}-${l.lane}"]`) || {}).value);
       const use = (box.querySelector(`[data-use="${h}-${l.lane}"]`) || {}).value || "pad";
-      return {lane: l.lane, pad: l.final, backup: l.backup, watch: isNaN(w) ? NaN : w, watch2: isNaN(w2) ? NaN : w2, use, place: l.place, splits: l.splits};
+      return {lane: l.lane, pad: l.final, backup: l.backup, buttons: (l.buttons || []).filter(b => b > 0), watch: isNaN(w) ? NaN : w, watch2: isNaN(w2) ? NaN : w2, use, place: l.place, splits: l.splits};
     });
     if (lanes.some(l => isNaN(l.watch) || isNaN(l.watch2))) return toast("Fix the watch time that isn't a time");
-    change("heat_results", {ptr: v.ptr, heat: h, overwrite: !document.getElementById(`tpKeep-${h}`).checked, lanes});
+    change("heat_results", {ptr: v.ptr, heat: h, overwrite: !document.getElementById(`tpKeep-${h}`).checked, lanes, raw: r});
   };
 }
 

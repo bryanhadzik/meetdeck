@@ -1,6 +1,7 @@
 import io
 import os
 import json
+from urllib.parse import quote
 import re
 import secrets
 import time
@@ -1898,8 +1899,10 @@ def db_op(mid: str, body: dict):
     if not fn:
         raise HTTPException(400, "unknown change")
     m = meetdb.load(db)
+    args = dict(body.get("args", {}))
+    raw = args.pop("raw", None)            # the console's whole reply for a heat, kept beside the meet
     try:
-        ops, msg = fn(m, **body.get("args", {}))
+        ops, msg = fn(m, **args)
     except (KeyError, ValueError) as e:
         raise HTTPException(400, str(e).strip("'"))
     if not ops:
@@ -1913,6 +1916,14 @@ def db_op(mid: str, body: dict):
                                      "server. Open the meet in the MeetDeck Windows app to change it (or save it in Meet Manager 8 format).")
         raise HTTPException(500, f"Database change failed: {e}")
     _dblog(d, msg)
+    if raw and body.get("op") == "heat_results":
+        try:
+            cdir = _dbdir(d) / "console"
+            cdir.mkdir(exist_ok=True)
+            (cdir / f"ev{int(args['ptr'])}-heat{int(args['heat'])}-{time.strftime('%Y%m%d-%H%M%S')}.json").write_text(
+                json.dumps({"saved": time.strftime("%Y-%m-%d %H:%M:%S"), "applied": args.get("lanes"), "console": raw}, indent=1))
+        except Exception as x:
+            print("console copy:", x)
     if body.get("op") == "meet":            # keep the meet list (name / date / location) in step with the database
         f = body.get("args", {}).get("fields", {})
         meta = _meta(d)
@@ -2215,6 +2226,27 @@ def rules_file(name: str):
     if not f.exists():
         raise HTTPException(404)
     return FileResponse(f, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{f.name}"'})
+
+
+@app.get("/rules/view/{name}")
+def rules_view(name: str, page: int = 1):
+    """A rules-library document opened at a page, as a normal page (the AO training links use this)."""
+    import html as _h
+    f = rules_mod.RULES / Path(name).name
+    title = _h.escape(Path(name).stem)
+    if not f.exists():
+        body = (f"<div style='max-width:620px;margin:60px auto;font:15px/1.5 system-ui,sans-serif;padding:0 16px'>"
+                f"<h2 style='margin:0 0 8px'>{title}</h2><p>This computer's Rules library doesn't have this document yet, so the "
+                f"slide can't be shown here.</p><p>Add the PDF on MeetDeck's <a href='/#rules'>Rules</a> tab (Add document) and this link "
+                f"will open it at the right page. The short summary in the AO training box still applies.</p></div>")
+        return Response(f"<!doctype html><meta charset='utf-8'><title>{title}</title>{body}", media_type="text/html", status_code=404)
+    src = f"/api/rules/file/{quote(f.name)}#page={max(1, int(page))}"
+    return Response(f"""<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title} - page {int(page)}</title><style>html,body{{margin:0;height:100%;font:14px system-ui,sans-serif}}
+.bar{{display:flex;gap:12px;align-items:center;padding:8px 14px;background:#0b6fa4;color:#fff}}.bar a{{color:#fff}}
+iframe{{border:0;width:100%;height:calc(100% - 38px)}}</style>
+<div class="bar"><b>{title}</b><span>page {int(page)}</span><span style="flex:1"></span><a href="{src}" target="_blank">Open the PDF</a><a href="/#rules">Rules library</a></div>
+<iframe src="{src}"></iframe>""", media_type="text/html")
 
 
 FONT_NAMES = {"cambria.ttc", "cambriab.ttf"}

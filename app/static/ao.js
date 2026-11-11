@@ -50,9 +50,9 @@
   window.AO_DOC = DOC;
   window.aoTip = function (key, open) {
     const x = T[key]; if (!x) return "";
-    const href = `/api/rules/file/${encodeURIComponent(DOC)}#page=${page(x.s[0])}`;
+    const href = `/rules/view/${encodeURIComponent(DOC)}?page=${page(x.s[0])}`;
     return `<details class="aotip"${open ? " open" : ""}><summary><span class="aotag">AO training</span> ${x.t}</summary><ul>${x.p.map(p => `<li>${p}</li>`).join("")}</ul>
-      <div class="aosrc">UHSAA AO Training 2026&ndash;27, ${x.s.map(n => `<a href="/api/rules/file/${encodeURIComponent(DOC)}#page=${page(n)}" target="_blank">slide ${n}</a>`).join(", ")}</div></details>`;
+      <div class="aosrc">UHSAA AO Training 2026&ndash;27, ${x.s.map(n => `<a href="/rules/view/${encodeURIComponent(DOC)}?page=${page(n)}" target="_blank">slide ${n}</a>`).join(", ")}</div></details>`;
   };
   const css = document.createElement("style");
   css.textContent = `.aotip{border-left:3px solid #c08a00;background:rgba(192,138,0,.08);border-radius:6px;padding:4px 10px;margin:6px 0;font-size:13px;line-height:1.4}

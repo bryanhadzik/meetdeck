@@ -370,7 +370,12 @@ def op_heat_results(m, ptr, heat, lanes, overwrite=True):
         if use != "pad" and final:
             used.append(f"lane {e['lane']} {'backup' if use == 'backup' else 'timers'}")
         stat = "R" if not final else ("Q" if int(ln.get("place") or 0) == -1 else "")
-        s = {"Fin_Time": final, "Fin_pad": pad, "Fin_back1": backup, "Fin_watch1": w1 or (w2 if not w1 else 0), "Sem_watch1": w2 if w1 else 0,
+        # keep every time the console and the timers gave, so the official time can be changed later:
+        # each button in Fin_back1-3 (the console's backup when it sent no buttons), both watches
+        btns = [float(b) for b in (ln.get("buttons") or []) if b][:3] or ([backup] if backup else [])
+        btns += [0] * (3 - len(btns))
+        s = {"Fin_Time": final, "Fin_pad": pad, "Fin_back1": btns[0], "Fin_back2": btns[1], "Fin_back3": btns[2],
+             "Fin_watch1": w1 or (w2 if not w1 else 0), "Sem_watch1": w2 if w1 else 0,
              "Fin_stat": stat or " ", "Fin_course": "Y"}
         ops.append({"op": "update", "table": _table(e), "match": _match(e), "set": s})
         override[e["key"]] = {**e, "time": final, "stat": stat}

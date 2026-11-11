@@ -987,6 +987,23 @@ document.addEventListener("click", async ev => {
 });
 $("#seedResetAll").onclick = async () => { if (!confirm("Undo every hand move and go back to the automatic seeding?")) return; M = await api(`/api/meets/${M.id}/seed-move`, J("POST", {reset: true})); SEED_PICK = null; render(); };
 const swName = k => { const s = M.swimmers[k]; return s ? `${s.first} ${s.last}` : k; };
+// entry problems grouped by team (errors first inside each team); problems that aren't one team's go under "Whole meet"
+function issuesByTeam(byId) {
+  const one = i => `<div class="issue ${i.level}"><b>${esc(i.msg)}</b>${i.rule ? `<div class="muted" style="font-size:12px">Rule: ${esc(i.rule)}</div>` : ""}
+      <div class="ents">${i.entries.map(id => byId[id]).filter(Boolean).map(e => `<div class="ent"><span>${esc(entLabel(e))}${e.kind === "relay" ? " — " + esc(e.swimmers.map(swName).join(", ")) : ""}</span>
+      <button class="small" data-${e.added ? "rmadd" : "rm"}="${esc(e.id)}">Remove entry</button></div>`).join("")}</div></div>`;
+  const teamOf = i => (i.teams && i.teams.length === 1 ? i.teams[0] : null) || (() => { const t = [...new Set(i.entries.map(id => byId[id]?.team).filter(Boolean))]; return t.length === 1 ? t[0] : ""; })();
+  const groups = new Map();
+  M.issues.forEach(i => { const t = teamOf(i); if (!groups.has(t)) groups.set(t, []); groups.get(t).push(i); });
+  const name = t => t ? ((M.teams[t] && M.teams[t].name) || t) : "Whole meet";
+  return [...groups.entries()].sort((a, b) => (a[0] === "") - (b[0] === "") || name(a[0]).localeCompare(name(b[0]))).map(([t, list]) => {
+    list.sort((a, b) => (a.level !== "error") - (b.level !== "error"));
+    const ne = list.filter(i => i.level === "error").length, nw = list.length - ne;
+    return `<details open style="margin-bottom:10px"><summary style="font-weight:700;font-size:15px;cursor:pointer;padding:4px 0">${esc(name(t))}
+      <span class="muted" style="font-weight:400;font-size:13px">&middot; ${ne ? `<span style="color:var(--err)">${ne} error${ne > 1 ? "s" : ""}</span>` : ""}${ne && nw ? ", " : ""}${nw ? `${nw} warning${nw > 1 ? "s" : ""}` : ""}</span></summary>
+      ${list.map(one).join("")}</details>`;
+  }).join("");
+}
 const entLabel = e => `#${e.event_no} ${e.event}` + (e.kind === "relay" ? ` (${e.relay})` : "") + ` · ${e.seed_fmt}` + (e.exhibition ? " · exh" : "");
 
 function chip(e) {
@@ -1063,9 +1080,7 @@ function render() {
   const byId = Object.fromEntries(M.entries.map(e => [e.id, e]));
   const errs = M.issues.filter(i => i.level === "error").length;
   $("#issues").innerHTML = !M.entries.length ? `<div class="muted">Upload entries to check them.</div>` :
-    M.issues.length ? M.issues.map(i => `<div class="issue ${i.level}"><b>${esc(i.msg)}</b>${i.rule ? `<div class="muted" style="font-size:12px">Rule: ${esc(i.rule)}</div>` : ""}
-      <div class="ents">${i.entries.map(id => byId[id]).map(e => `<div class="ent"><span>${esc(entLabel(e))}${e.kind === "relay" ? " — " + esc(e.swimmers.map(swName).join(", ")) : ""}</span>
-      <button class="small" data-${e.added ? "rmadd" : "rm"}="${esc(e.id)}">Remove entry</button></div>`).join("")}</div></div>`).join("")
+    M.issues.length ? issuesByTeam(byId)
     : `<div class="okbox">All ${M.entries.filter(e => !e.removed).length} entries pass the rules.</div>`;
   $("#coachMsgs").innerHTML = !M.coach_msgs.length ? "" : `<h3>Messages to coaches</h3>
     <div class="muted" style="font-size:13px;margin-bottom:6px">One per team with something to fix. Edit if you like, then copy into your reply.</div>` +

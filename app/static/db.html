@@ -506,6 +506,17 @@ function parseTime(x) {
   const p = x.split(":"), v = p.length > 1 ? (+p[0]) * 60 + (+p[1]) : +p[0];
   return isNaN(v) ? NaN : Math.round(v * 100) / 100;
 }
+// lanes in the order they touched, the way the referee writes it on the paperwork: 5, 4, 2, 6, 1, 3
+function finishOrder(ents) {
+  const done = ents.filter(e => !e.scr && e.lane && +e.time > 0).sort((a, b) => a.time - b.time || a.lane - b.lane);
+  if (!done.length) return "";
+  const dq = e => ["Q", "F", "D"].includes((e.stat || "").trim());
+  const parts = done.map((e, i) => {
+    const tie = (i && Math.abs(done[i - 1].time - e.time) < 0.005) ? " title=\"tied with the lane before\"" : "";
+    return `<span${tie} style="${dq(e) ? "color:var(--err);text-decoration:line-through" : ""}">${e.lane}${tie ? "=" : ""}</span>`;
+  });
+  return `<div class="muted" style="font-size:13px;margin:4px 0 2px">Finish order (lanes): <b style="color:var(--ink);font-size:15px;letter-spacing:.02em">${parts.join(", ")}</b>${done.some(dq) ? ` <span style="font-size:12px">(struck through = DQ)</span>` : ""}</div>`;
+}
 function raceBox(v, h) {
   const k = `${v.ptr}:${h}`, n = (S.races || {})[k] || "", manual = (S.race_overrides || {})[k];
   return `<label class="muted" style="font-weight:400;font-size:12.5px" title="Console race number for this heat. Change it and the heats after it count up from here. Clear it to go back to automatic.">Race
@@ -632,7 +643,7 @@ function renderEvent() {
     const hs = heatState(act.filter(e => e.heat === h));
     const hpill = hs.cls === "done" ? `<span class="pill timed">Timed</span>` : hs.cls === "part" ? `<span class="pill prog">${hs.r} of ${hs.n} lanes</span>` : `<span class="pill none">Waiting</span>`;
     html += `<div class="heat"><h3>Heat ${h} of ${heats.filter(x => x).length} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button>${act.some(e => e.heat === h && (+e.pad > 0 || +e.backup > 0)) ? ` <button class="ghost small" data-savedtimes="${h}" title="Open this heat's saved pad and backup button times again - to enter watch times or change which time counts - without asking the console">Enter watches</button>` : ""}</h3><div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1, h)).join("")}
-      ${inHeat.filter(e => !e.lane || e.lane > lanes).map(e => row(e)).join("")}</table></div>`;
+      ${inHeat.filter(e => !e.lane || e.lane > lanes).map(e => row(e)).join("")}</table>${finishOrder(inHeat)}</div>`;
   }
   if (MOVING) {   // an empty heat to drag swimmers into
     const nh = Math.max(0, ...heats) + 1;

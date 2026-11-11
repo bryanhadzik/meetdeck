@@ -245,7 +245,8 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <div id="tbDbNote"></div>
       <div id="tbProblems"></div>
       <div id="tbSwimmers" class="scroll"></div>
-      <h3 style="margin-top:14px">Relays <a class="chip addc" style="font-weight:400" id="tbAddRelay">+ Add relay</a></h3>
+      <h3 style="margin-top:14px">Relays <a class="chip addc" style="font-weight:400" id="tbAddRelay">+ Add relay</a>
+        <select id="tbRelFilter" style="font-size:13px;font-weight:400;margin-left:8px" title="Show only some relays"></select></h3>
       <div id="tbAddRelayBox"></div>
       <div id="tbRelays"></div>
     </section>
@@ -1144,13 +1145,16 @@ function render() {
 let TB = {team: recall("tbTeam") || "", open: null, flash: null};
 // Meets with a meet database (opened from Meet Manager, or already built): read and change the database itself.
 let TV = null, TV_LOADING = false;
+// the entries above, in short: when they change, the meet-database view reloads (and picks the changes up)
+const tvSig = () => M ? M.entries.map(e => e.id + (e.removed ? "x" : "") + JSON.stringify(e.legs || {})).join(";") : "";
 const TD = () => (TV && M && TV.id === M.id && M.has_db) ? TV : M;
 const tbEvents = kind => TD() === M ? meetEvents(kind) : TV.events.filter(v => v.kind === kind);
 const tbName = k => { const s = TD().swimmers[k]; return s ? `${s.first} ${s.last}` : k; };
 async function tvLoad() {
   if (!M || !M.has_db) { TV = null; return; }
   const id = M.id; TV_LOADING = true;
-  try { const t = await api(`/api/meets/${id}/table`); if (M && M.id === id) { TV = t; renderTable(); } } catch (e) { TV = null; }
+  const sig = tvSig();
+  try { const t = await api(`/api/meets/${id}/table`); if (M && M.id === id) { TV = t; TV._msig = sig; if (t.synced) TB.note = t.synced; renderTable(); } } catch (e) { TV = null; }
   TV_LOADING = false;
 }
 async function tbDb(op, args, flash) {
@@ -1172,6 +1176,7 @@ async function tbCall(url, opts, flash) {
   catch (x) { alert(x.message); }
 }
 function renderTable() {
+  if (M.has_db && TV && TV.id === M.id && TV._msig !== tvSig() && !TV_LOADING) { tvLoad(); }
   if (M.has_db && TD() === M) { $("#tbSwimmers").innerHTML = `<div class="muted">Loading the meet database…</div>`; $("#tbRelays").innerHTML = ""; $("#tbProblems").innerHTML = ""; if (!TV_LOADING) tvLoad(); return; }
   const sel = $("#tbTeam"), codes = TD().lanes.order.length ? TD().lanes.order : Object.keys(TD().teams);
   if (!codes.length) { $("#tbSwimmers").innerHTML = `<div class="muted">Upload entries first.</div>`; $("#tbRelays").innerHTML = ""; $("#tbProblems").innerHTML = ""; return; }
@@ -1179,7 +1184,8 @@ function renderTable() {
   const opts = codes.map(c => `<option value="${esc(c)}">${esc(TD().teams[c]?.name || c)} (${esc(c)})</option>`).join("");
   if (sel.dataset.k !== opts) { sel.innerHTML = opts; sel.dataset.k = opts; }
   sel.value = TB.team;
-  $("#tbDbNote").innerHTML = M.has_db ? `<div class="okbox" style="font-size:13px;margin-bottom:8px">Changes here go straight into the meet database${(M.files || []).length ? "" : " (opened from Meet Manager)"}. Every change is logged and can be undone in <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> &rarr; Changes. A swimmer or relay added here has no heat yet &mdash; place them in Seeding below or in Run the meet.</div>` : "";
+  $("#tbDbNote").innerHTML = M.has_db ? `<div class="okbox" style="font-size:13px;margin-bottom:8px">Changes here go straight into the meet database${(M.files || []).length ? "" : " (opened from Meet Manager)"}. Every change is logged and can be undone in <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> &rarr; Changes. A swimmer or relay added here has no heat yet &mdash; place them in Seeding below or in Run the meet.${(M.files || []).length ? ` Changes to the entries above (new files, removed entries, relay swimmers) are brought in automatically.` : ""}</div>` +
+    (TB.note ? `<div class="okbox" style="font-size:13px;margin-bottom:8px;background:var(--ok-bg, #e6f5ec)"><b>${esc(TB.note)}.</b> New entries have no heat yet.</div>` : "") : "";
   // problems for this team, each one a link to the swimmer or relay to fix
   const probs = tbIssues();
   $("#tbProblems").innerHTML = !probs.length ? `<div class="okbox" style="font-size:13px;margin-bottom:8px">No problems for ${esc(TD().teams[TB.team]?.name || TB.team)}.</div>` :
@@ -1221,9 +1227,22 @@ function renderTable() {
     </div></td></tr>`;
   }).join("") + `</table>` + (sws.length ? "" : `<div class="muted">No swimmers match.</div>`);
   // relays
-  const rels = TD().entries.filter(e => e.kind === "relay" && e.team === TB.team).sort((a, b) => (+a.event_no) - (+b.event_no) || (a.relay || "").localeCompare(b.relay || ""));
+  const allRels = TD().entries.filter(e => e.kind === "relay" && e.team === TB.team).sort((a, b) => (+a.event_no) - (+b.event_no) || (a.relay || "").localeCompare(b.relay || ""));
+  // filter: one relay event, girls / boys, or relays with a problem / with an empty leg
+  const rf = $("#tbRelFilter"), evs2 = [...new Map(allRels.map(e => [e.event_no, e.event])).entries()];
+  const fopts = `<option value="">All relays (${allRels.length})</option><option value="g:F">Girls</option><option value="g:M">Boys</option>` +
+    `<option value="bad">With a problem</option><option value="open">With an empty leg</option>` +
+    evs2.map(([no, name]) => `<option value="e:${esc(no)}">#${esc(no)} ${esc(name)}</option>`).join("");
+  if (rf.dataset.k !== fopts) { rf.innerHTML = fopts; rf.dataset.k = fopts; rf.value = TB.relf || ""; if (rf.value !== (TB.relf || "")) TB.relf = ""; }
+  const relBad = e => TD().issues.some(i => i.entries.includes(e.id));
+  const rels = allRels.filter(e => { const f = TB.relf || ""; if (!f) return true;
+    if (f.startsWith("g:")) return gNorm(e.gender) === f.slice(2);
+    if (f.startsWith("e:")) return String(e.event_no) === f.slice(2);
+    if (f === "bad") return !e.removed && relBad(e);
+    if (f === "open") return !e.removed && relayLegs(e).some(k => !k);
+    return true; });
   const teamSw = Object.values(TD().swimmers).filter(s => s.team === TB.team).sort((a, b) => a.last.localeCompare(b.last) || a.first.localeCompare(b.first));
-  $("#tbRelays").innerHTML = !rels.length ? `<div class="muted">No relays for this team.</div>` : `<div class="rgrid">` + rels.map(e => {
+  $("#tbRelays").innerHTML = !rels.length ? `<div class="muted">${allRels.length ? "No relays match the filter." : "No relays for this team."}</div>` : `<div class="rgrid">` + rels.map(e => {
     const legs = relayLegs(e), why = TD().issues.filter(i => i.entries.includes(e.id) && (!i.swimmer || legs.includes(i.swimmer)));
     const g = gNorm(e.gender), medley = /Medley/.test(e.event);
     const pool = teamSw.filter(s => !s.gender || g === "X" || s.gender === g);
@@ -1297,6 +1316,7 @@ document.addEventListener("drop", async ev => {
 });
 $("#tbTeam").onchange = e => { TB.team = e.target.value; TB.open = null; store("tbTeam", TB.team); $("#tbFind").value = ""; renderTable(); };
 $("#tbFind").oninput = () => { TB.open = null; renderTable(); };
+$("#tbRelFilter").onchange = e => { TB.relf = e.target.value; renderTable(); };
 $("#tbAddRelay").onclick = () => {
   const evs = tbEvents("relay");
   $("#tbAddRelayBox").innerHTML = !evs.length ? `<div class="muted">No relay events in this meet yet.</div>` : `<div class="addform"><select id="tbRelEv">${evs.map(v => `<option value="${esc(v.no)}">#${esc(v.no)} ${esc(v.name)}</option>`).join("")}</select>

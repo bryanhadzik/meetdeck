@@ -839,12 +839,38 @@ def _table_view(d: Path) -> dict:
             "rules": rules, "lanes": {"order": order}, "events": events}
 
 
+def _sync_db(d: Path) -> str | None:
+    """A database built from the team entries picks up what changed in the entries since (see dbsync)."""
+    import dbsync
+    info = _dbinfo(d)
+    if info.get("source") != "built from the team entries" or _jet3(_dbfile(d)):
+        return None
+    st = _state(d)
+    msg = None
+    try:
+        p = dbsync.plan(st, meetdb.load(_dbfile(d)), info.get("entries_base"))
+        if dbsync.count(p):
+            _snapshot(d, "before: bringing in entry changes")
+            done = dbsync.apply(_dbfile(d), p)
+            if done:
+                msg = "Brought the latest entry changes into the meet database: " + ", ".join(done)
+                _dblog(d, msg)
+    except Exception as x:          # never block the table over a sync problem
+        print("db sync:", x)
+        return None
+    info = _dbinfo(d)
+    info["entries_base"] = dbsync.baseline(dbsync.entry_sigs(st))
+    (_dbdir(d) / "info.json").write_text(json.dumps(info))
+    return msg
+
+
 @app.get("/api/meets/{mid}/table")
 def table_view(mid: str):
     d = _dir(mid)
     if not _dbfile(d).exists():
         raise HTTPException(400, "No meet database yet")
-    return _table_view(d)
+    msg = _sync_db(d)
+    return {**_table_view(d), "synced": msg}
 
 
 def _db_apply(d: Path, ops: list, msg: str):
@@ -1744,6 +1770,10 @@ def db_create(mid: str):
         (Path(tmp) / "b.zip").write_bytes(data)
         mdb_name, mdb, hyb = _unpack(Path(tmp) / "b.zip")
     _install_db(d, mdb_name, mdb, hyb, "built from the team entries")
+    import dbsync                      # what the entries looked like when built; later changes get synced in
+    info = _dbinfo(d)
+    info["entries_base"] = dbsync.baseline(dbsync.entry_sigs(_state(d)))
+    (_dbdir(d) / "info.json").write_text(json.dumps(info))
     return db_get(mid)
 
 

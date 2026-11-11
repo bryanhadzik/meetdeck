@@ -2156,6 +2156,26 @@ def db_export(mid: str, fmt: str):
 
 # ---- public phone results (GitHub Pages) ----
 import public_results  # noqa: E402
+import utahswimcoach  # noqa: E402
+
+_usc = utahswimcoach.Store(DATA_ROOT)
+_usc.refresh()
+
+
+@app.get("/api/statecoach")
+def statecoach_status():
+    return {**_usc.status(), "on": _settings().get("usc_on", True)}
+
+
+@app.post("/api/statecoach")
+def statecoach_set(body: dict):
+    if "on" in body:
+        st = _settings()
+        st["usc_on"] = bool(body["on"])
+        _write_settings(st)
+    if body.get("refresh"):
+        _usc.refresh(force=True, wait=bool(body.get("wait")))
+    return statecoach_status()
 
 
 def _stream_link() -> dict | None:
@@ -2177,7 +2197,8 @@ def _public_doc(mid: str) -> dict:
     db = _dbfile(d)
     if not db.exists():
         raise HTTPException(400, "No meet database yet - open Run the meet first")
-    doc = public_results.build(meetdb.load(db), _dbinfo(d).get("scoring"))
+    _usc.refresh()
+    doc = public_results.build(meetdb.load(db), _dbinfo(d).get("scoring"), _usc if _settings().get("usc_on", True) else None)
     doc["stream"] = _stream_link()
     return doc
 
@@ -2472,7 +2493,7 @@ def _meetboard_doc(mid: str) -> dict:
     if not _dbfile(d).exists():
         raise HTTPException(400, "No meet database yet - open Run the meet first")
     import updater as _up
-    return meetboard.startlist(meetdb.load(_dbfile(d)), f"MeetDeck {_up.version()}")
+    return meetboard.startlist(meetdb.load(_dbfile(d)), f"MeetDeck {_up.version()}", _usc if _settings().get("usc_on", True) else None)
 
 
 @app.get("/api/meets/{mid}/meetboard.json")

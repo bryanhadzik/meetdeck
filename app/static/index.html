@@ -397,6 +397,14 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     <div class="row" style="margin-top:4px;font-size:13.5px">Spectators go to: <a id="sPubUrl" target="_blank" rel="noopener"></a></div>
   </section>
   <section>
+    <h2>State standings</h2>
+    <div class="muted" style="font-size:13px">This season's Utah high school top times from <a href="https://utahswimcoach.com/" target="_blank" rel="noopener">utahswimcoach.com</a>
+      (updated about weekly; MeetDeck checks once a day). Phone results show each swimmer's class rank and season best, &ldquo;Season best&rdquo; / &ldquo;Now #8 in 4A&rdquo;
+      after a swim, and each event's #1, state line (#32, #20 relays) and record. Start lists sent to meet-board carry the ranks for the blocks.</div>
+    <label class="row" style="margin-top:6px;font-size:13.5px"><input type="checkbox" id="sUscOn"> Use state standings</label>
+    <div class="row" style="margin-top:4px;font-size:13.5px"><span id="sUscStat" class="muted"></span><button class="ghost small" id="sUscRef">Check now</button></div>
+  </section>
+  <section>
     <h2>Timing</h2>
     <div class="row"><label>Highlight a lane when pad, backup button and timers times differ by more than
       <input id="sTol" type="number" step="0.01" min="0.01" max="5" style="width:80px"> seconds</label>
@@ -868,6 +876,16 @@ $("#sPubSave").onclick = async () => {
     $("#sPubTok").placeholder = SET.public_token_set ? "saved (type to replace)" : "github_pat_…"; $("#sPubUrl").textContent = $("#sPubUrl").href = SET.public_url; }
   catch (e) { $("#sPubMsg").textContent = e.message; }
 };
+async function uscShow(d) {
+  d = d || await api("/api/statecoach");
+  $("#sUscOn").checked = d.on !== false;
+  const n = Object.entries(d.classes || {}).filter(([, v]) => v).map(([c, v]) => `${c} ${v}`).join(", ");
+  $("#sUscStat").textContent = d.busy ? "Downloading…" : d.error ? `Couldn't download: ${d.error}` + (d.fetched_at ? ` (using ${d.fetched_at.replace("T", " ")})` : "")
+    : d.fetched_at ? `${d.season.slice(0, 2)}-${d.season.slice(2)} season, checked ${d.fetched_at.replace("T", " ")} (${n} times)` : "Not downloaded yet";
+}
+$("#sUscOn").onchange = async () => uscShow(await api("/api/statecoach", J("POST", {on: $("#sUscOn").checked})));
+$("#sUscRef").onclick = async () => { $("#sUscStat").textContent = "Downloading…"; uscShow(await api("/api/statecoach", J("POST", {refresh: true, wait: true}))); };
+uscShow().catch(() => {});
 $("#sPubAuto").onchange = async () => {
   try { SET = await api("/api/settings", J("PUT", {public_auto: $("#sPubAuto").checked})); $("#sPubMsg").textContent = SET.public_auto ? "Auto-publish on" : "Auto-publish off"; }
   catch (e) { $("#sPubMsg").textContent = e.message; }

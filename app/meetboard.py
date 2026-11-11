@@ -33,7 +33,7 @@ def normalize_url(u: str) -> str:
     return base
 
 
-def startlist(m: dict, source: str = "MeetDeck") -> dict:
+def startlist(m: dict, source: str = "MeetDeck", store=None) -> dict:
     """The meet's start lists from a meetdb.load() model. Scratched and unseeded entries are left out."""
     teams, aths = m["teams"], m["athletes"]
     course = "Y"
@@ -42,8 +42,11 @@ def startlist(m: dict, source: str = "MeetDeck") -> dict:
         break
     used_teams = set()
     events = []
+    import public_results
     for v in m["events"]:                     # already in session order
         heats = {}
+        k = public_results._ev_key(v) if store else None
+        classes = []
         for e in m["entries"]:
             if e["event"] != v["ptr"] or e["scr"] or not e.get("heat") or not e.get("lane"):
                 continue
@@ -61,6 +64,17 @@ def startlist(m: dict, source: str = "MeetDeck") -> dict:
                              "age": a.get("age") or 0, "sex": a.get("sex", "")})
                 if e.get("exh"):
                     lane["exhibition"] = True
+            if k:
+                if e["kind"] == "R":
+                    st = store.standing(k, t.get("name", "")) if (e.get("ltr") or "A") == "A" else {"cls": store.school_class(t.get("name", ""))}
+                else:
+                    a = aths.get(e.get("ath")) or {}
+                    st = store.standing(k, t.get("name", ""), a.get("last", ""), a.get("first") or a.get("pref", ""))
+                if st and st.get("cls"):
+                    if st["cls"] not in classes:
+                        classes.append(st["cls"])
+                    if st.get("rank"):
+                        lane["state"] = {"cls": st["cls"], "rank": st["rank"], "sb": st["sb"]}
             heats.setdefault(int(e["heat"]), []).append(lane)
         if not heats:
             continue
@@ -69,6 +83,9 @@ def startlist(m: dict, source: str = "MeetDeck") -> dict:
             "stroke": v.get("stroke", ""), "relay": v.get("ind_rel") == "R", "course": course,
             "heats": [{"heat": h, "lanes": sorted(ls, key=lambda x: x["lane"])} for h, ls in sorted(heats.items())],
         })
+        if k and classes:
+            # this season's state line / #1 / record per class swimming the event (utahswimcoach.com)
+            events[-1]["state_now"] = [x for x in (store.event_line(k, c) for c in classes) if x]
     meet = m.get("meet") or {}
     return {
         "format": FORMAT, "version": 1, "source": source,
@@ -76,6 +93,8 @@ def startlist(m: dict, source: str = "MeetDeck") -> dict:
         "teams": {(teams.get(t) or {}).get("abbr", ""): (teams.get(t) or {}).get("name", "")
                   for t in used_teams if (teams.get(t) or {}).get("abbr")},
         "events": events,
+        **({"state_src": {"name": "utahswimcoach.com", "season": store.data.get("season", ""), "as_of": store.data.get("fetched_at", "")}}
+           if store and store.data else {}),
     }
 
 

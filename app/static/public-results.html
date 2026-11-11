@@ -67,6 +67,13 @@ main{padding:12px;max-width:720px;margin:0 auto}
 .r.me{background:color-mix(in srgb,var(--star) 14%,transparent)}
 .star{background:none;border:0;padding:0 0 0 4px;font-size:16px;color:var(--mute);cursor:pointer;vertical-align:-1px}
 .star.on{color:var(--star)}
+.r .st{font-size:12px;color:var(--mute);margin-top:2px;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}
+.chip{display:inline-block;border-radius:6px;padding:0 6px;font-size:11.5px;font-weight:700;line-height:18px;background:var(--acc2);color:var(--acc)}
+.chip.pb{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.chip.state{background:color-mix(in srgb,var(--star) 22%,transparent);color:var(--star)}
+.sl{padding:8px 14px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--mute);background:color-mix(in srgb,var(--acc2) 45%,transparent)}
+.sl b{color:var(--ink);font-variant-numeric:tabular-nums}
+.sl div+div{margin-top:3px}
 .empty{padding:28px 16px;text-align:center;color:var(--mute)}
 .ytl a{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--line);color:var(--ink);text-decoration:none}
 .ytl .dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto}
@@ -162,10 +169,13 @@ function render() {
       <button class="ev" data-tog="${esc(v.no)}"><span class="no">${esc(v.no)}</span>
         <span class="t"><div>${esc(v.label)}${isNew ? `<span class="pill new">${D.latest == v.no ? "LATEST" : "NEW"}</span>` : done ? "" : `<span class="pill wait">upcoming</span>`}</div><div class="meta">${meta}</div></span>
         <span class="chev">›</span></button>
-      <div class="rows">${done ? rows.map(r => rowHtml(r)).join("") : `<div class="empty" style="padding:14px">No results yet.</div>`}</div></div>`);
+      <div class="rows">${done ? stateLines(v) + rows.map(r => rowHtml(r)).join("") : `<div class="empty" style="padding:14px">No results yet.</div>`}</div></div>`);
   }
   if (!shown) out.push(`<div class="empty">${MINE ? "Tap ☆ next to a swimmer to follow them here." : q ? "No one matches that." : "No events yet."}</div>`);
   $("#main").innerHTML = out.join("");
+  const src = D.state_src;
+  $("#foot").innerHTML = "Updates on its own every 30 seconds. ▼ = time dropped from the seed time, ▲ = added." +
+    (src ? `<br>State standings (#rank in class, SB = season best) from <a href="${esc(src.url)}" target="_blank" rel="noopener">${esc(src.name)}</a>${src.as_of ? ", checked " + esc(src.as_of.replace("T", " ")) : ""}. Top 32 per event (20 relays) go to state.` : "");
 }
 
 // seed time, and how much faster (dropped) or slower (added) the swim was
@@ -175,11 +185,25 @@ function seedLine(r) {
   const ch = d == null ? "" : d > 0 ? ` <span class="dn">▼ ${d.toFixed(2)}</span>` : d < 0 ? ` <span class="up">▲ ${(-d).toFixed(2)}</span>` : ` <span class="up">±0.00</span>`;
   return `<div class="sd">Seed ${esc(r.seed)}${ch}</div>`;
 }
+// this season's Utah HS standings (utahswimcoach.com): times in seconds
+function ft(v) { if (!v) return ""; const m = Math.floor(v / 60), x = v - m * 60; return m ? `${m}:${x.toFixed(2).padStart(5, "0")}` : x.toFixed(2); }
+function stateLines(v) {
+  if (!v.state || !v.state.length) return "";
+  return `<div class="sl">${v.state.map(x => `<div><b>${esc(x.cls)}</b> this season: #1 <b>${ft(x.top)}</b>${x.top_by ? ` ${esc(x.top_by)}` : ""}${x.line ? ` &middot; #${x.spots} (state line) <b>${ft(x.line)}</b>` : ""}${x.record ? ` &middot; record <b>${ft(x.record)}</b> ${esc(x.record_by.split(",").length > 1 ? x.record_school : x.record_by)} ${esc(x.record_year || "")}` : ""}</div>`).join("")}</div>`;
+}
+function stateRow(r) {
+  const s = r.st; if (!s || !s.cls) return "";
+  const out = [];
+  if (s.rank) out.push(`<span>${esc(s.cls)} #${s.rank} &middot; SB ${ft(s.sb)}</span>`);
+  if (s.best) out.push(`<span class="chip pb">Season best</span>`);
+  if (s.now && (!s.rank || s.now < s.rank)) out.push(`<span class="chip ${s.now <= (s.spots || 32) ? "state" : ""}">Now #${s.now} in ${esc(s.cls)}</span>`);
+  return out.length ? `<div class="st">${out.join("")}</div>` : "";
+}
 function rowHtml(r) {
   const k = starKey(r), on = STARS.has(k), dq = /^(DQ|NS)/.test(r.result || "");
   return `<div class="r ${on ? "me" : ""}"><div class="pl">${esc(r.place || "–")}</div>
     <div><div class="nm">${esc(r.name)}${r.yr ? ` <small>${esc(r.yr)}</small>` : ""}${r.exh ? ` <small>(exh)</small>` : ""}<button class="star ${on ? "on" : ""}" data-star="${esc(k)}" aria-label="follow">${on ? "★" : "☆"}</button></div>
-      <div class="tm">${esc(r.team_name || r.team)}</div>${r.legs ? `<div class="legs">${esc(r.legs)}</div>` : ""}${r.dqtxt ? `<div class="legs dq">${esc(r.dqtxt)}</div>` : ""}</div>
+      <div class="tm">${esc(r.team_name || r.team)}</div>${r.legs ? `<div class="legs">${esc(r.legs)}</div>` : ""}${r.dqtxt ? `<div class="legs dq">${esc(r.dqtxt)}</div>` : ""}${stateRow(r)}</div>
     <div><div class="res ${dq ? "dq" : ""}">${esc(r.result || "")}</div>${seedLine(r)}${r.points ? `<div class="pts">${esc(r.points)} pts</div>` : ""}</div></div>`;
 }
 

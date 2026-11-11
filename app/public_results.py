@@ -16,6 +16,7 @@ import urllib.request
 from pathlib import Path
 
 import results as results_mod
+import utahswimcoach as usc
 
 PAGE = Path(__file__).parent / "static" / "public-results.html"
 BRANCH = "gh-pages"
@@ -32,7 +33,37 @@ def _date(s: str) -> str:
         return str(s or "")
 
 
-def build(m: dict, scoring: dict | None = None) -> dict:
+def _ev_key(v) -> str | None:
+    """utahswimcoach key for a MeetDeck event (girls/women -> F); None for mixed or odd events."""
+    g = (v.get("gender") or v.get("sex") or "").upper()
+    sex = "F" if g in ("F", "W", "G") else "M" if g in ("M", "B") else ""
+    if not sex or not v.get("dist") or not v.get("stroke"):
+        return None
+    return usc.key(sex, v["dist"], v["stroke"], v.get("ind_rel") == "R")
+
+
+def state_row(store, k, r) -> dict | None:
+    """This season's standing for one result row: {cls, rank, sb, now, best} (times in seconds)."""
+    if not store or not k:
+        return None
+    w = r.get("who") or {}
+    relay = k.endswith("|R")
+    if relay and (w.get("ltr") or "A") != "A":
+        return None                                   # the site only lists each school's best relay
+    st = store.standing(k, w.get("school", ""), "" if relay else w.get("last", ""), "" if relay else (w.get("first") or w.get("pref", "")))
+    if not st:
+        return None
+    st["spots"] = usc.STATE_SPOTS[relay]
+    t = r.get("time_v") if r.get("time_v") and not str(r.get("result", "")).startswith(("DQ", "NS")) else None
+    if t:
+        mine = store.find_row(k, st["cls"], w.get("school", ""), "" if relay else w.get("last", ""), "" if relay else (w.get("first") or w.get("pref", "")))
+        if not st.get("sb") or t < st["sb"]:
+            st["now"] = store.rank_of(k, st["cls"], t, exclude=mine)
+            st["best"] = bool(st.get("sb"))                # faster than this season's listed best
+    return st
+
+
+def build(m: dict, scoring: dict | None = None, store=None) -> dict:
     """results.json for the public page: meet, team scores and every event's results so far."""
     meet = m["meet"]
     teams = m["teams"]
@@ -41,17 +72,27 @@ def build(m: dict, scoring: dict | None = None) -> dict:
     with_rows = {v["ptr"]: rows for v, rows in results_mod._rows(m)}
     for v in m["events"]:
         rows = [r for r in with_rows.get(v["ptr"], []) if r["place"] or r["result"]]
+        k = _ev_key(v) if store else None
         out = []
         for r in rows:
             seed = r["seed"] if r["seed"] != "NT" else ""
             ok = r["time_v"] and r["seed_v"] and not r["result"].startswith(("DQ", "NS"))
             out.append({"place": r["place"], "name": r["name"], "yr": r["yr"], "team": r["team"], "team_name": names.get(r["team"], ""),
                         "result": r["result"], "points": r["points"], "legs": r["legs"], "dqtxt": r["dqtxt"], "exh": bool(r["exh"]),
-                        "seed": seed, "drop": round(r["seed_v"] - r["time_v"], 2) if ok else None})   # + = faster than seed
+                        "seed": seed, "drop": round(r["seed_v"] - r["time_v"], 2) if ok else None,   # + = faster than seed
+                        "st": state_row(store, k, r)})
         sig = hashlib.sha1(json.dumps(out, sort_keys=True).encode()).hexdigest()[:10] if out else ""
         if out:
             latest = v["no"]
-        events.append({"no": v["no"], "label": v["label"], "rows": out, "sig": sig})
+        lines = []
+        if k and out:
+            classes = []
+            for r in out:
+                c = (r["st"] or {}).get("cls")
+                if c and c not in classes:
+                    classes.append(c)
+            lines = [x for x in (store.event_line(k, c) for c in classes) if x]
+        events.append({"no": v["no"], "label": v["label"], "rows": out, "sig": sig, "state": lines})
     scores = []
     sc = scoring or {}
     if sc.get("pairs"):
@@ -71,7 +112,9 @@ def build(m: dict, scoring: dict | None = None) -> dict:
     return {"meet": {"name": meet.get("name", ""), "location": meet.get("location", ""), "date": _date(meet.get("start"))},
             "updated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
             "scored": len(sc.get("events") or []) or sum(1 for e in events if e["rows"]),
-            "latest": latest, "scores": scores, "events": events}
+            "latest": latest, "scores": scores, "events": events,
+            "state_src": ({"name": "utahswimcoach.com", "url": "https://utahswimcoach.com/", "season": store.data.get("season", ""),
+                           "as_of": store.data.get("fetched_at", "")} if store and store.data else None)}
 
 
 # ---- GitHub ----------------------------------------------------------------------

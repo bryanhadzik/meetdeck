@@ -408,17 +408,19 @@ def _rows(m):
                 a = aths.get(e["ath"], {})
                 name, yr, team = f"{a.get('last', '')}, {a.get('first', '')}", a.get("yr", ""), teams.get(a.get("team"), {}).get("abbr", "")
                 legs = ""
+                who = {"last": a.get("last", ""), "first": a.get("first", ""), "pref": a.get("pref", ""), "school": teams.get(a.get("team"), {}).get("name", "")}
             else:
                 tm = teams.get(e["team"], {})
                 name, yr, team = f"{tm.get('name', '')} \"{e['ltr']}\"", "", tm.get("abbr", "")
                 legs = ", ".join(f"{aths.get(x, {}).get('first', '')} {aths.get(x, {}).get('last', '')}" for x in e["legs"] if x)
+                who = {"last": "", "first": "", "pref": "", "school": tm.get("name", ""), "ltr": e.get("ltr", "")}
             result = mark if st == "R" else meetdb.fmt_time(e["time"]) if e["time"] else ("NT" if not mark else mark)
             if st in ("Q", "F", "D") and e["time"]:
                 result = f"DQ {meetdb.fmt_time(e['time'])}"
             dqtxt = " / ".join(f"{c} {dqcodes.describe(c, v['stroke'], e['kind'] == 'R')}" for c in (e["dq"], e.get("dq2")) if c) if st in ("Q", "F", "D") else ""
             rows.append({"place": e["place"] or "", "name": name, "dqtxt": dqtxt, "yr": yr, "team": team, "seed": meetdb.fmt_time(e["seed"]) or "NT",
                          "result": result if (e["time"] or mark) else "", "points": (f"{e['points']:g}" if e["points"] else ""),
-                         "dq": e["dq"], "legs": legs, "exh": e["exh"], "seed_v": e["seed"] or 0, "time_v": e["time"] or 0})
+                         "dq": e["dq"], "legs": legs, "exh": e["exh"], "seed_v": e["seed"] or 0, "time_v": e["time"] or 0, "who": who})
         yield v, rows
 
 

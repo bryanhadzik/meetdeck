@@ -27,6 +27,7 @@ def test_reference_packets():
 
 def make():
     sim = SimConsole(lanes=8, times_per_lane=5, buttons=1)   # 3 splits + final + button/backup
+    sim.TROUBLE = {"no_pad": 0, "early_button": 0, "late_pad": 0, "few_buttons": 0}
     sim.add_race(1, 1, {3: 132.62, 4: 128.4, 5: 130.11, 6: None})
     sim.add_race(2, 1, {2: 151.0, 4: 140.05, 5: 139.99, 7: 149.5}, dq={7})
     sim.add_race(2, 2, {4: 120.0, 5: 121.5})
@@ -154,3 +155,15 @@ def test_missing_heat_gives_clear_message():
         c.race_by_heat(4, 1)
     assert "no stored race for event 4 heat 1" in str(e.value)
     assert c.race_by_heat(2, 2).heat == 2      # still works after a miss
+
+
+def test_sim_real_life_trouble():
+    sim = SimConsole()                                     # like the pool's console: pad, 3 buttons, backup
+    sim.add_race(5, 1, {1: 60.0, 2: 61.0, 3: 62.0, 4: 63.0},
+                 trouble={1: "no_pad", 2: "early_button", 3: "late_pad", 4: ""})
+    c = Console(sim, settle=0)
+    byl = {l.lane: l for l in c.race_by_heat(5, 1).lanes}
+    assert byl[1].final_ms == 0 and byl[1].backup_ms > 60000           # missed the pad: backup only
+    assert 600 <= byl[2].final_ms - byl[2].backup_ms <= 1400              # backup about a second fast
+    assert byl[3].final_ms - 62000 >= 400 and byl[3].backup_ms < byl[3].final_ms   # pad late, buttons earlier
+    assert 63050 <= byl[4].backup_ms <= 63300 and byl[4].final_ms == 63000         # normal: buttons just after the pad

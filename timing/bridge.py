@@ -78,7 +78,7 @@ def connect(body: dict) -> dict:
     disconnect()
     if body.get("sim"):
         from sim import SimConsole
-        sim = SimConsole(lanes=int(body.get("lanes", 8)), times_per_lane=int(body.get("times_per_lane", 5)), buttons=1)
+        sim = SimConsole(lanes=int(body.get("lanes", 8)), times_per_lane=int(body.get("times_per_lane", 5)), buttons=3)   # like the real console
         c = cts.Console(sim, log=log, settle=0)
         STATE.update(console=c, serial=sim, port="SIMULATOR", settings={}, identity=c.who_are_you(), sim=True)
         note("connected to simulator")

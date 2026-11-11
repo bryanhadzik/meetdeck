@@ -9,7 +9,7 @@ from cts import frame, check_ok, u16, HEADER_LEN, DATE_AT, time_slots, ACK, NAME
 
 
 class SimConsole:
-    def __init__(self, lanes=8, times_per_lane=3, buttons=1, seed=7):
+    def __init__(self, lanes=8, times_per_lane=5, buttons=3, seed=7):
         self.lanes, self.tpl, self.buttons = lanes, times_per_lane, buttons
         self.rng = random.Random(seed)
         self.out = b""
@@ -41,27 +41,55 @@ class SimConsole:
         pass
 
     # ---- test helpers ----
-    def add_race(self, event: int, heat: int, results: dict[int, float | None], dq: set[int] = frozenset()):
-        """results: lane -> seconds (None = empty lane)."""
+    # how often each real-life problem turns up in made-up races (per lane)
+    TROUBLE = {"no_pad": 0.07, "early_button": 0.07, "late_pad": 0.05, "few_buttons": 0.25}
+
+    def add_race(self, event: int, heat: int, results: dict[int, float | None], dq: set[int] = frozenset(),
+                 trouble: dict[int, str] | None = None):
+        """results: lane -> seconds (None = empty lane). Times look like a real meet:
+        buttons land a little after the pad (reaction time), not every timer presses, and now and then
+          no_pad        the swimmer missed the pad (soft touch): no pad time, buttons only
+          early_button  a timer pressed about 3 s early, so the backup comes out about 1 s fast
+          late_pad      the pad registered late (light touch, then a second touch): pad slower than the buttons
+        `trouble` forces a problem for a lane (tests); otherwise it's random."""
         lanes = []
         finishers = sorted((t, ln) for ln, t in results.items() if t)
         place_of = {ln: i + 1 for i, (t, ln) in enumerate(finishers)}
+        final_i, btn_i, back_i = time_slots(self.tpl, self.buttons)
         for ln in range(1, self.lanes + 1):
             t = results.get(ln)
             if not t:
                 lanes.append((0, [0] * self.tpl))
                 continue
             ms = int(round(t * 1000))
-            final_i, btn_i, back_i = time_slots(self.tpl, self.buttons)
+            what = (trouble or {}).get(ln)
+            if what is None:
+                r = self.rng.random()
+                acc = 0.0
+                for k in ("no_pad", "early_button", "late_pad"):
+                    acc += self.TROUBLE[k]
+                    if r < acc:
+                        what = k
+                        break
             times = [0] * self.tpl
             for k in range(final_i):                   # even splits leading up to the finish
                 times[k] = int(ms * (k + 1) / (final_i + 1))
-            # buttons usually land within a few hundredths of the pad; now and then one is well off
-            btn = [ms + (self.rng.choice([-1, 1]) * self.rng.randint(80, 250) if self.rng.random() < 0.15 else self.rng.randint(-25, 25)) for _ in btn_i]
+            # buttons: human reaction, usually 0.05-0.30 s after the touch
+            n_btn = len(btn_i)
+            pressed = n_btn if self.rng.random() > self.TROUBLE["few_buttons"] else self.rng.randint(1, max(1, n_btn - 1))
+            btn = [ms + self.rng.randint(50, 300) for _ in range(pressed)]
+            if what == "early_button" and btn:
+                btn[0] = ms - self.rng.randint(800, 1200) * len(btn)    # pulls the backup (their average) ~1 s fast
+            pad = ms
+            if what == "no_pad":
+                pad = 0
+            elif what == "late_pad":
+                pad = ms + self.rng.randint(400, 900)
             for k, i in enumerate(btn_i):
-                times[i] = btn[k]
-            times[final_i] = ms
-            times[back_i] = int(round(sum(btn) / len(btn))) if btn else ms
+                times[i] = btn[k] if k < len(btn) else 0
+            if self.tpl:
+                times[final_i] = pad
+                times[back_i] = int(round(sum(btn) / len(btn))) if btn else pad
             lanes.append((0xFF if ln in dq else place_of[ln], times))
         self.races.append({"event": event, "heat": heat, "lanes": lanes})
 

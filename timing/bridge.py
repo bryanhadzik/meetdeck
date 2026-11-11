@@ -23,7 +23,18 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cts  # noqa: E402
 
-VERSION = "0.1 (untested on hardware)"
+def _version() -> str:
+    """MeetDeck's version (app/VERSION), so the page can tell which timing code is actually running."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for p in (os.path.join(here, "..", "VERSION"), os.path.join(here, "..", "app", "VERSION")):
+        try:
+            return open(p).read().strip()
+        except OSError:
+            pass
+    return "?"
+
+
+VERSION = _version()
 LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cts-log.txt")
 LOCK = threading.Lock()
 STATE = {"console": None, "serial": None, "port": None, "settings": None, "identity": None, "sim": False,

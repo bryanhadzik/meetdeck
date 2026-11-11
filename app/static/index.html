@@ -130,6 +130,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   <h1>MeetDeck</h1>
   <nav><button id="tabMeets" class="on">Meets</button><button id="tabSchools">Schools &amp; records</button><button id="tabRun">Meet checklist</button><button id="tabSend">Send results</button><button id="tabContacts">Contacts</button><button id="tabRules">Rules</button><button id="tabSetup">Setup</button></nav>
   <span id="meetBar" class="row"><label class="muted" style="font-size:13px">Season <select id="seasonSel"></select></label><select id="meetSel"></select><button class="ghost" id="newBtn">New meet</button><button class="ghost" id="openBarBtn" title="Open an existing Meet Manager meet (backup .zip or .mdb) from this computer or Google Drive">Open meet…</button></span>
+  <span class="muted" id="verTag" style="font-size:11.5px;white-space:nowrap;margin-left:auto" title="MeetDeck version"></span>
 </header>
 
 <div id="updBanner" class="hidden" style="background:var(--accent);color:var(--accent-ink);padding:8px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"></div>
@@ -1841,6 +1842,9 @@ document.addEventListener("click", e => { if (e.target.id === "updBanGo") instal
   const qm = new URLSearchParams(location.search).get("meet");      // "← Meet setup" from the meet page lands on that meet
   if (qm) { store("meet", qm); store("tab", "meets"); history.replaceState(null, "", "/"); }
   const h0 = location.hash.slice(1), t0 = ["schools", "setup", "meets", "rules", "run", "contacts", "send"].includes(h0) ? h0 : (recall("tab") || "meets"); tab(["schools", "setup", "rules", "run", "contacts", "send"].includes(t0) ? t0 : "meets"); })();
+</script>
+<script>
+fetch("/api/version").then(r => r.json()).then(v => { const t = document.getElementById("verTag"); if (t && v.version) t.textContent = "v" + v.version; }).catch(() => {});
 </script>
 </body>
 </html>

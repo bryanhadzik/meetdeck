@@ -112,6 +112,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <div class="prow"><span>Soft touch backup times <span class="muted" style="font-size:11px">(blank log)</span></span><button class="small" data-pr="softtouch">Print</button><button class="ghost small" data-pdf="softtouch">PDF</button></div>
       <div class="prow"><span>Timer sheets <select id="prLane" title="All lanes, or just one lane's sheets"><option value="">all lanes</option></select></span><button class="small" data-pr="timer">Print</button><button class="ghost small" data-pdf="timer">PDF</button></div>
     </div></div>
+  <span class="muted" id="verTag" style="font-size:11.5px;white-space:nowrap" title="MeetDeck version"></span>
   <div class="menu hidden" id="exportMenu"><button class="small" id="exportBtn">Download / export ▾</button>
     <div class="pop hidden" id="exportPop">
       <button class="small" data-x="backup">Meet Manager backup (.zip) &mdash; restore in MM</button>
@@ -746,7 +747,7 @@ async function tmDbgLoad() {
     <td>${p.vid ? esc(p.vid + ":" + p.pid) : ""}</td><td>${esc(p.manufacturer || "")}</td><td>${esc(p.serial_number || "")}</td><td class="muted" style="font-size:11px">${esc(p.hwid || "")}</td></tr>`;
   const st = d.stats, pr = d.last_probe;
   el.innerHTML = `
-    <div style="margin:4px 0"><span class="muted">Bridge</span> ${esc(d.bridge)} &middot; <span class="muted">Python</span> ${esc(d.python)} &middot; <span class="muted">pyserial</span> ${esc(d.pyserial)} &middot; <span class="muted">${esc(d.platform)}</span> &middot; <span class="muted">started</span> ${esc(d.bridge_started)}</div>
+    <div style="margin:4px 0"><span class="muted">Timing code</span> ${esc(d.bridge)} &middot; <span class="muted">Python</span> ${esc(d.python)} &middot; <span class="muted">pyserial</span> ${esc(d.pyserial)} &middot; <span class="muted">${esc(d.platform)}</span> &middot; <span class="muted">started</span> ${esc(d.bridge_started)}</div>
     <div style="margin:4px 0"><b>Connection:</b> ${d.connected ? `${esc(d.port)} ${d.sim ? "(simulator)" : ""} &middot; ${esc(d.identity || "")} &middot; since ${esc(d.connected_at || "?")}` : `<span class="muted">not connected</span>`}
       ${d.last_connect_error ? `<div style="color:var(--err)">Last connect error: ${esc(d.last_connect_error)}</div>` : ""}</div>
     ${d.serial ? `<div style="margin:4px 0"><b>Port settings:</b> ${dKV({baud: d.serial.baudrate, bits: d.serial.bytesize, parity: d.serial.parity, stop: d.serial.stopbits, timeout: d.serial.timeout, xonxoff: d.serial.xonxoff, rtscts: d.serial.rtscts, dsrdtr: d.serial.dsrdtr, "bytes waiting": d.serial.in_waiting})}</div>
@@ -1092,6 +1093,9 @@ document.addEventListener("click", async ev => {
 });
 tmStatus();
 if (!MID) document.body.innerHTML = "<main><section>Open this from a meet's page.</section></main>"; else load().catch(e => { document.querySelector("main").innerHTML = `<section>${esc(e.message)}</section>`; });
+</script>
+<script>
+fetch("/api/version").then(r => r.json()).then(v => { const t = document.getElementById("verTag"); if (t && v.version) t.textContent = "v" + v.version; }).catch(() => {});
 </script>
 </body>
 </html>

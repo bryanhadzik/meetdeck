@@ -383,6 +383,8 @@ def ingest(d: Path, filename: str, data: bytes, source: str = "upload", kind_hin
         _keep_as_doc(d, filename, data, out)
         return out
     meta = _meta(d)
+    hst = next((h for h in _hosts() if h["id"] == meta.get("host", "THS")), None) or {}
+    host_team = {"name": hst.get("name") or meta.get("host", "THS"), "code": (hst.get("team_codes") or [""])[0]}
     orig_dir = d / "originals"
     orig_dir.mkdir(exist_ok=True)
     orig_name = re.sub(r"[^A-Za-z0-9._ &-]", "_", filename)
@@ -396,9 +398,9 @@ def ingest(d: Path, filename: str, data: bytes, source: str = "upload", kind_hin
                 if kind == "sdif":
                     parsed = parse_sdif(content)
                 elif kind == "docx":
-                    parsed = parse_entry_list(docx_text(content))
+                    parsed = parse_entry_list(docx_text(content), default_team=host_team)
                 else:   # "text" / "paste"
-                    parsed = parse_entry_list(content.decode("utf-8", errors="replace"))
+                    parsed = parse_entry_list(content.decode("utf-8", errors="replace"), default_team=host_team)
             except Exception as e:  # unreadable file: report, don't crash the upload
                 out["skipped"].append(f"{name}: couldn't read it ({e})")
                 continue

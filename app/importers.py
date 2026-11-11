@@ -118,8 +118,116 @@ def _fuzzy(a: str, b: str) -> bool:
     return prev[-1] <= 2 or sorted(a) == sorted(b)
 
 
-def parse_entry_list(text: str, used_codes: set | None = None) -> dict:
+# ---------------------------------------------------------------- Team Manager "Meet Entries Report" (.txt)
+#   Meet Entries Report
+#   Blue @ Gold  12-Nov-26  Yards  Alt: 5000
+#   WOMEN
+#   Jane Doe (12) - 200 Medley Relay A Back; 200 Free 2:40.72Y; 200 Free Relay A1
+TM_LINE = re.compile(r"^\s*(?P<name>.+?)\s*\((?P<age>[^)]*)\)\s*[-–]\s*(?P<evs>.+)$")
+TM_RELAY = re.compile(r"^\s*(?P<dist>\d{2,4})\s*(?P<kind>free|medley)\s+relay\s+(?P<letter>[A-Z])\s*(?P<leg>[1-8]|back|bk|brst|breast|br|fly|bf|free|fr)?\s*$", re.I)
+MEDLEY_LEG = {"back": 0, "bk": 0, "brst": 1, "breast": 1, "br": 1, "fly": 2, "bf": 2, "free": 3, "fr": 3}
+
+
+def is_tm_report(text: str) -> bool:
+    first = next((l.strip() for l in text.splitlines() if l.strip()), "")
+    return bool(re.match(r"meet\s+entries\s+report\b", first, re.I))
+
+
+def _seed(piece: str) -> float:
+    tm = re.search(r"(\d+:)?\d{1,2}\.\d{2}", piece)
+    if not tm:
+        return 0.0
+    v = tm.group(0)
+    return (int(v.split(":")[0]) * 60 + float(v.split(":")[1])) if ":" in v else float(v)
+
+
+def parse_tm_report(text: str, used_codes: set | None = None, default_team: dict | None = None) -> dict:
+    """Team Manager's printed entries report. It names no team, so the entries go to default_team
+    (the meet's host school) unless a 'Team: <name>' line is present."""
+    used = used_codes if used_codes is not None else set()
+    warnings: list[str] = []
+    tname = (default_team or {}).get("name") or "Team"
+    tcode = (default_team or {}).get("code") or ""
+    m = re.search(r"^\s*team\s*:\s*(.+?)\s*$", text, re.I | re.M)
+    if m:
+        tname, tcode = m.group(1), ""
+    elif default_team:
+        warnings.append(f"the report doesn't name a team - entries assigned to {tname}")
+    if tcode:
+        used.add(tcode)
+    team = {"code": tcode or team_code_from_name(tname, used), "name": tname, "lsc": "", "swimmers": {},
+            "entries": [], "relays": []}
+    course = "Y"
+    gender = None
+    relays: dict[tuple, dict] = {}     # (gender, dist, stroke, letter) -> {slot: key}
+    for lineno, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line or re.match(r"meet\s+entries\s+report\b", line, re.I):
+            continue
+        if re.fullmatch(r"(women|girls|ladies)", line, re.I):
+            gender = "F"
+            continue
+        if re.fullmatch(r"(men|boys)", line, re.I):
+            gender = "M"
+            continue
+        if re.match(r"^\s*team\s*:", line, re.I):
+            continue
+        m = TM_LINE.match(line)
+        if not m:
+            if gender is None:          # the meet title line
+                if re.search(r"\bmeters?\b|\bLCM\b|\bSCM\b", line, re.I):
+                    course = "S" if re.search(r"\bSCM\b|short", line, re.I) else "L"
+                continue
+            warnings.append(f"line {lineno}: couldn't read: {line[:60]}")
+            continue
+        if gender is None:
+            warnings.append(f"line {lineno}: swimmer before a WOMEN/MEN heading: {line[:60]}")
+            continue
+        name = re.sub(r"[\[\]]", "", m.group("name"))
+        first, last = split_name(name)
+        key = name_key(team["code"], first, last)
+        age = int(m.group("age")) if m.group("age").strip().isdigit() else 0
+        if key not in team["swimmers"]:
+            team["swimmers"][key] = {"first": first, "last": last, "gender": gender, "age": age, "dob": "", "class": ""}
+        for piece in m.group("evs").split(";"):
+            piece = piece.strip()
+            if not piece:
+                continue
+            r = TM_RELAY.match(piece)
+            if r:
+                stroke = "E" if r.group("kind").lower() == "medley" else "A"
+                leg = (r.group("leg") or "").lower()
+                slot = MEDLEY_LEG.get(leg) if stroke == "E" else (int(leg) - 1 if leg.isdigit() else None)
+                if stroke == "E" and leg.isdigit():
+                    slot = int(leg) - 1
+                rel = relays.setdefault((gender, int(r.group("dist")), stroke, r.group("letter").upper()), {})
+                if slot is None or slot in rel:
+                    slot = max(list(rel) + [-1]) + 1
+                rel[slot] = key
+                continue
+            if re.search(r"\brelay\b", piece, re.I):
+                warnings.append(f"line {lineno}: {first} {last}: couldn't read relay '{piece}'")
+                continue
+            ev = event_from_text(piece)
+            if not ev:
+                warnings.append(f"line {lineno}: {first} {last}: unknown event '{piece}'")
+                continue
+            c = piece[-1].upper() if re.search(r"\d[YLS]$", piece, re.I) else course
+            team["entries"].append({"swimmer": key, "gender": gender, "dist": ev[0], "stroke": ev[1],
+                                    "seed": _seed(piece), "course": c})
+    for (g, dist, stroke, letter), rel in sorted(relays.items()):
+        legs = [rel[k] for k in sorted(rel)]
+        if len(legs) != 4:
+            warnings.append(f"{'girls' if g == 'F' else 'boys'} {dist} {'medley' if stroke == 'E' else 'free'} relay {letter} has {len(legs)} swimmers")
+        team["relays"].append({"gender": g, "dist": dist, "stroke": stroke, "letter": letter, "legs": legs,
+                               "seed": 0.0, "course": course})
+    return {"teams": [team] if team["swimmers"] else [], "warnings": warnings}
+
+
+def parse_entry_list(text: str, used_codes: set | None = None, default_team: dict | None = None) -> dict:
     """Parse a coach's typed entry list. Returns {"teams": [...], "warnings": [...]}."""
+    if is_tm_report(text):
+        return parse_tm_report(text, used_codes, default_team)
     used = used_codes if used_codes is not None else set()
     teams: dict[str, dict] = {}
     warnings: list[str] = []
@@ -188,7 +296,7 @@ def parse_entry_list(text: str, used_codes: set | None = None) -> dict:
             continue
 
         # individual line: "Name - event, event"
-        m = re.match(r"^\s*(?P<name>[^\-–:0-9]+?)\s*[-–:]\s*(?P<evs>.+)$", line)
+        m = re.match(r"^\s*(?P<name>[^\-–:0-9(]+?)\s*(?:\([^)]*\))?\s*[-–:]\s*(?P<evs>.+)$", line)
         if not m:
             warnings.append(f"line {lineno}: couldn't read: {line.strip()[:60]}")
             continue
@@ -204,6 +312,9 @@ def parse_entry_list(text: str, used_codes: set | None = None) -> dict:
             if tm:
                 v = tm.group(0)
                 seed = (int(v.split(":")[0]) * 60 + float(v.split(":")[1])) if ":" in v else float(v)
+            if re.search(r"\brelay\b", piece, re.I):
+                warnings.append(f"line {lineno}: {first} {last}: relay '{piece.strip()}' ignored - list relays under a '<team> girls relays' heading")
+                continue
             ev = event_from_text(piece)
             if not ev:
                 warnings.append(f"line {lineno}: {first} {last}: unknown event '{piece.strip()}'")

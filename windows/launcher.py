@@ -92,8 +92,19 @@ def shortcut():
         icon = APP / "static" / "meetdeck.ico"
         for folder in (Path(os.environ["USERPROFILE"]) / "Desktop",
                        Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs"):
+            if not folder.exists():
+                continue
+            lp = folder / "MeetDeck Launcher.lnk"      # the launcher window, with the MeetDeck icon (not PowerShell's)
+            if not lp.exists():
+                ps1 = APP / "tools" / "MeetDeck-Launcher.ps1"
+                ps = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{lp}');"
+                      f"$s.TargetPath=(Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\powershell.exe');"
+                      f"$s.Arguments='-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \\\"{ps1}\\\"';$s.WorkingDirectory='{ROOT}';"
+                      + (f"$s.IconLocation='{icon},0';" if icon.exists() else "") + "$s.Description='Start, stop and update MeetDeck';$s.Save()")
+                import subprocess
+                subprocess.run(["powershell", "-NoProfile", "-Command", ps], creationflags=0x08000000, timeout=30)
             lnk = folder / "MeetDeck.lnk"
-            if not folder.exists() or (lnk.exists() and str(ROOT) in _lnk_args(lnk)):
+            if lnk.exists() and str(ROOT) in _lnk_args(lnk):
                 continue
             ps = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}');$s.TargetPath='{pyw}';"
                   f"$s.Arguments='-X utf8 \"{start}\"';$s.WorkingDirectory='{ROOT}';"

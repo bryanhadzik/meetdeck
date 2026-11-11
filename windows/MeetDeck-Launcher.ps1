@@ -91,6 +91,38 @@ function Update-MeetDeck {
     Set-Status "Updated to $latest$(if (-not $wasRunning) { ' - it takes effect next time MeetDeck starts' })."
 }
 
+# ---------------------------------------------------------------- icon + shortcuts
+# Own taskbar identity, so the window shows the MeetDeck icon instead of PowerShell's
+try {
+    Add-Type -Namespace MeetDeck -Name Shell -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("shell32.dll", SetLastError = true)]
+public static extern int SetCurrentProcessExplicitAppUserModelID([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string AppID);
+'@
+    [void][MeetDeck.Shell]::SetCurrentProcessExplicitAppUserModelID('bryanhadzik.meetdeck.launcher')
+} catch { }
+
+# "MeetDeck Launcher" shortcuts (desktop + Start menu) with the MeetDeck icon. The .cmd in the
+# MeetDeck folder can't carry an icon, so this is what to double-click instead.
+function Set-LauncherShortcuts {
+    $ico = Join-Path $App 'static\meetdeck.ico'
+    $ps1 = Join-Path $Here 'MeetDeck-Launcher.ps1'
+    $folders = @([Environment]::GetFolderPath('Desktop'), (Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'Microsoft\Windows\Start Menu\Programs'))
+    foreach ($dir in $folders) {
+        try {
+            if (-not (Test-Path $dir)) { continue }
+            $sh = New-Object -ComObject WScript.Shell
+            $lnk = $sh.CreateShortcut((Join-Path $dir 'MeetDeck Launcher.lnk'))
+            $lnk.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+            $lnk.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $ps1 + '"'
+            $lnk.WorkingDirectory = $Root
+            if (Test-Path $ico) { $lnk.IconLocation = $ico + ',0' }
+            $lnk.Description = 'Start, stop and update MeetDeck'
+            $lnk.Save()
+        } catch { }
+    }
+}
+Set-LauncherShortcuts
+
 # ---------------------------------------------------------------- window
 $f = New-Object Windows.Forms.Form
 $f.Text = 'MeetDeck'; $f.StartPosition = 'CenterScreen'; $f.FormBorderStyle = 'FixedSingle'; $f.MaximizeBox = $false

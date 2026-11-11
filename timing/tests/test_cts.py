@@ -131,3 +131,16 @@ def test_who_are_you_reply_matches_real_console():
     sim = SimConsole()
     sim.write(frame(b"W"))
     assert sim.read(64) == bytes.fromhex("0a 00 31 2e 32 33 34 00 fd fe")
+
+
+def test_real_race_reply_with_button_and_backup():
+    # complete reply from the real console (HHD capture 2026-11-10 18:03): lane 1 pad 10.59, one button 13.05
+    lane1 = bytes((1,)) + b"".join(t.to_bytes(4, "little") for t in (10590, 13050, 0, 0, 13050))
+    msg = bytes.fromhex("db 00 01 01 01 01 06 00 15 00 12 03 0b 0a 1a 01 08 05" + " 00" * 22 +
+                        " ea 07 00 01 01 00 01 00 03") + lane1 + bytes(21 * 7) + bytes.fromhex("dc fa")
+    from cts import check_ok
+    assert check_ok(msg) and len(msg) == 0xDB
+    r = parse_race(msg)
+    assert r.race_number == 6 and r.when == "2026-11-10 18:00:21"
+    l1 = r.lanes[0]
+    assert l1.final_ms == 10590 and l1.buttons_ms == [13050, 0, 0] and l1.backup_ms == 13050 and l1.splits_ms == []

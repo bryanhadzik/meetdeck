@@ -149,7 +149,7 @@ class Race:
 
 def time_slots(times_per_lane: int, buttons: int) -> tuple[int, list[int], int]:
     """Positions in a lane's time list: [splits..., final, buttons..., backup].
-    Follows the System 5 layout (UNVERIFIED on System 6). With one button the button time is the backup."""
+    Verified on a real System 6 (5 times, 3 buttons): [pad, button 1, button 2, button 3, backup]."""
     n = times_per_lane
     if n <= 0:
         return 0, [], 0

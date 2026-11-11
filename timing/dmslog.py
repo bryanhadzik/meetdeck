@@ -19,7 +19,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cts  # noqa: E402
 
-STAMP = bytes.fromhex("7571dd01")   # top bytes of a 2020s-era FILETIME (Windows timestamp)
+DAY = 864000000000                 # one day in FILETIME units (100 ns)
 WRITE, READ = 4, 3                 # IRP_MJ_WRITE / IRP_MJ_READ
 
 
@@ -30,9 +30,13 @@ def _ft(b):
 def records(data):
     """[(time, 'W'|'R', bytes)]: writes as sent, reads as received."""
     out = []
-    for m in re.finditer(re.escape(STAMP), data):
-        q = m.start() - 4                             # the request's timestamp inside a record
-        if q < 24:
+    if len(data) < 64:
+        return out
+    base = struct.unpack("<Q", data[24:32])[0]       # capture start (file header FILETIME)
+    hi = data[30:32]                                 # its top two bytes; every record stamp shares them
+    for m in re.finditer(re.escape(hi), data):
+        q = m.start() - 6                             # the request's timestamp inside a record
+        if q < 24 or abs(struct.unpack("<Q", data[q:q + 8])[0] - base) > DAY:
             continue
         size, typ = struct.unpack("<II", data[q - 8:q])
         if not (0x18 <= size < 0x2000) or (typ & 0x7FFFFFFF) != 1:
@@ -58,6 +62,15 @@ def _describe(d, m):
             return emulator.describe(body)
         except Exception:
             return repr(body)
+    if body == cts.ACK:
+        return "ACK"
+    if len(m) > 49 and len(m) == cts.HEADER_LEN + m[16] * (1 + 4 * m[17]) + 2:
+        try:
+            r = cts.parse_race(m)
+            return "RACE DATA event %d heat %d: " % (r.event, r.heat) + ", ".join(
+                "L%d %.2f" % (l.lane, l.final_ms / 1000) for l in r.lanes if l.final_ms) or "no times"
+        except Exception:
+            pass
     text = body.rstrip(b"\x00")
     if text and all(32 <= c < 127 for c in text):
         return "text %r" % text.decode("latin-1")

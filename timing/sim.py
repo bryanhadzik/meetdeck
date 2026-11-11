@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import time
 
-from cts import frame, check_ok, u16, HEADER_LEN, DATE_AT, time_slots
+from cts import frame, check_ok, u16, HEADER_LEN, DATE_AT, time_slots, ACK, NAME_LEN
 
 
 class SimConsole:
@@ -16,8 +16,8 @@ class SimConsole:
         self.races = []            # [{event, heat, lanes:[(place, [ms...])]}]
         self.labels = {}           # (table, index) -> text
         self.events = {}           # (slot, event) -> bytes
-        self.active_slot = 9
-        self.titles = {s: f"SEQUENCE {s}" for s in range(2, 10)}
+        self.active_slot = 1
+        self.titles = {s: f"Meet {s}" for s in range(1, 9)}
         self.writes = []           # every message received (for tests)
 
     # ---- serial-like interface ----
@@ -90,23 +90,26 @@ class SimConsole:
             if not r:
                 return frame(b"\x03\x00")            # error: no such race
             return self._race_reply(r, self.races.index(r) + 1)
-        if cmd[:2] == b"Rs":
-            return frame(b"R" + self.titles.get(cmd[2], "").encode() + b"\x00")
+        if cmd[:2] == b"Rs":       # real reply: [slot][21-byte name]
+            return frame(bytes((cmd[2],)) + self.titles.get(cmd[2], "").encode("latin-1")[:NAME_LEN - 1].ljust(NAME_LEN, b"\x00"))
+        if cmd[:2] == b"Is":
+            self.titles[cmd[2]] = cmd[3:].split(b"\x00")[0].decode("latin-1")
+            return frame(ACK)
         if cmd[:2] == b"Ir":
             self.active_slot = cmd[2]
-            return frame(b"Ir\x00")
+            return frame(ACK)
         if cmd[:2] == b"It":
             self.labels[(cmd[2], cmd[3])] = cmd[4:].split(b"\x00")[0].decode("latin-1")
-            return b""
+            return frame(ACK)
         if cmd[:2] == b"Rt":
             return frame(b"Rt" + self.labels.get((cmd[2], cmd[3]), "").encode() + b"\x00")
         if cmd[:2] == b"Iu":
             slot, ev = cmd[2], u16(cmd[3], cmd[4])
-            if cmd[5:] == bytes(8):
+            if not any(cmd[5:]):
                 self.events.pop((slot, ev), None)
             else:
                 self.events[(slot, ev)] = cmd[5:]
-            return b""
+            return frame(ACK)
         if cmd[:2] == b"Ru":
             v = self.events.get((cmd[2], u16(cmd[3], cmd[4])), b"")
             return frame(b"Ru" + v)

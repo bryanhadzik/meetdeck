@@ -134,7 +134,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
               <select id="tmPort"><option value="">COM port…</option></select>
               <button class="small" id="tmConnect">Connect</button><button class="ghost small" id="tmSim">Simulator</button><button class="ghost small hidden" id="tmDisc">Disconnect</button>
               <a href="/timing/bridge.zip" class="muted" style="font-size:12.5px">Download the bridge for the timing laptop</a></div>
-            <div class="row" style="margin-top:6px"><label class="muted" style="font-size:12.5px">Send events to console slot <select id="tmSlot"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option selected>9</option></select></label>
+            <div class="row" style="margin-top:6px"><label class="muted" style="font-size:12.5px">Send the meet to console meet slot <select id="tmSlot"><option selected>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
               <button class="ghost small" id="tmSend">Send events</button>
               <button class="ghost small hidden" id="tmPractice" title="Simulator only: fills it with made-up times for this event's heats">Load practice times</button>
               <a href="#" id="tmLogBtn" class="muted" style="font-size:12.5px">Console log</a>
@@ -777,9 +777,9 @@ $("#tmSend").onclick = async () => {
   const strokeName = v => v.ind_rel === "R" ? (v.stroke === "E" ? "Medley Relay" : "Free Relay") : ({A: "Free", B: "Back", C: "Breast", D: "Fly", E: "IM"}[v.stroke] || v.stroke);
   const events = M.events.map(v => ({no: v.no, distance: v.dist, gender: v.gender === "W" ? "F" : v.gender, stroke: strokeName(v)}));
   const slot = +$("#tmSlot").value;
-  if (!confirm(`Write ${events.length} events into event sequence slot ${slot} on the console? Whatever is in that slot is replaced. (Console must be in RESET with Allow Remote Setup on.)`)) return;
-  tmMsg("Sending events…");
-  try { const r = await bridge("/download", {slot, events}); tmMsg(`Sent ${r.events} events to slot ${r.slot}; it's now the active sequence. Advance heats on the console as usual.`); api(`${API}/activity`, J({key: "console"})).catch(() => {}); } catch (e) { tmMsg(e.message, true); }
+  if (!confirm(`Send ${events.length} events to meet slot ${slot} on the console? Whatever meet is in that slot is replaced. (Console must be in RESET with Allow Remote Setup on.)`)) return;
+  tmMsg("Sending the meet… (about 5 seconds)");
+  try { const r = await bridge("/download", {slot, events, title: (M.meet.name || "").slice(0, 20)}); tmMsg(`Sent ${r.events} events to meet slot ${r.slot} as \"${esc(r.title)}\". Advance heats on the console as usual.`); api(`${API}/activity`, J({key: "console"})).catch(() => {}); } catch (e) { tmMsg(e.message, true); }
 };
 async function loadPractice(v) {
   const act = evEntries(v.ptr).filter(e => !e.scr && e.heat && e.lane);

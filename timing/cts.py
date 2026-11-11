@@ -59,15 +59,50 @@ CMD_MEET_NEXT = b"M+"
 CMD_MEET_PREV = b"M-"
 CMD_RACE_INFO = b"SR"          # + race number (LE16) -> event / heat of that stored race
 CMD_SWIM_DATA = b"SSBI"        # + mode: C current, L last, N next, E heat event, R 00 race
-CMD_SEQ_READ = b"Rs"           # + slot, 0, 0  -> sequence title
-CMD_SEQ_SELECT = b"Ir"         # + slot        -> make that event sequence active
+CMD_SEQ_READ = b"Rs"           # + slot -> [slot][21-byte meet name]       (verified, capture 2026-11-10)
+CMD_SEQ_NAME = b"Is"           # + slot + 21-byte meet name -> ACK          (verified)
+CMD_SEQ_SELECT = b"Ir"         # + slot -> ACK; ends a download, makes that meet active (verified)
 CMD_LABEL_READ = b"Rt"         # + label table, index
-CMD_LABEL_WRITE = b"It"        # + label table, index, text, 0
+CMD_LABEL_WRITE = b"It"        # + label table, index, 16-byte text -> ACK  (verified)
 CMD_EVENT_READ = b"Ru"         # + slot, event LE16
-CMD_EVENT_WRITE = b"Iu"        # + slot, event LE16, distance LE16, label indexes...
+CMD_EVENT_WRITE = b"Iu"        # + slot, event LE16, distance LE16, 7 label tokens -> ACK (verified)
+ACK = b"\x06\x00"              # the console's answer to every write: 06 00 06 00 f3 ff
 
 # Label tables on the console (used by event download)
 LABEL_SEX, LABEL_AGE, LABEL_EVENT_TYPE, LABEL_BRACKET = 0, 1, 2, 3
+LABEL_LEN, NAME_LEN, TOKENS = 16, 21, 7
+# An event's description is up to 7 tokens; token = table base + label index (0 = none).
+# Sizes and bases as Meet Manager writes them (HHD capture of a real System 6, 2026-11-10).
+TABLE_SIZE = {LABEL_SEX: 9, LABEL_EVENT_TYPE: 10, LABEL_AGE: 20, LABEL_BRACKET: 10}
+TOKEN_BASE = {LABEL_SEX: 0x01, LABEL_EVENT_TYPE: 0x0A, LABEL_AGE: 0x14, LABEL_BRACKET: 0x28}
+# Meet Manager's standard label tables, sent in this order on every download
+MM_LABELS = [
+    (LABEL_SEX, ["Mens", "Womens", "Boys", "Girls", "Mixed", "Masters"]),
+    (LABEL_EVENT_TYPE, ["Freestyle", "Backstroke", "Breaststroke", "Butterfly", "IM", "Medley", "Relay",
+                        "1 Mtr Diving", "3 Mtr Diving", "Platform Diving"]),
+    (LABEL_AGE, ["6 & Under", "8 & Under", "10 & Under", "9-10", "11-12", "13-14", "15-16", "15-18", "17-18", "Open"]),
+    (LABEL_BRACKET, ["Final", "Prelim", "Semi-Final", "Consolation", "Bonus", "Consols/Finals", "Championship"]),
+]
+MM_CLEAR_EVENTS = 32           # Meet Manager clears events 1-32 before writing the meet
+
+
+def token(table: int, label: str) -> int:
+    names = dict(MM_LABELS)[table]
+    return TOKEN_BASE[table] + names.index(label)
+
+
+SEX_WORD = {"F": "Girls", "M": "Boys", "X": "Mixed", "W": "Womens"}
+STROKE_WORDS = {"Free": ["Freestyle"], "Back": ["Backstroke"], "Breast": ["Breaststroke"], "Fly": ["Butterfly"],
+                "IM": ["IM"], "Free Relay": ["Freestyle", "Relay"], "Medley Relay": ["Medley", "Relay"]}
+NO_AGE = TOKEN_BASE[LABEL_AGE] + TABLE_SIZE[LABEL_AGE] - 1   # 0x27: a blank age label; MM uses it for open events
+
+
+def event_tokens(gender: str, stroke: str, round_: str = "Final") -> bytes:
+    """The 7 label tokens Meet Manager sends for an event, e.g. girls 200 medley relay -> 04 0f 10 27 28 00 00."""
+    t = [token(LABEL_SEX, SEX_WORD.get(gender, "Mixed"))]
+    t += [token(LABEL_EVENT_TYPE, w) for w in STROKE_WORDS.get(stroke, ["Freestyle"])]
+    t += [NO_AGE, token(LABEL_BRACKET, round_)]
+    return bytes(t + [0] * (TOKENS - len(t)))
 
 HEADER_LEN = 49                # race header bytes before the lane data
 DATE_AT = 8                    # sec, min, hour, weekday, month, day, year(2-digit)
@@ -224,6 +259,9 @@ class Console:
                             self.stats["bad_checksum"] += 1
                             self._err("bad checksum in reply")
                             raise CTSError(f"bad checksum in reply: {msg.hex(' ')} (wrong baud/parity, or line noise)")
+                        if n == 6 and msg[2:4] == ACK:
+                            self.stats["replies"] += 1
+                            return msg
                         if n == 6:
                             self.stats["console_errors"] += 1
                             self._err(f"console error code {u16(msg[2], msg[3])}")
@@ -292,8 +330,15 @@ class Console:
 
     # -- event sequences (sending the meet to the console) --
     def sequence_title(self, slot: int) -> str:
-        r = self.request(CMD_SEQ_READ + bytes((slot, 0, 0)))
-        return r[3:-2].decode("latin-1", errors="replace").strip("\x00 ")
+        """Name of the meet stored in slot 1-8 (Meet Manager reads all 8 before a download)."""
+        r = self.request(CMD_SEQ_READ + bytes((slot,)))
+        return r[3:-2].split(b"\x00")[0].decode("latin-1", errors="replace").strip()
+
+    def sequence_titles(self) -> dict:
+        return {s: self.sequence_title(s) for s in range(1, 9)}
+
+    def write_sequence_title(self, slot: int, name: str):
+        self.request(CMD_SEQ_NAME + bytes((slot,)) + fixed(name, NAME_LEN))
 
     def select_sequence(self, slot: int):
         return self.request(CMD_SEQ_SELECT + bytes((slot,)))
@@ -303,41 +348,54 @@ class Console:
         return r[4:-2].decode("latin-1", errors="replace").strip("\x00 ")
 
     def write_label(self, table: int, index: int, text: str):
-        self.send(CMD_LABEL_WRITE + bytes((table, index)) + text.encode("latin-1", errors="replace")[:20] + b"\x00")
+        self.request(CMD_LABEL_WRITE + bytes((table, index)) + fixed(text, LABEL_LEN))
 
-    def write_event(self, slot: int, event_no: int, distance: int, sex: int | None = None, stroke: int | None = None,
-                    age: int | None = None, session: int | None = None):
-        labels = bytes(v for v in (sex, stroke, age, session) if v is not None)
-        self.send(CMD_EVENT_WRITE + bytes((slot,)) + le16(event_no) + le16(distance) + labels)
+    def write_event(self, slot: int, event_no: int, distance: int, tokens: bytes):
+        self.request(CMD_EVENT_WRITE + bytes((slot,)) + le16(event_no) + le16(distance) + (bytes(tokens) + bytes(TOKENS))[:TOKENS])
 
     def clear_event(self, slot: int, event_no: int):
-        self.send(CMD_EVENT_WRITE + bytes((slot,)) + le16(event_no) + bytes(8))
+        self.request(CMD_EVENT_WRITE + bytes((slot,)) + le16(event_no) + bytes(2 + TOKENS))
 
     def read_event(self, slot: int, event_no: int) -> bytes:
         return self.request(CMD_EVENT_READ + bytes((slot,)) + le16(event_no))
 
     def download_meet(self, slot: int, events: list[dict], title: str | None = None, progress=None) -> dict:
-        """events: [{no, distance, gender ('F'/'M'/'X'), stroke ('Free','Back','Breast','Fly','IM','Free Relay',
-        'Medley Relay')}]. Writes sex and stroke label tables, then each event, then makes the slot active.
-        UNVERIFIED: label table indexes/meaning and whether the title is label table 'bracket'."""
-        sexes = sorted({e["gender"] for e in events})
-        strokes = []
-        for e in events:
-            if e["stroke"] not in strokes:
-                strokes.append(e["stroke"])
-        sex_text = {"F": "Girls", "M": "Boys", "X": "Mixed", "W": "Women"}
-        for i, s in enumerate(sexes):
-            self.write_label(LABEL_SEX, i, sex_text.get(s, s))
-        for i, s in enumerate(strokes):
-            self.write_label(LABEL_EVENT_TYPE, i, s)
-        done = []
-        for k, e in enumerate(sorted(events, key=lambda e: e["no"])):
-            self.write_event(slot, int(e["no"]), int(e["distance"]), sexes.index(e["gender"]), strokes.index(e["stroke"]))
-            done.append(e["no"])
+        """Send a meet to console slot 1-8 exactly as Meet Manager does (HHD capture, 2026-11-10):
+        the four label tables, the meet name, clear events 1-32, each event, then Ir to finish.
+        events: [{no, distance, gender ('F'/'M'/'X'), stroke ('Free','Back','Breast','Fly','IM','Free Relay',
+        'Medley Relay'), round ('Final' default)}]. Every write is acknowledged by the console."""
+        if not 1 <= slot <= 8:
+            raise ValueError("console meet slot must be 1-8")
+        evs = sorted(events, key=lambda e: int(e["no"]))
+        total = sum(TABLE_SIZE.values()) + 1 + max(MM_CLEAR_EVENTS, len(evs)) + len(evs) + 1
+        done = [0]
+
+        def tick():
+            done[0] += 1
             if progress:
-                progress(k + 1, len(events))
+                progress(done[0], total)
+
+        for table, names in MM_LABELS:
+            for i in range(TABLE_SIZE[table]):
+                self.write_label(table, i, names[i] if i < len(names) else "")
+                tick()
+        self.write_sequence_title(slot, title or "MeetDeck meet")
+        tick()
+        for n in range(1, max(MM_CLEAR_EVENTS, max((int(e["no"]) for e in evs), default=0)) + 1):
+            self.clear_event(slot, n)
+            tick()
+        for e in evs:
+            self.write_event(slot, int(e["no"]), int(e["distance"]),
+                             event_tokens(e.get("gender", "X"), e.get("stroke", "Free"), e.get("round", "Final")))
+            tick()
         self.select_sequence(slot)
-        return {"slot": slot, "events": len(done), "sex_labels": sexes, "stroke_labels": strokes}
+        tick()
+        return {"slot": slot, "events": len(evs), "title": title or "MeetDeck meet"}
+
+
+def fixed(text: str, n: int) -> bytes:
+    """Text in a fixed n-byte field: up to n-1 characters, NUL padded."""
+    return (text.encode("latin-1", errors="replace")[:n - 1]).ljust(n, b"\x00")
 
 
 # ---- serial helpers ----------------------------------------------------------------

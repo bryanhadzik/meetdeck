@@ -59,15 +59,16 @@ def test_bridge_talks_to_emulator(rig):
     assert r.event == 3 and r.heat == 2 and any(ln.final_ms for ln in r.lanes)
     # download events the way MeetDeck does; the emulator keeps them and writes the capture
     con.write_label(2, 1, "Free")
-    con.write_event(9, 5, 200, sex=1, stroke=1, age=0, session=1)
-    con.select_sequence(9)
+    con.write_event(1, 5, 200, cts.event_tokens("F", "IM"))
+    con.select_sequence(1)
     time.sleep(0.4)
     cap = json.load(open(tmp / "capture.json"))
-    assert cap["event_sequences"]["9"]["5"]["distance"] == 200
+    assert cap["event_sequences"]["1"]["5"]["distance"] == 200
+    assert cap["event_sequences"]["1"]["5"]["description"] == "Girls IM Final"
     assert cap["labels"]["stroke"]["1"] == "Free"
-    assert cap["active_sequence"] == 9
+    assert cap["active_sequence"] == 1
     log = open(tmp / "log.txt").read()
-    assert "WHO ARE YOU" in log and "WRITE EVENT 5 in slot 9" in log
+    assert "WHO ARE YOU" in log and "WRITE EVENT 5 in slot 1: 200 Girls IM Final" in log
 
 
 def test_records_bytes_that_are_not_console_messages(rig):

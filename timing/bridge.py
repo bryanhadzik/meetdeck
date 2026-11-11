@@ -273,7 +273,7 @@ class Handler(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         routes = {"/status": status, "/races": lambda: need().race_list(), "/race": lambda: get_race(q),
                   "/meet": lambda: need().meet(int(q.get("dir", 0))), "/log": lambda: {"lines": RECENT[-int(q.get("n", 200)):]},
-                  "/sequence": lambda: {"slot": int(q.get("slot", 9)), "title": need().sequence_title(int(q.get("slot", 9)))},
+                  "/sequence": lambda: {"slot": int(q.get("slot", 1)), "title": need().sequence_title(int(q.get("slot", 1)))},
                   "/debug": debug}
         if u.path not in routes:
             return self._send(404, {"error": "not found"})
@@ -284,7 +284,7 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length") or 0)
         body = json.loads(self.rfile.read(n) or b"{}") if n else {}
         routes = {"/connect": lambda: connect(body), "/disconnect": lambda: (disconnect(), status())[1],
-                  "/download": lambda: need().download_meet(int(body.get("slot", 9)), body["events"], body.get("title")),
+                  "/download": lambda: need().download_meet(int(body.get("slot", 1)), body["events"], body.get("title")),
                   "/sim/load": lambda: sim_load(body), "/ping": ping, "/listen": lambda: listen(body),
                   "/probe": lambda: probe_only(body)}
         if u.path not in routes:

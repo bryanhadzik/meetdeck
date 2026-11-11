@@ -43,6 +43,21 @@ CAPTURE = os.path.join(HERE, "emulator-capture.json")
 TABLES = {0: "sex", 1: "age group", 2: "stroke", 3: "bracket"}
 
 
+def token_words(tokens) -> str:
+    """Event label tokens -> words using Meet Manager's standard tables (e.g. 04 0f 10 27 28 -> Girls Medley Relay Final)."""
+    out = []
+    for t in tokens:
+        if not t:
+            continue
+        for table, base in sorted(cts.TOKEN_BASE.items(), key=lambda kv: -kv[1]):
+            if t >= base:
+                names = dict(cts.MM_LABELS)[table]
+                i = t - base
+                out.append(names[i] if i < len(names) else "")
+                break
+    return " ".join(w for w in out if w)
+
+
 def ts():
     t = time.time()
     return time.strftime("%H:%M:%S", time.localtime(t)) + ".%03d" % int((t % 1) * 1000)
@@ -92,9 +107,11 @@ def describe(cmd: bytes) -> str:
             return "RACE DATA for race #%d" % ((cmd[5] << 8) | cmd[6])
         return "RACE DATA (%s)" % {b"C": "current", b"L": "last", b"N": "next"}.get(m, m.decode("latin-1", "replace"))
     if two == b"Rs" and len(cmd) >= 3:
-        return "READ SEQUENCE TITLE slot %d" % cmd[2]
+        return "READ MEET NAME slot %d" % cmd[2]
+    if two == b"Is" and len(cmd) >= 3:
+        return "WRITE MEET NAME slot %d = %r" % (cmd[2], cmd[3:].split(b"\x00")[0].decode("latin-1"))
     if two == b"Ir" and len(cmd) >= 3:
-        return "MAKE SEQUENCE %d ACTIVE" % cmd[2]
+        return "FINISH DOWNLOAD / MAKE MEET %d ACTIVE" % cmd[2]
     if two == b"Rt" and len(cmd) >= 4:
         return "READ LABEL %s #%d" % (TABLES.get(cmd[2], "table %d" % cmd[2]), cmd[3])
     if two == b"It" and len(cmd) >= 4:
@@ -108,10 +125,7 @@ def describe(cmd: bytes) -> str:
         if rest == bytes(8) or not any(rest):
             return "CLEAR EVENT %d in slot %d" % (ev, slot)
         dist = cts.u16(rest[0], rest[1]) if len(rest) >= 2 else 0
-        idx = list(rest[2:])
-        names = ["sex", "stroke", "age", "session"]
-        extra = ", ".join("%s #%d" % (names[i] if i < len(names) else "b%d" % i, v) for i, v in enumerate(idx))
-        return "WRITE EVENT %d in slot %d: %d, %s" % (ev, slot, dist, extra)
+        return "WRITE EVENT %d in slot %d: %d %s" % (ev, slot, dist, token_words(rest[2:]))
     return "UNKNOWN %r" % printable(cmd[:12])
 
 
@@ -168,7 +182,7 @@ class Emulator:
         self.sim.write(msg)
         reply = self.sim.read(1 << 16)
         if reply:
-            meaning = "error reply" if len(reply) == 6 else "reply"
+            meaning = ("ACK" if reply[2:4] == cts.ACK else "error reply") if len(reply) == 6 else "reply"
             if self.delay_ms:
                 time.sleep(self.delay_ms / 1000.0)
             if self.pace_baud:                  # one byte at a time, ~10 bits each, like a real 9600 line
@@ -182,7 +196,7 @@ class Emulator:
             self.rec.msg(">>", reply, meaning)
         else:
             self.rec.line("%s    (no reply - the real console doesn't answer this one, as far as we know)" % ts())
-        if cmd[:2] in (b"Iu", b"It", b"Ir"):
+        if cmd[:2] in (b"Iu", b"It", b"Ir", b"Is"):
             self.save()
 
     def bump(self, k):
@@ -196,14 +210,13 @@ class Emulator:
             d = data + bytes(8)
             events.setdefault(str(slot), {})[str(ev)] = {
                 "distance": cts.u16(d[0], d[1]), "bytes": data.hex(" "),
-                "sex": s.labels.get((0, d[2])), "stroke": s.labels.get((2, d[3])),
-                "age": s.labels.get((1, d[4])), "session_or_more": list(d[5:len(data)]),
+                "description": token_words(d[2:2 + cts.TOKENS]), "tokens": list(d[2:2 + cts.TOKENS]),
             }
         labels = {}
         for (t, i), text in sorted(s.labels.items()):
             labels.setdefault(TABLES.get(t, "table %d" % t), {})[str(i)] = text
         out = {"started": self.started, "saved": time.strftime("%Y-%m-%d %H:%M:%S"),
-               "active_sequence": s.active_slot, "event_sequences": events, "labels": labels,
+               "active_sequence": s.active_slot, "meet_names": s.titles, "event_sequences": events, "labels": labels,
                "commands_seen": self.counts, "unknown_commands": self.unknown[-50:],
                "not_console_messages": self.garbage[-50:]}
         with open(CAPTURE, "w", encoding="utf-8") as f:

@@ -68,6 +68,10 @@ main{padding:12px;max-width:720px;margin:0 auto}
 .star{background:none;border:0;padding:0 0 0 4px;font-size:16px;color:var(--mute);cursor:pointer;vertical-align:-1px}
 .star.on{color:var(--star)}
 .empty{padding:28px 16px;text-align:center;color:var(--mute)}
+.ytl a{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--line);color:var(--ink);text-decoration:none}
+.ytl .dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto}
+.ytl .nm{flex:1;font-weight:600}.ytl .nm small{display:block;font-weight:400;color:var(--mute)}
+.ytl .sub{background:#e5252a;color:#fff;border-radius:99px;padding:4px 12px;font-size:13px;font-weight:700}
 footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
 .hide{display:none!important}
 </style>
@@ -81,6 +85,9 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
   <div class="bar"><input id="q" type="search" placeholder="Find a swimmer or team" autocomplete="off" enterkeyhint="search"><button id="mine" title="Show only swimmers you starred">★ Mine</button></div>
 </header>
 <main id="main"><div class="empty">Loading results…</div></main>
+<section class="card" id="yt" style="max-width:720px;margin:0 auto 10px;width:calc(100% - 24px)"><h2>Watch &amp; follow on YouTube</h2>
+  <div style="padding:2px 14px 12px;font-size:14px;color:var(--mute)">Subscribe to the pool's channel for every meet, or just your school's.</div>
+  <div class="ytl"></div></section>
 <footer id="foot">Updates on its own every 30 seconds. ▼ = time dropped from the seed time, ▲ = added.</footer>
 <script>
 const $ = s => document.querySelector(s);
@@ -225,6 +232,12 @@ $("#share").addEventListener("click", () => {
     }
   });
 });
+// the pool's channel and each school's (subscribe links ask YouTube to confirm the subscription)
+const CHANNELS = [["@PrattAquaticCenter", "Tooele County Pratt Aquatic Center", "Every meet at the pool", "#0b5cab"],
+  ["@TooeleHighSwim", "Tooele High Swimming", "Buffaloes", "#9B5DE5"], ["@StansburySwim", "Stansbury High Swimming", "Stallions", "#3D7FF0"],
+  ["@GrantsvilleSwim", "Grantsville High Swimming", "Cowboys", "#E5383B"], ["@DeseretPeakSwim", "Deseret Peak Golden Eagles Swimming", "Golden Eagles", "#C9B45C"]];
+document.querySelector(".ytl").innerHTML = CHANNELS.map(([h, n, s, c]) => `<a href="https://www.youtube.com/${h}?sub_confirmation=1" target="_blank" rel="noopener">
+  <span class="dot" style="background:${c}"></span><span class="nm">${esc(n)}<small>${esc(s)} &middot; ${esc(h)}</small></span><span class="sub">Subscribe</span></a>`).join("");
 load();
 setInterval(load, 30000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });

@@ -503,6 +503,8 @@ $("#rgo").onclick = rulesSearch;
 $("#rq").addEventListener("keydown", e => { if (e.key === "Enter") rulesSearch(); });
 let MOVING = false;      // heat / lane editing is off unless asked for
 const TIMERS = () => (S.info && +S.info.timers) || 1;
+// two watches: their average with the thousandths dropped (NFHS 6-4-1b); one watch: itself
+const watchAvg = (a, b) => (a > 0 && b > 0) ? Math.floor((Math.round(a * 100) + Math.round(b * 100)) / 2) / 100 : (a > 0 ? a : b > 0 ? b : 0);
 // which time became the official time - shown read-only next to it
 function usedSource(e) {
   const t = +e.time || 0, same = (a, b) => a && Math.abs(a - b) < 0.005;
@@ -853,7 +855,8 @@ async function getTimes(h) {
       <td data-cpad="${h}-${l.lane}"><b>${esc(fmt(l.final)) || '<span class="badge dq">NO PAD</span>'}</b></td>
       <td class="legs" data-cbtn="${h}-${l.lane}">${(l.buttons || []).map((b, i) => b ? `<span data-b="${i}">${esc(fmt(b))}</span>` : "").filter(Boolean).join(" · ") || '<span class="muted">none</span>'}</td>
       <td data-cback="${h}-${l.lane}">${esc(fmt(l.backup)) || '<span class="muted">none</span>'}</td>
-      <td><input class="t" data-watch="${h}-${l.lane}" placeholder="time" value="${e && e.watch ? esc(fmt(e.watch)) : ""}" title="Timers time - only needed when the pad or buttons had a problem. Digits are fine: 21753 = 2:17.53"></td>
+      <td style="white-space:nowrap"><input class="t" data-watch="${h}-${l.lane}" placeholder="watch 1" style="width:68px" value="${e && e.watch ? esc(fmt(e.watch)) : ""}" title="Timers' watch time - only needed when the pad or buttons had a problem. Digits are fine: 21753 = 2:17.53">
+        <input class="t" data-watch2="${h}-${l.lane}" placeholder="watch 2" style="width:68px" value="${e && e.watch2 ? esc(fmt(e.watch2)) : ""}" title="Second timer's watch, if there is one - the two are averaged (thousandths dropped)"></td>
       <td><select data-use="${h}-${l.lane}"><option value="pad">Pad</option><option value="backup">Backup</option><option value="watch">Timers</option></select></td>
       <td>${pl(l.place)}</td><td class="legs" data-cnote="${h}-${l.lane}" style="max-width:280px">${l.splits.length ? "Splits " + l.splits.map(fmt).join(" · ") : ""}</td></tr>`).join("")}</table>
     <div id="tpNote-${h}" class="muted" style="font-size:12.5px;margin-top:4px"></div>
@@ -880,27 +883,32 @@ async function getTimes(h) {
   const check = () => {
     let flagged = 0, missing = 0, nopad = 0;
     rows.forEach(({l, e}) => {
-      const id = `${h}-${l.lane}`, tr = document.getElementById(`tl-${id}`), w = parseT(box.querySelector(`[data-watch="${id}"]`).value);
+      const id = `${h}-${l.lane}`, tr = document.getElementById(`tl-${id}`);
+      const w1 = parseT(box.querySelector(`[data-watch="${id}"]`).value), w2 = parseT(box.querySelector(`[data-watch2="${id}"]`).value), w = isNaN(w1) || isNaN(w2) ? NaN : 0;
       const sel = box.querySelector(`[data-use="${id}"]`);
-      const pad = l.final || 0, back = l.backup || 0, watch = isNaN(w) ? 0 : w, btns = (l.buttons || []).filter(x => x > 0);
+      const watch = isNaN(w) ? 0 : watchAvg(w1, w2), nw = [w1, w2].filter(x => x > 0).length;
+      const pad = l.final || 0, back = l.backup || 0, btns = (l.buttons || []).filter(x => x > 0);
       const avail = {pad, backup: back, watch};
       // which time to use by default: the pad, unless it's missing or the timers' watch says the pad is the odd one out
       let pick = pad ? "pad" : back ? "backup" : watch ? "watch" : "pad", note = "", level = 0;
-      if (!pad && (back || watch)) { note = "No pad touch &mdash; using the " + (back ? "backup" : "timers' time") + (watch || !back ? "." : ". Enter the timers' time to confirm it."); level = 2; nopad++; }
-      else if (pad && back && Math.abs(pad - back) > TOL + 1e-4) {
+      const W = nw === 2 ? "the two watches (averaged)" : "the timer's watch";
+      if (!pad && (back || watch)) {
+        level = 2; nopad++;
+        if (back && watch && Math.abs(back - watch) > TOL + 1e-4) { pick = "watch"; note = `No pad touch, and the backup is ${sgn(back - watch)} off ${W}. <b>Use the timers.</b>`; }
+        else note = "No pad touch &mdash; " + (back ? `<b>use the backup</b>${watch ? `; ${W} agree.` : ". Get the timers' watch times to confirm it."}` : `<b>use the timers.</b>`);
+      } else if (pad && back && Math.abs(pad - back) > TOL + 1e-4) {
         const d = back - pad;
         level = Math.abs(d) > BIG ? 2 : 1;
         if (watch) {
-          const padOk = Math.abs(watch - pad) <= Math.abs(watch - back);
-          if (padOk) note = `Backup ${sgn(d)} off the pad; the timers agree with the pad. Keep the pad.`;
-          else { note = `Pad looks wrong: the timers agree with the backup (pad ${sgn(pad - back)} vs backup). Use the backup.`; pick = "backup"; }
+          // the watches break the tie: whichever of pad and backup they're closer to wins
+          if (Math.abs(watch - back) < Math.abs(watch - pad)) { pick = "backup"; note = `Pad ${sgn(pad - back)} vs the backup, and ${W} agree with the backup. <b>Use the backup.</b>`; }
+          else note = `Backup ${sgn(d)} off the pad, and ${W} agree with the pad. <b>Stick with the pad.</b>`;
         } else if (d < 0) {
-          // backup faster: an early button, or a pad that registered late
           const med = btns.length ? btns.slice().sort((a, b) => a - b)[Math.floor(btns.length / 2)] : 0;
           const early = btns.length > 1 && btns.some(b => med - b > BIG);
-          note = early ? `Backup ${sgn(d)} fast because a button was pressed early (see Buttons). Keep the pad.`
-                       : `Backup ${sgn(d)} faster than the pad &mdash; a late pad (soft touch)? Get the timers' time to decide.`;
-        } else note = `Buttons ${sgn(d)} slower than the pad. The pad is usually right; check with the timers if unsure.`;
+          note = early ? `Backup ${sgn(d)} fast because a button was pressed early (see Buttons). <b>Stick with the pad.</b>`
+                       : `Pad ${sgn(-d)} slower than the backup &mdash; a late pad (soft touch)? <b>Enter the timers' watch times</b>: if they agree with the backup, use the backup.`;
+        } else note = `Buttons ${sgn(d)} slower than the pad. <b>Stick with the pad</b> (buttons are usually late).`;
       }
       if (watch && !note) {
         const ref = pad || back, d = watch - ref;
@@ -912,10 +920,12 @@ async function getTimes(h) {
       tint(box.querySelector(`[data-cback="${id}"]`), back && base ? back - base : 0);
       const bcell = box.querySelector(`[data-cbtn="${id}"]`);
       if (bcell) bcell.querySelectorAll("[data-b]").forEach(sp => { const b = l.buttons[+sp.dataset.b]; tint(sp, base ? b - base : 0); if (base && Math.abs(b - base) > BIG) sp.title = `${sgn(b - base)} from the ${pick === "pad" ? "pad" : pick}`; });
-      tint(box.querySelector(`[data-watch="${id}"]`), watch && base ? watch - base : 0);
-      [...sel.options].forEach(o => { o.disabled = !avail[o.value]; o.textContent = {pad: "Pad", backup: "Backup", watch: "Timers"}[o.value] + (avail[o.value] ? ` ${fmt(avail[o.value])}` : ""); });
+      tint(box.querySelector(`[data-watch="${id}"]`), w1 > 0 && base ? w1 - base : 0);
+      tint(box.querySelector(`[data-watch2="${id}"]`), w2 > 0 && base ? w2 - base : 0);
+      [...sel.options].forEach(o => { o.disabled = !avail[o.value]; o.textContent = {pad: "Pad", backup: "Backup", watch: nw === 2 ? "Watches avg" : "Timers"}[o.value] + (avail[o.value] ? ` ${fmt(avail[o.value])}` : "") + (o.value === pick && level ? " ✓" : ""); });
       if (!sel.dataset.touched || !avail[sel.value]) sel.value = avail[pick] ? pick : avail.pad ? "pad" : avail.backup ? "backup" : avail.watch ? "watch" : "pad";
-      if (isNaN(w)) { note = "The timers' time isn't a time."; level = 1; }
+      if (isNaN(w)) { note = "A watch time isn't a time."; level = 1; }
+      else if (level && sel.dataset.touched && sel.value !== pick) note += ` <span class="muted">(you chose ${sel.value === "watch" ? "the timers" : sel.value})</span>`;
       tr.style.background = level === 2 ? "var(--err-bg, #fde2e1)" : level === 1 ? "var(--warn-bg)" : "";
       const nc = box.querySelector(`[data-cnote="${id}"]`);
       if (nc) { nc.innerHTML = note || (l.splits.length ? "Splits " + l.splits.map(fmt).join(" · ") : ""); nc.style.color = level === 2 ? "var(--err)" : ""; }
@@ -927,10 +937,10 @@ async function getTimes(h) {
       (missing ? `${missing} entered lane(s) have no time and will be marked no-show unless you add a timers time.` : "") +
       (flagged >= 3 ? aoTip("wholeheat", true) : flagged ? aoTip("timing", true) : "") + (missing || nopad ? aoTip("missingpad", true) : "");
   };
-  box.addEventListener("input", ev => { if (ev.target.dataset.watch) check(); });
+  box.addEventListener("input", ev => { if (ev.target.dataset.watch || ev.target.dataset.watch2) check(); });
   box.addEventListener("change", ev => {
     if (ev.target.dataset.use) { ev.target.dataset.touched = 1; check(); }
-    if (ev.target.dataset.watch) {                 // show how the digits were read: 21753 -> 2:17.53
+    if (ev.target.dataset.watch || ev.target.dataset.watch2) {   // show how the digits were read: 21753 -> 2:17.53
       const w = parseT(ev.target.value);
       if (ev.target.value.trim() && !isNaN(w)) ev.target.value = fmt(w);
       check();
@@ -940,11 +950,11 @@ async function getTimes(h) {
   document.getElementById(`tpCancel-${h}`).onclick = () => { box.innerHTML = ""; show(); };   // redraw drops the previews
   document.getElementById(`tpApply-${h}`).onclick = () => {
     const lanes = r.lanes.map(l => {
-      const w = parseT((box.querySelector(`[data-watch="${h}-${l.lane}"]`) || {}).value);
+      const w = parseT((box.querySelector(`[data-watch="${h}-${l.lane}"]`) || {}).value), w2 = parseT((box.querySelector(`[data-watch2="${h}-${l.lane}"]`) || {}).value);
       const use = (box.querySelector(`[data-use="${h}-${l.lane}"]`) || {}).value || "pad";
-      return {lane: l.lane, pad: l.final, backup: l.backup, watch: isNaN(w) ? 0 : w, use, place: l.place, splits: l.splits};
+      return {lane: l.lane, pad: l.final, backup: l.backup, watch: isNaN(w) ? NaN : w, watch2: isNaN(w2) ? NaN : w2, use, place: l.place, splits: l.splits};
     });
-    if (lanes.some(l => isNaN(l.watch))) return toast("Fix the timers time that isn't a time");
+    if (lanes.some(l => isNaN(l.watch) || isNaN(l.watch2))) return toast("Fix the watch time that isn't a time");
     change("heat_results", {ptr: v.ptr, heat: h, overwrite: !document.getElementById(`tpKeep-${h}`).checked, lanes});
   };
 }

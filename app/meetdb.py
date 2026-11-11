@@ -362,13 +362,16 @@ def op_heat_results(m, ptr, heat, lanes, overwrite=True):
         if not overwrite and (e["time"] or (e["stat"] or "").strip()):
             skipped.append(e["lane"])
             continue
-        pad, backup, watch = float(ln.get("pad", ln.get("final")) or 0), float(ln.get("backup") or 0), float(ln.get("watch") or 0)
+        pad, backup = float(ln.get("pad", ln.get("final")) or 0), float(ln.get("backup") or 0)
+        w1, w2 = float(ln.get("watch") or 0), float(ln.get("watch2") or 0)
+        watch = timers_time(w1, w2) if w1 and w2 else (w1 or w2)       # two watches: averaged, thousandths dropped
         use = ln.get("use") or "pad"
         final = {"pad": pad, "backup": backup, "watch": watch}.get(use, pad) or 0
         if use != "pad" and final:
             used.append(f"lane {e['lane']} {'backup' if use == 'backup' else 'timers'}")
         stat = "R" if not final else ("Q" if int(ln.get("place") or 0) == -1 else "")
-        s = {"Fin_Time": final, "Fin_pad": pad, "Fin_back1": backup, "Fin_watch1": watch, "Fin_stat": stat or " ", "Fin_course": "Y"}
+        s = {"Fin_Time": final, "Fin_pad": pad, "Fin_back1": backup, "Fin_watch1": w1 or (w2 if not w1 else 0), "Sem_watch1": w2 if w1 else 0,
+             "Fin_stat": stat or " ", "Fin_course": "Y"}
         ops.append({"op": "update", "table": _table(e), "match": _match(e), "set": s})
         override[e["key"]] = {**e, "time": final, "stat": stat}
         ops.append({"op": "delete", "table": "Split", "match": {**_match(e), "Rnd_ltr": "F"} if e["kind"] == "I" else {"Relay_no": e["relay"], "Rnd_ltr": "F"}})

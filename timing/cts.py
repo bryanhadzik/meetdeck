@@ -191,7 +191,9 @@ def parse_race(msg: bytes) -> Race:
 
 # ---- transport -------------------------------------------------------------------
 class CTSError(Exception):
-    pass
+    def __init__(self, msg, code=None):
+        super().__init__(msg)
+        self.code = code            # console error code when the console refused the request
 
 
 class Console:
@@ -265,7 +267,7 @@ class Console:
                         if n == 6:
                             self.stats["console_errors"] += 1
                             self._err(f"console error code {u16(msg[2], msg[3])}")
-                            raise CTSError(f"console error code {u16(msg[2], msg[3])}")
+                            raise CTSError(f"console error code {u16(msg[2], msg[3])}", code=u16(msg[2], msg[3]))
                         self.stats["replies"] += 1
                         return msg
             else:
@@ -319,8 +321,31 @@ class Console:
         # UNVERIFIED: race number is sent as one byte after a 0; races above 255 may need the high byte there.
         return parse_race(self.request(CMD_SWIM_DATA + b"R" + bytes((race_number >> 8 & 0xFF, race_number & 0xFF)), timeout=3))
 
+    heat_order = None              # which byte order of SSBI E the console understood (learned on first success)
+
     def race_by_heat(self, event: int, heat: int) -> Race:
-        return parse_race(self.request(CMD_SWIM_DATA + b"E" + bytes((heat & 0xFF, event & 0xFF)), timeout=3))
+        """Times for one event/heat. The byte order of SSBI E isn't verified yet (captures only asked for 1/1),
+        so try both and accept a reply only when its own header says the right event and heat."""
+        orders = ["he", "eh"] if self.heat_order != "eh" else ["eh", "he"]
+        refused = None
+        for o in orders:
+            arg = bytes((heat & 0xFF, event & 0xFF)) if o == "he" else bytes((event & 0xFF, heat & 0xFF))
+            try:
+                r = parse_race(self.request(CMD_SWIM_DATA + b"E" + arg, timeout=3))
+            except CTSError as e:
+                if e.code is None:
+                    raise
+                refused = e
+                continue
+            if (r.event, r.heat) == (event, heat):
+                self.heat_order = o
+                return r
+            if event == heat:
+                break
+        code = f" (console error code {refused.code})" if refused else ""
+        raise CTSError(f"the console has no stored race for event {event} heat {heat}{code}. Check the event and heat "
+                       f"match the console (the console's race list shows what it has), or enter the console's race number.",
+                       code=refused.code if refused else None)
 
     def race_current(self) -> Race:
         return parse_race(self.request(CMD_SWIM_DATA + b"C", timeout=3))
@@ -399,9 +424,9 @@ def fixed(text: str, n: int) -> bytes:
 
 
 # ---- serial helpers ----------------------------------------------------------------
-SETTINGS_TO_TRY = [  # UNVERIFIED which one the System 6 uses; probe() finds out
-    {"baudrate": 9600, "parity": "N", "stopbits": 1},
+SETTINGS_TO_TRY = [  # the pool's System 6 answers at 9600 8-O-1 (probe, 2026-11-10)
     {"baudrate": 9600, "parity": "O", "stopbits": 1},
+    {"baudrate": 9600, "parity": "N", "stopbits": 1},
     {"baudrate": 9600, "parity": "E", "stopbits": 1},
     {"baudrate": 19200, "parity": "N", "stopbits": 1},
     {"baudrate": 2400, "parity": "N", "stopbits": 1},

@@ -144,3 +144,13 @@ def test_real_race_reply_with_button_and_backup():
     assert r.race_number == 6 and r.when == "2026-11-10 18:00:21"
     l1 = r.lanes[0]
     assert l1.final_ms == 10590 and l1.buttons_ms == [13050, 0, 0] and l1.backup_ms == 13050 and l1.splits_ms == []
+
+
+def test_missing_heat_gives_clear_message():
+    import pytest
+    from cts import CTSError
+    sim, c = make()
+    with pytest.raises(CTSError) as e:
+        c.race_by_heat(4, 1)
+    assert "no stored race for event 4 heat 1" in str(e.value)
+    assert c.race_by_heat(2, 2).heat == 2      # still works after a miss

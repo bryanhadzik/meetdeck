@@ -78,7 +78,7 @@ def connect(body: dict) -> dict:
     info = next((p for p in cts.list_ports(detail=True) if p["port"] == port), None)
     note(f"connect {port}: {info or 'not in the port list'}")
     if body.get("baudrate"):
-        s = {"baudrate": int(body["baudrate"]), "parity": body.get("parity", "N"), "stopbits": float(body.get("stopbits", 1))}
+        s = {"baudrate": int(body["baudrate"]), "parity": body.get("parity", "O"), "stopbits": float(body.get("stopbits", 1))}
         try:
             ser = cts.open_serial(port, **s)
         except Exception as e:
@@ -159,7 +159,7 @@ def listen(body: dict) -> dict:
         port = body.get("port")
         if not port:
             raise ValueError("pick a COM port")
-        s = {"baudrate": int(body.get("baudrate", 9600)), "parity": body.get("parity", "N"), "stopbits": float(body.get("stopbits", 1))}
+        s = {"baudrate": int(body.get("baudrate", 9600)), "parity": body.get("parity", "O"), "stopbits": float(body.get("stopbits", 1))}
         try:
             own = ser = cts.open_serial(port, **s)
         except Exception as e:

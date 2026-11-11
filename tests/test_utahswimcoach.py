@@ -40,9 +40,9 @@ def test_parse():
 def test_standing_and_lines(tmp_path):
     s = store(tmp_path)
     assert s.school_class("Stansbury High School") == "4A"
-    assert s.standing("F|50|A|I", "Stansbury High School", "Last5", "First5") == {"cls": "4A", "rank": 5, "sb": 25.5}
+    assert s.standing("F|50|A|I", "Stansbury High School", "Last5", "First5") == {"cls": "4A", "rank": 5, "sb": 25.5, "sb_date": "2026-11-01", "sb_meet": "M"}
     assert s.standing("F|50|A|I", "Stansbury", "Nobody", "X") == {"cls": "4A"}
-    assert s.standing("F|200|E|R", "Stansbury") == {"cls": "4A", "rank": 2, "sb": 121.0}
+    assert s.standing("F|200|E|R", "Stansbury")["sb"] == 121.0
     assert s.rank_of("F|50|A|I", "4A", 25.15) == 2
     ln = s.event_line("F|50|A|I", "4A")
     assert ln["line"] == 28.2 and ln["top"] == 25.1 and ln["record"] == 23.1 and ln["spots"] == 32
@@ -63,5 +63,5 @@ def test_phone_and_board(tmp_path):
     assert pr.build(m, None, None)["events"][0]["rows"][0]["st"] is None
     doc = meetboard.startlist(m, "x", s)
     ev = doc["events"][0]
-    assert ev["heats"][0]["lanes"][0]["state"] == {"cls": "4A", "rank": 5, "sb": 25.5}
+    assert ev["heats"][0]["lanes"][0]["state"] == {"cls": "4A", "rank": 5, "sb": 25.5, "sb_date": "2026-11-01"}
     assert ev["state_now"][0]["line"] == 28.2

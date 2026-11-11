@@ -277,7 +277,7 @@ class Store:
                     break
         if r is None:
             return {"cls": cls}
-        return {"cls": cls, "rank": r["rank"], "sb": r["t"]}
+        return {"cls": cls, "rank": r["rank"], "sb": r["t"], "sb_date": r.get("date", ""), "sb_meet": r.get("meet", "")}
 
     def rank_of(self, k: str, cls: str, t: float, exclude: dict | None = None) -> int | None:
         """Where time t would place in the class list (1 = fastest), if inside the top 100."""

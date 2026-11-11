@@ -74,7 +74,7 @@ def startlist(m: dict, source: str = "MeetDeck", store=None) -> dict:
                     if st["cls"] not in classes:
                         classes.append(st["cls"])
                     if st.get("rank"):
-                        lane["state"] = {"cls": st["cls"], "rank": st["rank"], "sb": st["sb"]}
+                        lane["state"] = {"cls": st["cls"], "rank": st["rank"], "sb": st["sb"], "sb_date": st.get("sb_date", "")}
             heats.setdefault(int(e["heat"]), []).append(lane)
         if not heats:
             continue

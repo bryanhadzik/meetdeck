@@ -68,7 +68,8 @@ class SimConsole:
     # ---- protocol ----
     def handle(self, cmd: bytes) -> bytes:
         if cmd == b"W":
-            return frame(b"System 6 Swimming 1.233 (SIM)\x00")
+            # what the real console answered Meet Manager (capture 2026-11-10): 0a 00 "1.234" 00 fd fe
+            return frame(b"1.234\x00")
         if cmd in (b"T", b"M+", b"M-"):
             return frame(b"T" + self._date_block(pad_to=HEADER_LEN - 3))
         if cmd[:2] == b"SR":

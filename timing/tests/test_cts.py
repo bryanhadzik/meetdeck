@@ -35,7 +35,7 @@ def make():
 
 def test_identity_and_races():
     sim, c = make()
-    assert "System 6" in c.who_are_you()
+    assert c.who_are_you().startswith("1.234")
     assert c.meet(0).get("when")
     assert c.race_list() == [{"race": 1, "event": 1, "heat": 1}, {"race": 2, "event": 2, "heat": 1}, {"race": 3, "event": 2, "heat": 2}]
     r = c.race_by_heat(2, 1)
@@ -72,3 +72,10 @@ if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and name != "test_bad_length_rejected":
             fn(); print("ok", name)
+
+
+def test_who_are_you_reply_matches_real_console():
+    # bytes the real System 6 sent to Meet Manager's 'W' (HHD capture, 2026-11-10)
+    sim = SimConsole()
+    sim.write(frame(b"W"))
+    assert sim.read(64) == bytes.fromhex("0a 00 31 2e 32 33 34 00 fd fe")

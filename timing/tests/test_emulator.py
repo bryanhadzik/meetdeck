@@ -52,7 +52,7 @@ def rig(tmp_path, monkeypatch):
 def test_bridge_talks_to_emulator(rig):
     emu, port, tmp = rig
     con = Console(port)
-    assert "System 6" in con.who_are_you()
+    assert con.who_are_you().startswith("1.234")
     races = con.race_list()
     assert len(races) == 8 and races[0]["event"] == 1
     r = con.race_by_heat(3, 2)
@@ -120,7 +120,7 @@ def test_tap_passes_through_and_records(tmp_path, monkeypatch):
     th = threading.Thread(target=lambda: emulator.tap(a, rec), daemon=True); th.start()
     time.sleep(0.3)
     con = Console(FdPort(mmm))
-    assert "System 6" in con.who_are_you()
+    assert con.who_are_you().startswith("1.234")
     assert con.race_by_heat(1, 1).event == 1
     time.sleep(0.3)
     log = open(tmp_path / "log.txt").read()

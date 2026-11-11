@@ -5,13 +5,18 @@
 set -e
 cd "$(dirname "$0")/.."
 NOTES="${1:?say what changed: windows/release.sh \"Fixed ...\"}"
-TODAY=$(date +%Y.%m.%d)
+# Version: MEETDECK_VERSION=1.1 windows/release.sh "..." sets it; otherwise the last number goes up
+# (1.0 -> 1.0.1 -> 1.0.2). Old dated builds (2026.11.10.6) sort before 1.0 in the updater.
 CUR=$(cat app/VERSION 2>/dev/null || echo 0)
-case "$CUR" in
-  "$TODAY".*) N=$(( ${CUR##*.} + 1 )) ;;
-  *) N=1 ;;
-esac
-V="$TODAY.$N"
+if [ -n "$MEETDECK_VERSION" ]; then V="$MEETDECK_VERSION"
+else
+  case "$CUR" in
+    20[0-9][0-9].*) TODAY=$(date +%Y.%m.%d)
+      case "$CUR" in "$TODAY".*) V="$TODAY.$(( ${CUR##*.} + 1 ))" ;; *) V="$TODAY.1" ;; esac ;;
+    *.*.*) V="${CUR%.*}.$(( ${CUR##*.} + 1 ))" ;;
+    *) V="$CUR.1" ;;
+  esac
+fi
 echo "$V" > app/VERSION
 windows/build.sh --with-meets          # also refreshes the server's Windows download
 git add -A

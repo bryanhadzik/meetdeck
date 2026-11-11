@@ -37,7 +37,10 @@ def supported() -> bool:
 
 
 def _key(v: str):
-    return [int(x) for x in re.findall(r"\d+", v or "")] or [0]
+    """Sort key for versions. Builds before 1.0 were dated (2026.11.10.6); release numbers (1.0, 1.0.1, 1.1)
+    come after every dated build."""
+    nums = [int(x) for x in re.findall(r"\d+", v or "")] or [0]
+    return [0] + nums if nums[0] >= 2000 else [1] + nums
 
 
 def _ctx():

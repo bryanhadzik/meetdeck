@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f8bf0"/>
+      <stop offset="1" stop-color="#0b4fb3"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3fd0f0"/>
+      <stop offset="1" stop-color="#0f7fd6"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#bg)"/>
+  <!-- pool with lane ropes -->
+  <clipPath id="c"><rect x="8" y="8" width="240" height="240" rx="52"/></clipPath>
+  <g clip-path="url(#c)">
+    <rect x="8" y="150" width="240" height="98" fill="url(#water)"/>
+    <path d="M8 150 q20 -10 40 0 t40 0 t40 0 t40 0 t40 0 t40 0 v8 H8z" fill="#ffffff" opacity=".35"/>
+    <g stroke-width="6" stroke-dasharray="10 8">
+      <line x1="8" y1="180" x2="248" y2="180" stroke="#ff4d6d"/>
+      <line x1="8" y1="208" x2="248" y2="208" stroke="#ffd23f"/>
+      <line x1="8" y1="236" x2="248" y2="236" stroke="#ff4d6d"/>
+    </g>
+  </g>
+  <!-- confetti -->
+  <g>
+    <rect x="34" y="40" width="14" height="7" rx="2" fill="#ffd23f" transform="rotate(-25 41 43)"/>
+    <rect x="200" y="36" width="14" height="7" rx="2" fill="#7cf29a" transform="rotate(30 207 40)"/>
+    <rect x="212" y="104" width="12" height="6" rx="2" fill="#ff4d6d" transform="rotate(-40 218 107)"/>
+    <rect x="30" y="112" width="12" height="6" rx="2" fill="#c38bff" transform="rotate(35 36 115)"/>
+    <circle cx="62" cy="76" r="5" fill="#ff8a3d"/>
+    <circle cx="190" cy="70" r="5" fill="#ffffff"/>
+    <circle cx="176" cy="128" r="4" fill="#ffd23f"/>
+    <circle cx="44" cy="140" r="4" fill="#7cf29a"/>
+  </g>
+  <!-- MD -->
+  <text x="128" y="122" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-weight="800" font-size="92" fill="#ffffff" letter-spacing="-4">MD</text>
+  <!-- star -->
+  <path d="M206 150 l7 14 15 2 -11 10 3 15 -14 -7 -14 7 3 -15 -11 -10 15 -2z" fill="#ffd23f" stroke="#b07a00" stroke-width="2"/>
+</svg>

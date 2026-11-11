@@ -2730,6 +2730,11 @@ def update_install():
         raise HTTPException(502, f"Update failed: {e}")
 
 
+@app.get("/favicon.ico")
+def favicon():
+    return FileResponse(STATIC / "meetdeck.ico")
+
+
 @app.get("/static/{name}")
 def static_file(name: str):
     f = STATIC / Path(name).name

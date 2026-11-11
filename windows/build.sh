@@ -33,7 +33,7 @@ mkdir -p "$B/MeetDeck/app/tools" && cp windows/MeetDeck-Launcher.ps1 "$B/MeetDec
 cp "$SP/certifi/cacert.pem" "$B/MeetDeck/app/cacert.pem"     # CA list for HTTPS (updates); travels with app updates
 cp windows/start.py "$B/MeetDeck/start.py"
 cp windows/start.py "$B/MeetDeck/app/start.py"      # updates carry it; the launcher refreshes the root copy
-docker run --rm -v "$PWD:/s" python:3.12-slim sh -c "pip install -q pillow && python /s/windows/make_icon.py /s/$B/MeetDeck/app/static"
+# icon: app/static/meetdeck.ico / .png / .svg are committed (made from meetdeck.svg)
 # starter data: host schools' master meets, rules library, settings (and the meets, if asked)
 for f in hosts hosts.json template rules settings.json; do [ -e data/$f ] && cp -r data/$f "$B/MeetDeck/seed/"; done
 python3 - "$B/MeetDeck/seed/settings.json" <<'PY'

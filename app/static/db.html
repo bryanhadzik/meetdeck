@@ -24,6 +24,10 @@ button:disabled{opacity:.5;cursor:default}
 button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
 button.small{padding:2px 7px;font-size:12.5px}
 button.danger{color:var(--err)}
+section.stale{border:2px solid var(--err)!important;background:var(--err-bg)!important;border-radius:10px;padding:8px 10px}
+button.alert{background:var(--err)!important;color:#fff!important;border-color:var(--err)!important;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--err) 30%,transparent)}}
+.stalemsg{color:var(--err);font-weight:600}
 input,select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 6px;max-width:100%}
 .muted{color:var(--muted)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -128,11 +132,13 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <span class="muted" style="font-size:12.5px" id="mbUrl"></span><span class="grow"></span>
       <label class="muted" style="font-size:12.5px" title="Send again by itself after scratches, lane moves, relay swimmer or name changes"><input type="checkbox" id="mbAuto"> auto</label>
       <button class="small" id="mbSend">Send start lists</button></div>
+    <div id="mbStale" class="stalemsg hidden" style="font-size:13px;margin-top:4px"></div>
     <div id="mbMsg" class="muted" style="font-size:12.5px;margin-top:4px"></div></section>
   <section id="pubBox" class="hidden" style="margin-bottom:14px"><div class="row"><b>Phone results</b><span id="pubState" class="badge"></span>
       <a id="pubUrl" target="_blank" rel="noopener" style="font-size:12.5px"></a><span class="grow"></span>
       <a class="ghost small" id="pubPrev" target="_blank" rel="noopener" style="font-size:12.5px">Preview</a>
       <button class="small" id="pubSend">Publish now</button></div>
+    <div id="pubStale" class="stalemsg hidden" style="font-size:13px;margin-top:4px"></div>
     <div id="pubMsg" class="muted" style="font-size:12.5px;margin-top:4px"></div></section>
   <section id="timing" style="margin-bottom:14px"><div class="row"><b>Timing console</b><span id="tmState" class="badge">not connected</span><span class="grow"></span>
           <button class="ghost small" id="tmToggle">Hide</button></div>
@@ -298,6 +304,7 @@ function mbShow() {
   $("#mbUrl").innerHTML = MB.url ? esc(MB.url.replace(/^https?:\/\//, "")) : `not set &mdash; <a href="/#setup">add its address in Setup</a>`;
   $("#mbSend").disabled = !on || MB.busy;
   $("#mbAuto").checked = MB.auto; $("#mbAuto").disabled = !MB.url;
+  if (!MB.busy) mbCheck();
 }
 // What the board shows: who swims in which heat and lane. Times and scoring don't count.
 function mbSig() {
@@ -885,7 +892,26 @@ async function pubStatus() {
     st.className = "badge " + (p.last && !p.last.ok ? "no" : "ok");
     st.textContent = p.queued ? "update queued" : p.last ? (p.last.ok ? "published " + p.last.at : "failed") : p.auto ? "auto" : "manual";
     $("#pubMsg").textContent = p.last && !p.last.ok ? p.last.error : p.queued ? "The next update goes out within a minute." : p.auto ? "Publishes by itself after each scored race." : "";
+    staleMark("pub", p.other_meet && !p.queued, p.live ? `Phones are showing another meet: ${p.live.name || "?"}${p.live.date ? " (" + p.live.date + ")" : ""}. Publish to switch them to this one.` : "");
   } catch (e) {}
+}
+// red box + pulsing button when the board / phone page still has an older meet
+function staleMark(k, on, text) {
+  $(`#${k}Box`).classList.toggle("stale", !!on);
+  $(`#${k}Send`).classList.toggle("alert", !!on);
+  const m = $(`#${k}Stale`); m.classList.toggle("hidden", !on); m.textContent = on ? text : "";
+}
+// Which meet is on the meet board right now (meet-board 0.2.76+ echoes the meet's id)
+async function mbCheck() {
+  if (!MB.url || MB.busy || !S || !S.exists) return staleMark("mb", false);
+  try {
+    const r = await fetch(MB.url + "/api/startlists", {cache: "no-store"});
+    const g = await r.json();
+    const name = (M && M.meet && M.meet.name) || "";
+    const other = g.meet && g.meet.id ? g.meet.id !== MID
+      : !!g.schedule && !(name && g.schedule.includes(name));
+    staleMark("mb", other, `The meet board has another meet loaded${g.meet && g.meet.name ? ": " + g.meet.name : g.schedule ? " (" + g.schedule + ")" : ""}. Send start lists to switch it to this one.`);
+  } catch (e) { /* can't reach the board from here: leave it */ }
 }
 $("#pubSend").onclick = async () => {
   $("#pubMsg").textContent = "Publishing…";
@@ -893,7 +919,7 @@ $("#pubSend").onclick = async () => {
   catch (e) { $("#pubMsg").textContent = e.message; }
   pubStatus();
 };
-setInterval(() => { if (!$("#pubBox").classList.contains("hidden")) pubStatus(); }, 30000);
+setInterval(() => { if (!$("#pubBox").classList.contains("hidden")) { pubStatus(); mbCheck(); } }, 30000);
 async function loadPractice(v) {
   const act = evEntries(v.ptr).filter(e => !e.scr && e.heat && e.lane);
   const seeds = act.map(e => e.seed).filter(x => x).sort((a, b) => a - b);

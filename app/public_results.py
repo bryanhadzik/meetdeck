@@ -118,6 +118,32 @@ def build(m: dict, scoring: dict | None = None, store=None) -> dict:
 
 
 # ---- GitHub ----------------------------------------------------------------------
+_LIVE = {}
+
+
+def live_meet(url: str, ttl: int = 60) -> dict | None:
+    """Which meet the public page shows right now: {id, name, date, updated} from its results.json
+    (cached a minute). None when it can't be read (no internet, nothing published yet)."""
+    now = time.time()
+    hit = _LIVE.get(url)
+    if hit and now - hit[0] < ttl:
+        return hit[1]
+    out = None
+    # https first; plain http while GitHub is still issuing a custom domain's certificate
+    for base in dict.fromkeys([url, url.replace("https://", "http://", 1)]):
+        try:
+            req = urllib.request.Request(base.rstrip("/") + f"/results.json?t={int(now)}", headers={"Cache-Control": "no-cache"})
+            with urllib.request.urlopen(req, timeout=6) as r:
+                d = json.loads(r.read().decode("utf-8"))
+            m = d.get("meet") or {}
+            out = {"id": m.get("id", ""), "name": m.get("name", ""), "date": m.get("date", ""), "updated": d.get("updated", "")}
+            break
+        except Exception:
+            out = None
+    _LIVE[url] = (now, out)
+    return out
+
+
 def _api(token: str, method: str, path: str, body=None):
     req = urllib.request.Request("https://api.github.com" + path, method=method,
                                  data=json.dumps(body).encode() if body is not None else None,
@@ -220,7 +246,7 @@ class Publisher:
         self.last[mid] = time.time()
         try:
             out = job()
-            self.status[mid] = {"ok": True, "at": time.strftime("%H:%M:%S"), **out}
+            self.status[mid] = {"ok": True, "at": time.strftime("%H:%M:%S"), "ts": time.time(), **out}
         except Exception as e:
             self.status[mid] = {"ok": False, "at": time.strftime("%H:%M:%S"), "error": str(e)}
         return self.status[mid]

@@ -2200,6 +2200,7 @@ def _public_doc(mid: str) -> dict:
     _usc.refresh()
     doc = public_results.build(meetdb.load(db), _dbinfo(d).get("scoring"), _usc if _settings().get("usc_on", True) else None)
     doc["stream"] = _stream_link()
+    doc["meet"]["id"] = mid
     return doc
 
 
@@ -2245,9 +2246,19 @@ def public_publish(mid: str):
 def public_status(mid: str):
     st = _settings()
     t = public_results.PUBLISHER.timer.get(mid)
+    url = public_results.site_url(st.get("public_repo") or public_results.DEFAULT_REPO, st.get("public_domain", public_results.DEFAULT_DOMAIN))
+    live = public_results.live_meet(url)
+    mine = None
+    if live and not live.get("id"):          # published before meets carried an id: compare names
+        try:
+            mine = (meetdb.load(_dbfile(_dir(mid)))["meet"] or {}).get("name", "")
+        except Exception:
+            mine = None
+    last = public_results.PUBLISHER.status.get(mid) or {}
+    just = last.get("ok") and time.time() - last.get("ts", 0) < 180     # GitHub is still deploying it
+    other = not just and bool(live) and (live.get("id") != mid if live.get("id") else (mine is not None and live.get("name", "") != mine))
     return {"last": public_results.PUBLISHER.status.get(mid), "queued": bool(t), "auto": bool(st.get("public_auto")),
-            "token": bool(st.get("public_token")),
-            "url": public_results.site_url(st.get("public_repo") or public_results.DEFAULT_REPO, st.get("public_domain", public_results.DEFAULT_DOMAIN))}
+            "token": bool(st.get("public_token")), "url": url, "live": live, "other_meet": other}
 
 
 # ---- rules library ----
@@ -2493,7 +2504,9 @@ def _meetboard_doc(mid: str) -> dict:
     if not _dbfile(d).exists():
         raise HTTPException(400, "No meet database yet - open Run the meet first")
     import updater as _up
-    return meetboard.startlist(meetdb.load(_dbfile(d)), f"MeetDeck {_up.version()}", _usc if _settings().get("usc_on", True) else None)
+    doc = meetboard.startlist(meetdb.load(_dbfile(d)), f"MeetDeck {_up.version()}", _usc if _settings().get("usc_on", True) else None)
+    doc["meet"]["id"] = mid          # meet-board echoes it back, so MeetDeck can tell the board has another meet
+    return doc
 
 
 @app.get("/api/meets/{mid}/meetboard.json")

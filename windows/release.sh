@@ -18,5 +18,6 @@ git add -A
 if [ -n "$COMMIT_TRAILER" ]; then git commit -q -m "MeetDeck $V" -m "$NOTES" -m "$COMMIT_TRAILER"
 else git commit -q -m "MeetDeck $V" -m "$NOTES"; fi
 git push -q origin HEAD
-gh release create "v$V" "windows/dist/meetdeck-app-$V.zip" --title "MeetDeck $V" --notes "$NOTES"
+python3 windows/public_zip.py windows/dist/MeetDeck-Windows.zip windows/dist/public/MeetDeck-Windows.zip 2>/dev/null || { mkdir -p windows/dist/public && python3 windows/public_zip.py windows/dist/MeetDeck-Windows.zip windows/dist/public/MeetDeck-Windows.zip; }
+gh release create "v$V" "windows/dist/meetdeck-app-$V.zip" "windows/dist/public/MeetDeck-Windows.zip" --title "MeetDeck $V" --notes "$NOTES"
 echo "Released MeetDeck $V"

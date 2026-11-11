@@ -56,6 +56,9 @@ main{padding:12px;max-width:720px;margin:0 auto}
 .r .legs{font-size:13px;color:var(--mute)}
 .r .res{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:17px}
 .r .pts{text-align:right;font-size:12px;color:var(--mute)}
+.r .sd{text-align:right;font-size:12px;color:var(--mute);white-space:nowrap;font-variant-numeric:tabular-nums}
+.r .dn{color:var(--ok);font-weight:700}
+.r .up{color:var(--mute)}
 .r .dq{color:var(--bad)}
 .r.me{background:color-mix(in srgb,var(--star) 14%,transparent)}
 .star{background:none;border:0;padding:0 0 0 4px;font-size:16px;color:var(--mute);cursor:pointer;vertical-align:-1px}
@@ -73,7 +76,7 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
   <div class="bar"><input id="q" type="search" placeholder="Find a swimmer or team" autocomplete="off" enterkeyhint="search"><button id="mine" title="Show only swimmers you starred">★ Mine</button></div>
 </header>
 <main id="main"><div class="empty">Loading results…</div></main>
-<footer id="foot">Updates on its own every 30 seconds.</footer>
+<footer id="foot">Updates on its own every 30 seconds. ▼ = time dropped from the seed time, ▲ = added.</footer>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -150,12 +153,19 @@ function render() {
   $("#main").innerHTML = out.join("");
 }
 
+// seed time, and how much faster (dropped) or slower (added) the swim was
+function seedLine(r) {
+  if (!r.seed) return r.result && !/^(DQ|NS)/.test(r.result) ? `<div class="sd">Seed NT</div>` : "";
+  const d = r.drop;
+  const ch = d == null ? "" : d > 0 ? ` <span class="dn">▼ ${d.toFixed(2)}</span>` : d < 0 ? ` <span class="up">▲ ${(-d).toFixed(2)}</span>` : ` <span class="up">±0.00</span>`;
+  return `<div class="sd">Seed ${esc(r.seed)}${ch}</div>`;
+}
 function rowHtml(r) {
   const k = starKey(r), on = STARS.has(k), dq = /^(DQ|NS)/.test(r.result || "");
   return `<div class="r ${on ? "me" : ""}"><div class="pl">${esc(r.place || "–")}</div>
     <div><div class="nm">${esc(r.name)}${r.yr ? ` <small>${esc(r.yr)}</small>` : ""}${r.exh ? ` <small>(exh)</small>` : ""}<button class="star ${on ? "on" : ""}" data-star="${esc(k)}" aria-label="follow">${on ? "★" : "☆"}</button></div>
       <div class="tm">${esc(r.team_name || r.team)}</div>${r.legs ? `<div class="legs">${esc(r.legs)}</div>` : ""}${r.dqtxt ? `<div class="legs dq">${esc(r.dqtxt)}</div>` : ""}</div>
-    <div><div class="res ${dq ? "dq" : ""}">${esc(r.result || "")}</div>${r.points ? `<div class="pts">${esc(r.points)} pts</div>` : ""}</div></div>`;
+    <div><div class="res ${dq ? "dq" : ""}">${esc(r.result || "")}</div>${seedLine(r)}${r.points ? `<div class="pts">${esc(r.points)} pts</div>` : ""}</div></div>`;
 }
 
 document.addEventListener("click", e => {

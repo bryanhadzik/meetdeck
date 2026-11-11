@@ -41,9 +41,13 @@ def build(m: dict, scoring: dict | None = None) -> dict:
     with_rows = {v["ptr"]: rows for v, rows in results_mod._rows(m)}
     for v in m["events"]:
         rows = [r for r in with_rows.get(v["ptr"], []) if r["place"] or r["result"]]
-        out = [{"place": r["place"], "name": r["name"], "yr": r["yr"], "team": r["team"], "team_name": names.get(r["team"], ""),
-                "result": r["result"], "points": r["points"], "legs": r["legs"], "dqtxt": r["dqtxt"], "exh": bool(r["exh"])}
-               for r in rows]
+        out = []
+        for r in rows:
+            seed = r["seed"] if r["seed"] != "NT" else ""
+            ok = r["time_v"] and r["seed_v"] and not r["result"].startswith(("DQ", "NS"))
+            out.append({"place": r["place"], "name": r["name"], "yr": r["yr"], "team": r["team"], "team_name": names.get(r["team"], ""),
+                        "result": r["result"], "points": r["points"], "legs": r["legs"], "dqtxt": r["dqtxt"], "exh": bool(r["exh"]),
+                        "seed": seed, "drop": round(r["seed_v"] - r["time_v"], 2) if ok else None})   # + = faster than seed
         sig = hashlib.sha1(json.dumps(out, sort_keys=True).encode()).hexdigest()[:10] if out else ""
         if out:
             latest = v["no"]

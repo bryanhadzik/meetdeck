@@ -418,7 +418,7 @@ def _rows(m):
             dqtxt = " / ".join(f"{c} {dqcodes.describe(c, v['stroke'], e['kind'] == 'R')}" for c in (e["dq"], e.get("dq2")) if c) if st in ("Q", "F", "D") else ""
             rows.append({"place": e["place"] or "", "name": name, "dqtxt": dqtxt, "yr": yr, "team": team, "seed": meetdb.fmt_time(e["seed"]) or "NT",
                          "result": result if (e["time"] or mark) else "", "points": (f"{e['points']:g}" if e["points"] else ""),
-                         "dq": e["dq"], "legs": legs, "exh": e["exh"]})
+                         "dq": e["dq"], "legs": legs, "exh": e["exh"], "seed_v": e["seed"] or 0, "time_v": e["time"] or 0})
         yield v, rows
 
 

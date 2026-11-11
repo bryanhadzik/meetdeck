@@ -458,6 +458,38 @@ function statBadge(e) {
   const s = (e.stat || "").trim();
   return s === "Q" || s === "F" || s === "D" ? `<span class="badge dq">DQ${e.dq ? " " + esc(e.dq) : ""}</span>` : s === "R" ? `<span class="badge dq">NS</span>` : "";
 }
+// ---- time typing: digits only, the ":" and "." are already there and fill from the right like a register
+//      (type 3 0 2 5 -> 0:30.25; 1 3 0 2 5 -> 1:30.25). Tab goes straight to the next time box.
+const TIME_BOX = "[data-watch],[data-watch2],[data-time],[data-timer]";
+function maskTime(v) {
+  if (/[a-z]/i.test(v)) return v;                       // NT / NS / DQ typed on purpose: leave it
+  const d = v.replace(/\D/g, "").replace(/^0+/, "").slice(0, 6);
+  if (!d) return "";
+  const p = d.padStart(5, "0");
+  return `${+p.slice(0, -4)}:${p.slice(-4, -2)}.${p.slice(-2)}`;
+}
+document.addEventListener("input", ev => {
+  const t = ev.target;
+  if (!t.matches || !t.matches(TIME_BOX)) return;
+  const m = maskTime(t.value);
+  if (m !== t.value) { t.value = m; try { t.setSelectionRange(m.length, m.length); } catch (e) {} }
+}, true);
+document.addEventListener("focusin", ev => {
+  const t = ev.target;
+  if (t.matches && t.matches(TIME_BOX)) { if (!t.placeholder || /^(time|timer|watch)/i.test(t.placeholder)) t.dataset.ph = t.placeholder; t.placeholder = "0:00.00"; setTimeout(() => { try { t.select(); } catch (e) {} }, 0); }
+});
+document.addEventListener("focusout", ev => {
+  const t = ev.target;
+  if (t.matches && t.matches(TIME_BOX) && t.dataset.ph !== undefined) { t.placeholder = t.dataset.ph; delete t.dataset.ph; }
+});
+document.addEventListener("keydown", ev => {
+  const t = ev.target;
+  if (ev.key !== "Tab" || !t.matches || !t.matches(TIME_BOX)) return;
+  const scope = t.closest("table") || document;
+  const boxes = [...scope.querySelectorAll(TIME_BOX)].filter(b => !b.disabled && b.offsetParent !== null);
+  const i = boxes.indexOf(t), next = boxes[i + (ev.shiftKey ? -1 : 1)];
+  if (next) { ev.preventDefault(); next.focus(); }          // leaving the box fires its change (save) as usual
+}, true);
 // same rules as the server: 1:05.32, 65.32, or digits only (10532 = 1:05.32, 5632 = 56.32)
 function parseTime(x) {
   x = String(x || "").trim().toUpperCase();
@@ -896,9 +928,9 @@ async function getTimes(h) {
       <td data-cpad="${h}-${l.lane}"><b>${esc(fmt(l.final)) || '<span class="badge dq">NO PAD</span>'}</b></td>
       <td class="legs" data-cbtn="${h}-${l.lane}">${(l.buttons || []).map((b, i) => b ? `<span data-b="${i}">${esc(fmt(b))}</span>` : "").filter(Boolean).join(" · ") || '<span class="muted">none</span>'}</td>
       <td data-cback="${h}-${l.lane}">${esc(fmt(l.backup)) || '<span class="muted">none</span>'}</td>
-      <td style="white-space:nowrap"><input class="t" data-watch="${h}-${l.lane}" placeholder="watch 1" style="width:68px" value="${e && e.watch ? esc(fmt(e.watch)) : ""}" title="Timers' watch time - only needed when the pad or buttons had a problem. Digits are fine: 21753 = 2:17.53">
-        <input class="t" data-watch2="${h}-${l.lane}" placeholder="watch 2" style="width:68px" value="${e && e.watch2 ? esc(fmt(e.watch2)) : ""}" title="Second timer's watch, if there is one - the two are averaged (thousandths dropped)"></td>
-      <td><select data-use="${h}-${l.lane}"><option value="pad">Pad</option><option value="backup">Backup button</option><option value="watch">Timers</option></select></td>
+      <td style="white-space:nowrap"><input class="t" data-watch="${h}-${l.lane}" placeholder="watch 1" inputmode="numeric" style="width:68px" value="${e && e.watch ? esc(fmt(e.watch)) : ""}" title="Timers' watch time - only needed when the pad or buttons had a problem. Digits are fine: 21753 = 2:17.53">
+        <input class="t" data-watch2="${h}-${l.lane}" placeholder="watch 2" inputmode="numeric" style="width:68px" value="${e && e.watch2 ? esc(fmt(e.watch2)) : ""}" title="Second timer's watch, if there is one - the two are averaged (thousandths dropped)"></td>
+      <td><select data-use="${h}-${l.lane}" tabindex="-1"><option value="pad">Pad</option><option value="backup">Backup button</option><option value="watch">Timers</option></select></td>
       <td>${pl(l.place)}</td><td class="legs" data-cnote="${h}-${l.lane}" style="max-width:280px">${l.splits.length ? "Splits " + l.splits.map(fmt).join(" · ") : ""}</td></tr>`).join("")}</table>
     <div id="tpNote-${h}" class="muted" style="font-size:12.5px;margin-top:4px"></div>
     <div class="row" style="margin-top:6px"><button class="small" id="tpApply-${h}">Apply to meet</button><button class="ghost small" id="tpCancel-${h}">Cancel</button>

@@ -800,9 +800,10 @@ async function getTimes(h) {
   let r;
   const noRace = e => /error code 3\b/.test(e.message);
   const raceNo = (S.races || {})[`${v.ptr}:${h}`];
-  // a real console is asked by race number; the simulator files practice races by event and heat
-  try { r = await bridge(raceNo && !TM.sim ? `/race?race=${raceNo}` : `/race?event=${v.no}&heat=${h}`); }
+  // ask by event and heat, the way Meet Manager does (verified on the real console); the race number is only a fallback
+  try { r = await bridge(`/race?event=${v.no}&heat=${h}`); }
   catch (e) {
+    if (raceNo && !TM.sim) { try { r = await bridge(`/race?race=${raceNo}`); } catch (e2) {} }
     if (noRace(e) && TM.sim) {
       try { await loadPractice(v); r = await bridge(`/race?event=${v.no}&heat=${h}`); tmMsg(`Simulator: made up practice times for event ${v.no}.`); }
       catch (e2) { e = e2; }

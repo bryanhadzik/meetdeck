@@ -318,8 +318,21 @@ class Console:
         return out
 
     def race(self, race_number: int) -> Race:
-        # UNVERIFIED: race number is sent as one byte after a 0; races above 255 may need the high byte there.
-        return parse_race(self.request(CMD_SWIM_DATA + b"R" + bytes((race_number >> 8 & 0xFF, race_number & 0xFF)), timeout=3))
+        """By stored race number. UNVERIFIED byte order (the real console refused hi,lo with code 50 once),
+        so try both and keep only a reply whose header carries that race number."""
+        n, last = race_number, None
+        for arg in (bytes((n >> 8 & 0xFF, n & 0xFF)), bytes((n & 0xFF, n >> 8 & 0xFF))):
+            try:
+                r = parse_race(self.request(CMD_SWIM_DATA + b"R" + arg, timeout=3))
+            except CTSError as e:
+                if e.code is None:
+                    raise
+                last = e
+                continue
+            if r.race_number == n:
+                return r
+        raise CTSError(f"the console wouldn't give race {n} by number" + (f" (console error code {last.code})" if last else ""),
+                       code=last.code if last else None)
 
     heat_order = None              # which byte order of SSBI E the console understood (learned on first success)
 

@@ -5,6 +5,12 @@ Start:   double-click MeetDeck.bat (the first start also puts a MeetDeck shortcu
          MeetDeck opens in your web browser. A blue "MD" icon sits in the tray (bottom-right, by the
          clock): Open MeetDeck / Open data folder / Quit MeetDeck.
 
+Network: MeetDeck also listens on this PC's network address, so a phone or another laptop on the
+         same Wi-Fi can open it: the tray menu shows the address (http://<this PC's IP>:8001).
+         The first start may ask to let Python through Windows Firewall - allow it on private
+         networks. To keep MeetDeck to this PC only, put MEETDECK_HOST=127.0.0.1 in
+         Documents\MeetDeck\meetdeck.env.
+
 Data:    Documents\MeetDeck  (meets, host schools' master meets, rules library, settings).
          Back up that folder; the app folder can be replaced with a newer version any time.
 

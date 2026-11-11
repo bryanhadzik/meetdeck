@@ -164,7 +164,27 @@ def serve():
     sys.path.insert(0, str(APP))
     os.chdir(ROOT)
     import main  # noqa: F401  (MeetDeck server)
-    uvicorn.run(main.app, host=os.environ.get("MEETDECK_HOST", "127.0.0.1"), port=PORT, log_level="warning", log_config=None)
+    # every network card (0.0.0.0), so phones / other laptops on the same network can open it at
+    # http://<this PC's IP>:8001 - MEETDECK_HOST=127.0.0.1 in meetdeck.env keeps it to this PC only
+    uvicorn.run(main.app, host=os.environ.get("MEETDECK_HOST", "0.0.0.0"), port=PORT, log_level="warning", log_config=None)
+
+
+def lan_urls() -> list:
+    """http://<ip>:8001/ for this PC's network addresses (not loopback / link-local)."""
+    ips = set()
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:   # the address used to reach the network
+            s.connect(("192.0.2.1", 9))
+            ips.add(s.getsockname()[0])
+    except OSError:
+        pass
+    try:
+        for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
+            ips.add(ip)
+    except OSError:
+        pass
+    ips = sorted(ip for ip in ips if not ip.startswith(("127.", "169.254.")))
+    return [f"http://{ip}:{PORT}/" for ip in ips]
 
 
 def tray(stop):
@@ -177,7 +197,10 @@ def tray(stop):
         else:
             img = Image.new("RGB", (64, 64), (31, 111, 235))
             ImageDraw.Draw(img).text((14, 20), "MD", fill="white")
+        others = [pystray.MenuItem(f"Other devices: {u}", (lambda u: lambda: webbrowser.open(u))(u))
+                  for u in (lan_urls() if os.environ.get("MEETDECK_HOST", "0.0.0.0") != "127.0.0.1" else [])]
         menu = pystray.Menu(pystray.MenuItem("Open MeetDeck", lambda: webbrowser.open(URL), default=True),
+                            *others,
                             pystray.MenuItem("Open data folder", lambda: os.startfile(DATA)),
                             pystray.MenuItem("Quit MeetDeck", lambda icon: (icon.stop(), stop())))
         pystray.Icon("MeetDeck", img, "MeetDeck", menu).run()

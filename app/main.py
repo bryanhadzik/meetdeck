@@ -2356,6 +2356,8 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
         pdf, label = heatsheet.timeline_pdf(m, licensee), "timeline"
     elif kind == "softtouch":
         pdf, label = heatsheet.softtouch_pdf(m, licensee), "soft touch backup times"
+    elif kind == "watches":
+        pdf, label = heatsheet.watches_pdf(m, float(_settings().get("time_tolerance") or 0.30), licensee), "watches needed"
     elif kind == "timer":
         pdf, label = heatsheet.timer_pdf(m, licensee, lane=lane or None), "timer sheets" + (f" lane {lane}" if lane else "")
     else:

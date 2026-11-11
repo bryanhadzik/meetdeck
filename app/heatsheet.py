@@ -926,3 +926,121 @@ def softtouch_pdf(m, licensee="", printed=None) -> bytes:
     c.showPage()
     c.save()
     return buf.getvalue()
+
+
+def watches_needed(m, tol=0.30):
+    """Lanes that still need the timers' watch times: no pad touch, or pad and backup button disagree by more
+    than the tolerance - and no watch time entered yet (entering one takes the lane off the list)."""
+    import meetdb as _mdb
+    evs = {v["ptr"]: v for v in m["events"]}
+    order = {v["ptr"]: i for i, v in enumerate(m["events"])}
+    out = []
+    for e in m["entries"]:
+        if e["scr"] or not e["heat"] or not e["lane"] or (e["stat"] or "").strip() in ("R", "F", "D"):
+            continue
+        if (e.get("watch") or 0) > 0 or (e.get("watch2") or 0) > 0:
+            continue
+        pad = float(e.get("pad") or 0)
+        btn = [float(x) for x in (e.get("backup"), e.get("back2"), e.get("back3")) if x and float(x) > 0]
+        back = (sum(round(b * 100) for b in btn) // len(btn)) / 100 if btn else 0
+        if not pad and not back:
+            continue
+        if not pad:
+            why = "No pad touch"
+        elif back and abs(pad - back) > tol + 1e-6:
+            d = back - pad
+            why = f"Button {'+' if d > 0 else '-'}{abs(d):.2f} vs pad"
+        else:
+            continue
+        v = evs.get(e["event"], {})
+        team = m["teams"].get(e["team"] if e["kind"] == "R" else m["athletes"].get(e["ath"], {}).get("team"), {}).get("abbr", "")
+        out.append({"order": (order.get(e["event"], 999), e["heat"], e["lane"]), "event": v.get("no", ""), "label": v.get("label", ""),
+                    "heat": e["heat"], "lane": e["lane"], "who": _mdb.who(m, e), "team": team,
+                    "pad": _mdb.fmt_time(pad) if pad else "none", "back": _mdb.fmt_time(back) if back else "none", "why": why})
+    out.sort(key=lambda r: r["order"])
+    return out
+
+
+def watches_pdf(m, tol=0.30, licensee="", printed=None) -> bytes:
+    """The watch times still to collect, one row per lane, with boxes for both watches."""
+    rows_data = watches_needed(m, tol)
+    reg, bold = _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    W, H = letter
+    c.setTitle(f"{m['meet']['name']} - Watches needed")
+    margin = 27.0
+    cols = [("Event", 0.09), ("Ht", 0.045), ("Ln", 0.045), ("Swimmer / relay", 0.25), ("Pad", 0.085), ("Button", 0.085),
+            ("Why", 0.17), ("Watch 1", 0.115), ("Watch 2", 0.115)]
+    tw = W - 2 * margin
+    widths = [tw * f for _, f in cols]
+    head_h, row_h = 16.0, 27.0
+    meet = (m.get("meet") or {}).get("name", "")
+    stamp = printed or __import__("time").strftime("%I:%M %p").lstrip("0")
+
+    def header(page):
+        top = H - margin
+        c.setFont(bold, 12.5)
+        c.drawString(margin, top - 11, "Watches needed")
+        c.setFont(reg, 9.5)
+        c.drawRightString(W - margin, top - 11, f"{meet}  ·  printed {stamp}" + (f"  ·  page {page}" if page > 1 else ""))
+        c.setFont(reg, 8.5)
+        c.drawString(margin, top - 24, f"Lanes with no pad touch, or pad and backup button more than {tol:.2f} apart. Get both timers' watches; "
+                     "enter them in MeetDeck and the lane drops off this list.")
+        y = top - 32
+        c.setFillGray(0.88)
+        c.rect(margin, y - head_h, tw, head_h, stroke=0, fill=1)
+        c.setFillGray(0)
+        c.setFont(bold, 8.5)
+        x = margin
+        for (label, _), w in zip(cols, widths):
+            c.drawCentredString(x + w / 2, y - head_h + 4.6, label)
+            x += w
+        return y - head_h
+
+    page, y = 1, header(1)
+    if not rows_data:
+        c.setFont(reg, 12)
+        c.drawString(margin + 6, y - 24, "Nothing to collect right now - every lane has a pad time that agrees with its backup button, or a watch time.")
+    for r in rows_data:
+        if y - row_h < margin + 8:
+            c.showPage()
+            page += 1
+            y = header(page)
+        yb = y - row_h
+        c.setLineWidth(0.5)
+        c.setStrokeGray(0.55)
+        c.line(margin, yb, margin + tw, yb)
+        c.setStrokeGray(0)
+        x = margin
+        cells = [str(r["event"]), str(r["heat"]), str(r["lane"]), None, r["pad"], r["back"], r["why"], "", ""]
+        for i, (val, w) in enumerate(zip(cells, widths)):
+            if i == 3:
+                c.setFont(bold, 9)
+                nm = r["who"] if len(r["who"]) <= 30 else r["who"][:29] + "…"
+                c.drawString(x + 4, yb + 15, nm)
+                c.setFont(reg, 7.5)
+                c.drawString(x + 4, yb + 5, f"{r['team']}  ·  {r['label']}"[:48])
+            elif i in (7, 8):
+                c.setFont(reg, 11)
+                c.setFillGray(0.72)
+                c.drawString(x + w * 0.30, yb + 9, ":")
+                c.drawString(x + w * 0.66, yb + 9, ".")
+                c.setFillGray(0)
+            else:
+                c.setFont(bold if i < 3 else reg, 9.5 if i < 3 else 8.5)
+                if i == 6:
+                    c.drawString(x + 3, yb + 10, val[:30])
+                else:
+                    c.drawCentredString(x + w / 2, yb + 10, val)
+            x += w
+        x = margin
+        for w in widths[:-1]:
+            x += w
+            c.line(x, y, x, yb)
+        c.rect(margin, yb, tw, 0)
+        y = yb
+    c.setLineWidth(0.9)
+    c.showPage()
+    c.save()
+    return buf.getvalue()

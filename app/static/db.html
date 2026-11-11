@@ -109,6 +109,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <div class="prow"><span>Referee program</span><button class="small" data-pr="referee">Print</button><button class="ghost small" data-pdf="referee">PDF</button></div>
       <div class="prow"><span>Timeline <span class="muted" style="font-size:11px">(session report)</span></span><button class="small" data-pr="timeline">Print</button><button class="ghost small" data-pdf="timeline">PDF</button></div>
       <div class="prow"><span>Results</span><button class="small" data-pr="results">Print</button><button class="ghost small" data-pdf="results">PDF</button></div>
+      <div class="prow"><span>Watches needed <span class="muted" style="font-size:11px" id="watchCount">(lanes to get watch times for)</span></span><button class="small" data-pr="watches">Print</button><button class="ghost small" data-pdf="watches">PDF</button></div>
       <div class="prow"><span>Soft touch backup times <span class="muted" style="font-size:11px">(blank log)</span></span><button class="small" data-pr="softtouch">Print</button><button class="ghost small" data-pdf="softtouch">PDF</button></div>
       <div class="prow"><span>Timer sheets <select id="prLane" title="All lanes, or just one lane's sheets"><option value="">all lanes</option></select></span><button class="small" data-pr="timer">Print</button><button class="ghost small" data-pdf="timer">PDF</button></div>
     </div></div>
@@ -292,6 +293,7 @@ function mbShow() {
   const on = !!(MB.url && S && S.exists);
   $("#mbBox").classList.toggle("hidden", !S || !S.exists);
   $("#pubBox").classList.toggle("hidden", !S || !S.exists);
+  { const n = watchesNeeded(), wc = document.getElementById("watchCount"); if (wc) { wc.textContent = n ? `(${n} lane${n > 1 ? "s" : ""} to get)` : "(none right now)"; wc.style.color = n ? "var(--warn)" : ""; } }
   pubStatus();
   $("#mbUrl").innerHTML = MB.url ? esc(MB.url.replace(/^https?:\/\//, "")) : `not set &mdash; <a href="/#setup">add its address in Setup</a>`;
   $("#mbSend").disabled = !on || MB.busy;
@@ -820,6 +822,16 @@ $("#tmSend").onclick = async () => {
   tmMsg("Sending the meet… (about 5 seconds)");
   try { const r = await bridge("/download", {slot, events, title: (M.meet.name || "").slice(0, 20)}); tmMsg(`Sent ${r.events} events to meet slot ${r.slot} as \"${esc(r.title)}\". Advance heats on the console as usual.`); api(`${API}/activity`, J({key: "console"})).catch(() => {}); } catch (e) { tmMsg(e.message, true); }
 };
+// lanes still needing watch times (same rule as the Watches needed printout)
+function watchesNeeded() {
+  if (!M) return 0;
+  return M.entries.filter(e => {
+    if (e.scr || !e.heat || !e.lane || ["R", "F", "D"].includes((e.stat || "").trim()) || +e.watch > 0 || +e.watch2 > 0) return false;
+    const pad = +e.pad || 0, btn = [e.backup, e.back2, e.back3].filter(x => +x > 0);
+    const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
+    return (!pad && back) || (pad && back && Math.abs(pad - back) > TOL + 1e-6);
+  }).length;
+}
 async function pubStatus() {
   try {
     const p = await api(`/api/meets/${MID}/public/status`);

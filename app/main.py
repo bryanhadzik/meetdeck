@@ -706,7 +706,7 @@ def put_state(mid: str, body: dict):
     d = _dir(mid)
     meta = _meta(d)
     for k in ("removed", "rules", "lanes", "name", "date", "location", "host", "combine", "combine_low", "expected_teams", "preseed", "min_heat",
-              "run", "ended", "contacts"):
+              "run", "ended", "contacts", "session_break"):
         if k in body:
             meta[k] = body[k]
     if "record_team" in body:
@@ -1753,7 +1753,15 @@ def db_get(mid: str):
     vd = _dbdir(d) / "versions"
     versions = sorted(vd.glob("*.mdb.gz"), reverse=True) if vd.exists() else []
     scoring = info.get("scoring") or {}
-    return {"exists": True, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
+    gap = _meta(d).get("session_break")
+    gap = gap if isinstance(gap, int) else None
+    try:
+        import heatsheet
+        tl = [{"no": s["no"], "name": s["name"], "day": s["day"], "start": s["start"], "finish": s["finish"], "heats": s["heats"]}
+              for s in heatsheet.timeline(m, gap)]
+    except Exception:
+        tl = []
+    return {"exists": True, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
             "model": meetdb.json_safe(m), "problems": meetdb.check(m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
@@ -2390,7 +2398,8 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
     elif kind == "results":
         pdf, label = heatsheet.results_pdf(m, db, licensee), "results"
     elif kind == "timeline":
-        pdf, label = heatsheet.timeline_pdf(m, licensee), "timeline"
+        gap = _meta(d).get("session_break")
+        pdf, label = heatsheet.timeline_pdf(m, licensee, gap_min=gap if isinstance(gap, int) else None), "timeline"
     elif kind == "softtouch":
         pdf, label = heatsheet.softtouch_pdf(m, licensee), "soft touch backup times"
     elif kind == "watches":

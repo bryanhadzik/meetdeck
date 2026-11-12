@@ -760,6 +760,15 @@ function renderTeams() {
     `<tr><td><input data-team="${t.no}" data-f="abbr" value="${esc(t.abbr)}" size="6"></td><td><input data-team="${t.no}" data-f="name" value="${esc(t.name)}" size="30"></td>
      <td><input data-team="${t.no}" data-f="short" value="${esc(t.short)}" size="16"></td><td>${Object.values(M.athletes).filter(a => a.team === t.no).length}</td></tr>`).join("") + `</table>`;
 }
+function clockOf(sec) { const m = Math.round(sec / 60), h = Math.floor(m / 60) % 24, mi = m % 60; return `${(h + 11) % 12 + 1}:${String(mi).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; }
+document.addEventListener("change", async e => {
+  if (e.target.id !== "sessBreak") return;
+  const v = e.target.value === "" ? null : +e.target.value;
+  try {
+    await api(`/api/meets/${MID}/state`, {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({session_break: v})});
+    S = await api(API); toast(v == null ? "Using Meet Manager's session start times" : `Sessions now ${v} minutes apart`); show();
+  } catch (x) { toast("Not saved: " + x.message); }
+});
 function renderMeet() {
   const mt = M.meet;
   const inp = (k, label, val, attrs = "") => `<label class="mf"><span>${label}</span><input data-meet="${k}" value="${esc(val ?? "")}" ${attrs}></label>`;
@@ -773,6 +782,13 @@ function renderMeet() {
       ${inp("calc_date", "Age-up date", mt.calc_date, 'type="date" title="Date ages are calculated on"')}
       <label class="mf"><span>Course</span><select data-meet="course">${[[3, "Short course yards (SCY)"], [2, "Short course meters (SCM)"], [1, "Long course meters (LCM)"]].map(([v, l]) => `<option value="${v}" ${+mt.course === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       ${inp("lanes", "Lanes", mt.lanes, 'type="number" min="1" max="10" style="width:70px"')}${inp("altitude", "Altitude (ft)", mt.altitude || "", 'type="number" min="0" max="15000" style="width:90px"')}</div>
+    <h3>Timeline</h3>
+    <div class="row" style="gap:12px;align-items:center">
+      <label class="mf"><span>Break between sessions</span><select id="sessBreak">
+        <option value="">Meet Manager's session start times</option>
+        ${[5, 10, 15, 20, 30].map(n => `<option value="${n}" ${S.session_break === n ? "selected" : ""}>${n} minutes</option>`).join("")}</select></label>
+      <span class="muted" style="font-size:12.5px">With a break picked, each later session starts that long after the one before is projected to finish (Timeline report and below).</span></div>
+    <div id="sessList" style="font-size:13.5px;margin:6px 0 4px">${(S.timeline || []).map(s => `<div>Session ${esc(s.no)}${s.name && s.name != s.no ? " &middot; " + esc(s.name) : ""}: <b>${clockOf(s.start)}</b> &ndash; about ${clockOf(s.finish)} (${s.heats} heats)</div>`).join("")}</div>
     <h3>Address</h3>
     <div class="mgrid">${inp("addr1", "Address", mt.addr1, 'maxlength="30" style="width:100%"')}${inp("addr2", "Address line 2", mt.addr2, 'maxlength="30" style="width:100%"')}</div>
     <div class="mgrid4">${inp("city", "City", mt.city, 'maxlength="30"')}${inp("state", "State", mt.state, 'maxlength="3" size="4"')}${inp("zip", "Zip", mt.zip, 'maxlength="10" size="10"')}${inp("country", "Country", mt.country, 'maxlength="3" size="4"')}</div>`;

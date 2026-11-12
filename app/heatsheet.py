@@ -734,17 +734,21 @@ def _nt_estimate(v, course):
     return d * f * (1.1 if course in ("L", "S") else 1.0)
 
 
-def timeline(m) -> list:
+def timeline(m, gap_min=None) -> list:
     """Session Report timeline, worked out the way Meet Manager does:
     each heat lasts as long as its slowest seed time (NT entries don't count unless the whole heat is NT,
     then a canned estimate) plus the session's heat interval, plus the backstroke allowance for events that
     start in the water (backstroke and medley relays). Unseeded events use the average entry time and a
-    projected heat count. Start times are rounded up to the minute."""
+    projected heat count. Start times are rounded up to the minute.
+    gap_min: break between sessions (minutes). When set, a later session on the same day starts that long after
+    the one before it is projected to finish, instead of at its Meet Manager start time."""
     import math
     evs = {v["ptr"]: v for v in m["events"]}
     lanes = m["meet"].get("lanes") or 8
     out = []
     for s in m.get("sessions", []):
+        if gap_min is not None and out and out[-1]["day"] == s["day"]:
+            s = {**s, "start": out[-1]["finish"] + int(gap_min) * 60}
         t, rows, swimmers, n_ent, n_heat = 0.0, [], set(), 0, 0
         for it in s["items"]:
             v = evs.get(it["event"])
@@ -789,7 +793,7 @@ def _clock(sec):
     return f"{(h - 1) % 12 + 1:02d}:{mi:02d} {'AM' if h % 24 < 12 else 'PM'}"
 
 
-def timeline_pdf(m, licensee="", printed=None) -> bytes:
+def timeline_pdf(m, licensee="", printed=None, gap_min=None) -> bytes:
     if printed is None:
         try:
             from zoneinfo import ZoneInfo
@@ -804,7 +808,7 @@ def timeline_pdf(m, licensee="", printed=None) -> bytes:
         when = f"{d.month}/{d.day}/{d.year}"
     except Exception:
         when = mt.get("start") or ""
-    sessions = timeline(m) or [{"no": 0, "ltr": "", "name": "No sessions set up in Meet Manager", "day": 1, "start": 0,
+    sessions = timeline(m, gap_min) or [{"no": 0, "ltr": "", "name": "No sessions set up in Meet Manager", "day": 1, "start": 0,
                                 "interval": 0, "back": 0, "rows": [], "swimmers": 0, "entries": 0, "heats": 0, "finish": 0}]
     X_RND, X_NO, X_EV, X_ENT, X_HT, X_ST, X_END = 28.0, 177.0, 187.0, 588.0, 672.0, 709.0, 869.0
     k = 0.6458   # the layout above is in 936-wide units (the original's), scaled to the page

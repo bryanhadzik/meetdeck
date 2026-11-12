@@ -1785,6 +1785,7 @@ def _adopt_scoring(d: Path):
             summary = {"method": method, "method_name": cfg["name"], "ind_max": im, "rel_max": rm, "fastest": fastest,
                        "events": done, "sigs": {str(p): meetdb.event_sig(m, p) for p in done}, "skipped": [],
                        "when": time.strftime("%Y-%m-%d %H:%M"), "from_file": True}
+            summary["host_teams"] = _host_team_nos(d, m)
             summary.update(meetdb.score_totals(m, summary))
             info["scoring"] = summary
             _dblog(d, f"{len(done)} race(s) were already scored in Meet Manager - kept their points", "score")
@@ -2020,6 +2021,13 @@ def _jet3(db: Path) -> bool:
 
 
 # ---- last-minute changes: re-seeding and each team's "done" -----------------------------------------
+def _host_team_nos(d: Path, m: dict) -> list:
+    """The host school's team number(s) in the meet database (for double-dual scoring)."""
+    h = next((h for h in _hosts() if h["id"] == _meta(d).get("host", "THS")), None) or {}
+    codes = {c.upper() for c in h.get("team_codes") or []}
+    return [no for no, t in m["teams"].items() if (t or {}).get("abbr", "").upper() in codes]
+
+
 def _standard_seed_meet(entries, removed, min_heat, skip):
     """Invitational seeding: every event by seed time only (fastest heat last, fastest in the middle lanes)."""
     import reseed
@@ -2290,7 +2298,9 @@ def db_score(mid: str, body: dict):
     summary = {"method": method, "method_name": cfg["name"], "ind_max": ind_max, "rel_max": rel_max, "fastest": fastest,
                "events": sorted(kept | set(scored)), "sigs": {**(prev.get("sigs", {}) if same else {}), **sigs},
                "skipped": skipped if body.get("all") else [], "when": time.strftime("%Y-%m-%d %H:%M")}
-    summary.update(meetdb.score_totals(meetdb.load(db), summary))
+    m_now = meetdb.load(db)
+    summary["host_teams"] = _host_team_nos(d, m_now)
+    summary.update(meetdb.score_totals(m_now, summary))
     info = _dbinfo(d)
     info["scoring_stack"] = (info.get("scoring_stack", []) + [prev])[-40:]   # for undo
     info["scoring"] = summary

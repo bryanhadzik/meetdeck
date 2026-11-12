@@ -608,7 +608,8 @@ SCORING = {
     "dual4": {"name": "Dual meet, 4 entries per team (8-6-5-4-3-2-1 / 10-5-3)", "ind": [8, 6, 5, 4, 3, 2, 1], "rel": [10, 5, 3], "ind_max": 4, "rel_max": 2},
     "tri": {"name": "Triangular meet (7-5-4-3-2-1 / 14-10-8-6-4-2)", "ind": [7, 5, 4, 3, 2, 1], "rel": [14, 10, 8, 6, 4, 2], "ind_max": 2, "rel_max": 2},
     "champ": {"name": "Championship / invitational, 16 places (20-17-16...1, relays double)", "ind": CHAMP16, "rel": [p * 2 for p in CHAMP16], "ind_max": 4, "rel_max": 1},
-    "doubledual": {"name": "Double / triple dual - each pair of teams scored as a dual meet (6-4-3-2-1 / 8-4-2)", "ind": [6, 4, 3, 2, 1], "rel": [8, 4, 2], "ind_max": 3, "rel_max": 2, "pairs": True},
+    "doubledual": {"name": "Double dual - the host scored against each other team as a dual meet (6-4-3-2-1 / 8-4-2)", "ind": [6, 4, 3, 2, 1], "rel": [8, 4, 2], "ind_max": 3, "rel_max": 2, "pairs": "host"},
+    "tripledual": {"name": "Triple dual - every pair of teams scored as a dual meet (6-4-3-2-1 / 8-4-2)", "ind": [6, 4, 3, 2, 1], "rel": [8, 4, 2], "ind_max": 3, "rel_max": 2, "pairs": True},
 }
 
 
@@ -703,8 +704,11 @@ def score_totals(m, summary) -> dict:
     pairs = []
     if cfg.get("pairs"):
         all_teams = sorted({e["team"] for e in m["entries"] if not e["scr"]})
+        host = set(summary.get("host_teams") or [])
         for i, a in enumerate(all_teams):
             for b in all_teams[i + 1:]:
+                if cfg["pairs"] == "host" and host and not ({a, b} & host):
+                    continue        # double dual (NFHS 1-4-10b): only the host against each visitor
                 tot = {a: {"F": 0, "M": 0}, b: {"F": 0, "M": 0}}
                 for v in m["events"]:
                     if v["ptr"] not in done:

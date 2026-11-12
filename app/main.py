@@ -8,7 +8,7 @@ import time
 import zipfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 
 from hy3 import POOL_LANES, _list, checksum, clean_hy3, combine_plan, lane_plan, table_plan, table_has_open, parse_hy3, read_upload, seed_meet, validate
@@ -3179,6 +3179,41 @@ def windows_app():
     if not f.exists():
         raise HTTPException(404, "The Windows version hasn't been built yet")
     return FileResponse(f, filename="MeetDeck-Windows.zip", media_type="application/zip")
+
+
+# ---- timing bridge through this server ----
+# The bridge (in the Windows app, or timing\bridge.py) only listens on 127.0.0.1:8766 of the computer the
+# console is plugged into. A browser on another computer can't reach that, so the page talks to it through
+# here: /api/bridge/<path> -> http://127.0.0.1:8766/<path> on the MeetDeck computer.
+BRIDGE_LOCAL = os.environ.get("MEETDECK_BRIDGE", "http://127.0.0.1:8766").rstrip("/")
+_BRIDGE_PATHS = {"status", "races", "race", "meet", "log", "sequence", "debug",
+                 "connect", "disconnect", "download", "sim/load", "ping", "listen", "probe"}
+
+
+def _bridge_call(method: str, path: str, query: str, body: bytes) -> tuple[int, bytes]:
+    import urllib.error
+    import urllib.request
+    url = f"{BRIDGE_LOCAL}/{path}" + (f"?{query}" if query else "")
+    req = urllib.request.Request(url, data=body if method == "POST" else None, method=method,
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=180) as r:      # probes and listens take a while
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+    except (urllib.error.URLError, OSError) as e:
+        return 502, json.dumps({"error": f"The timing bridge isn't running on the MeetDeck computer ({e})",
+                                "no_bridge": True}).encode()
+
+
+@app.api_route("/api/bridge/{path:path}", methods=["GET", "POST"])
+async def bridge_proxy(path: str, request: Request):
+    if path not in _BRIDGE_PATHS:
+        raise HTTPException(404)
+    from starlette.concurrency import run_in_threadpool
+    body = await request.body() if request.method == "POST" else b""
+    code, data = await run_in_threadpool(_bridge_call, request.method, path, request.url.query, body)
+    return Response(data, status_code=code, media_type="application/json")
 
 
 @app.get("/timing/bridge.zip")

@@ -503,6 +503,7 @@ function renderEvents() {
   if (!EV || !evOf(EV)) EV = M.events[0]?.ptr;
   const states = M.events.map(eventState);
   const tally = k => states.filter(x => x.status === k).length;
+  const listTop = $("#evlist").scrollTop;           // keep the event list where it was
   $("#evlist").innerHTML = `<div class="legend"><span><span class="pill timed">${tally("timed") + tally("scored") + tally("stale")}</span> timed</span>
       <span><span class="pill scored">${tally("scored")}</span> scored</span><span><span class="pill prog">${tally("prog")}</span> in progress</span>
       <span><span class="pill none">${tally("none")}</span> not started</span>${tally("stale") ? `<span><span class="pill stale">${tally("stale")}</span> changed since scoring</span>` : ""}</div>` +
@@ -514,6 +515,7 @@ function renderEvents() {
         <span class="st"><span class="seg${st.heats.length > 7 ? " many" : ""}">${st.heats.map(x => `<i class="${x.cls}" title="Heat ${x.h}: ${x.r}/${x.n}"></i>`).join("")}</span>
           <span class="pill ${st.status}">${st.label}</span>${extra ? `<span>${extra}</span>` : ""}</span></button>`;
     }).join("");
+  $("#evlist").scrollTop = listTop;
   renderEvent();
 }
 function nameCell(e) {
@@ -1420,7 +1422,7 @@ function renderScores() {
 // ---------------- events wiring ----------------
 document.addEventListener("click", async ev => {
   const d = ev.target.dataset || {};
-  if (ev.target.closest("#evlist") && ev.target.closest("button")) { EV = +ev.target.closest("button").dataset.ev; MOVING = false; renderEvents(); window.scrollTo({top: 0}); return; }
+  if (ev.target.closest("#evlist") && ev.target.closest("button")) { EV = +ev.target.closest("button").dataset.ev; MOVING = false; renderEvents(); return; }   // no jumping: the list and the page stay where they are
   if (d.tab || (ev.target.closest("[data-tab]") && ev.target.closest("#problems"))) { ev.preventDefault(); TAB = d.tab || ev.target.closest("[data-tab]").dataset.tab; render(); return; }
   if (d.scr) {
     const e = M.entries.find(x => x.key === d.scr), btn = ev.target.closest("button");

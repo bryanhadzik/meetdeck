@@ -71,8 +71,8 @@ def fresh(m, ptr, team_order: list[str], lanes: list[int], min_heat: int = MIN_H
     ents = _ents(m, ptr)
     in_meet = {(t or {}).get("abbr") for t in m["teams"].values()}
     order = [t for t in team_order if t in in_meet] + sorted(t for t in in_meet if t and t not in team_order)
-    if not isinstance(team_order, Std) and 1 < len(order) <= 3:
-        plan = hy3.lane_plan(order, len(lanes), min(lanes))
+    plan = None if isinstance(team_order, Std) else hy3.table_plan(order, len(lanes), min(lanes))
+    if plan and len(order) > 1:
         res, _ = hy3.seed_event(ents, plan, min_heat)
         return res, "dual"
     return standard_seed(ents, lanes, min_heat), "standard"

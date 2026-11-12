@@ -1166,20 +1166,29 @@ function render() {
   $("#laneIntro").style.display = timeSeeded ? "none" : "";
   if ($("#seedHow") && !$("#seedHow").dataset.dual) $("#seedHow").dataset.dual = $("#seedHow").textContent;
   if ($("#seedHow")) $("#seedHow").textContent = timeSeeded
-    ? (M.championship ? "Championship seeding:" : "Invitational seeding:") + " by seed time only, fastest heat last and fastest swimmers in the middle lanes, with at least 3 swimmers in every heat."
+    ? (M.championship ? "Championship seeding:" : "Seeded meet:") + " by seed time only, fastest heat last and fastest swimmers in the middle lanes, with at least 3 swimmers in every heat."
     : $("#seedHow").dataset.dual;
+  const nT = M.lanes.order.length;
+  const laneChoice = M.lane_choice ? `<div class="row" style="gap:14px;font-size:13.5px;margin:4px 0" data-tip="NFHS 5-3-2 (p. 45): with ${nT} teams in ${M.lanes.count || 8} lanes, Table 5-1 leaves lanes open, so meet management may seed instead.">
+      <label><input type="radio" name="laneMode" value="teams" ${M.lane_mode !== "seed" ? "checked" : ""}> Team lanes (Table 5-1)</label>
+      <label><input type="radio" name="laneMode" value="seed" ${M.lane_mode === "seed" ? "checked" : ""}> Seed by time</label></div>` : "";
   if (timeSeeded) {
-    $("#order").innerHTML = `<span class="muted" style="font-size:13px">${M.championship ? "Championship rules" : "Invitational"}: lanes are seeded by time, not by team &mdash; the fastest heat swims last, with the fastest swimmers in the middle lanes.${M.championship ? "" : " Switch the meet type to Regular season to give teams their own lanes."}</span>`;
+    const why = M.seed_why === "championship" ? "Championship rules: every event is seeded by time"
+      : M.seed_why === "chosen" ? "Seeded by time instead of team lanes (your choice, allowed by NFHS 5-3-2)"
+      : `With ${nT} teams the meet is seeded by time (NFHS 5-3-2, p. 45: multi-team meets with more than five teams are seeded, and Table 5-1 has no team lanes for this many teams in ${M.lanes.count || 8} lanes)`;
+    $("#order").innerHTML = laneChoice + `<span class="muted" style="font-size:13px">${why} &mdash; the fastest heat swims last, with the fastest swimmers in the middle lanes (Table 5-2: lanes 4, 5, 3, 6, 2, 7, 1, 8).</span>`;
     $("#lanePlan").innerHTML = "";
   } else { const o = M.lanes.order, tn = t => esc(M.teams[t]?.name || t);
     const lanesOf = k => M.lane_plan.filter(l => l.team === o[k]).map(l => l.lane).join(", ");
     $("#order").innerHTML = !o.length ? `<span class="muted">Upload entries first.</span>` : o.length === 2 ?
+      `<span class="muted" style="font-size:12.5px;flex-basis:100%" data-tip="NFHS 5-3-1 (p. 45): in dual meets the visiting team chooses the odd or the even lanes for all swimming events.">Dual meet: the visiting team picks odd or even (NFHS 5-3-1, p. 45).</span>` +
       [0, 1].map(k => `<label class="muted" style="display:flex;flex-direction:column;gap:4px">${k ? "Even" : "Odd"} lanes (${lanesOf(k)})
         <select data-oddeven="${k}">${o.map(t => `<option value="${esc(t)}" ${t === o[k] ? "selected" : ""}>${tn(t)}</option>`).join("")}</select></label>`).join("") :
-      `<span class="muted" style="font-size:13px">Lanes go 1, 2, 3&hellip; through this order:</span> ` +
+      laneChoice + `<span class="muted" style="font-size:13px;flex-basis:100%">NFHS Table 5-1 (p. 46) lanes for ${o.length} teams${M.lane_plan.length < (M.lanes.count || 8) ? `, lanes ${Array.from({length: M.lanes.count || 8}, (_, i) => i + 1).filter(l => !M.lane_plan.some(p => p.lane === l)).join(" & ")} open` : ""}. The rule assigns them by lot &mdash; reorder with the arrows:</span> ` +
       o.map((t, i) => `<span class="chip">${i + 1}. ${tn(t)} <span class="muted" style="font-size:12px">lanes ${lanesOf(i)}</span>
         ${i ? `<a href="#" data-up="${i}" title="Move earlier">▲</a>` : ""}</span>`).join("");
-  $("#lanePlan").innerHTML = M.lane_plan.map(l => `<div class="lane"><b>Lane ${l.lane}</b>${esc(l.team)}</div>`).join(""); }
+  $("#lanePlan").innerHTML = Array.from({length: M.lanes.count || 8}, (_, i) => i + 1).map(n => { const l = M.lane_plan.find(p => p.lane === n);
+    return `<div class="lane" style="${l ? "" : "opacity:.45"}"><b>Lane ${n}</b>${l ? esc(l.team) : "open"}</div>`; }).join(""); }
   $("#comboLow").value = M.combine_low || "F";
   $("#combos").innerHTML = !M.combos.length ? `<div class="muted">No 200 Free, 500 Free or 400 Free Relay entries yet.</div>` :
     `<table><tr><th>Events</th><th>Girls</th><th>Boys</th><th>Lanes needed</th><th>Heat layout</th><th></th></tr>` + M.combos.map(c => `<tr>
@@ -1247,7 +1256,7 @@ async function tbDb(op, args, flash) {
 const CHAMP_TIP = "<b>Championship rules</b> (NFHS; usually region/state, but any meet may use them &mdash; 1-4-10 NOTE, p. 4). What changes in MeetDeck:" +
   "<ul style='margin:6px 0 0;padding-left:18px'>" +
   "<li><b>Entries:</b> up to 4 swimmers per team in each individual event and 1 relay per team per event (3-1-1, p. 14) &mdash; extras are flagged.</li>" +
-  "<li><b>Seeding:</b> by time, not team lanes.</li>" +
+  "<li><b>Seeding:</b> by time, not team lanes (5-3-3/5-3-4, p. 46&ndash;47).</li>" +
   "<li><b>Scoring:</b> championship scoring (16 places, relays double) by default.</li>" +
   "<li><b>No show:</b> a swimmer who doesn't compete is out of the rest of the meet unless a doctor or the referee excuses them (3-2-2 penalty 3, p. 16) &mdash; MeetDeck offers to pull them.</li>" +
   "<li><b>False starts:</b> need written dual confirmation by the referee and starter (8-1-3, p. 59&ndash;60).</li>" +
@@ -1563,6 +1572,7 @@ $("#seedBtn").onclick = () => save({preseed: true});
 $("#unseedBtn").onclick = () => { if (confirm("Clear the seeding here? You'd seed in Meet Manager instead. Hand moves are kept if you seed again.")) save({preseed: false}); };
 $("#mKind").addEventListener("change", e => save({kind: e.target.value}));
 $("#mChamp").addEventListener("change", e => save({championship: e.target.checked}));
+document.addEventListener("change", e => { if (e.target.name === "laneMode") save({lane_mode: e.target.value}); });
 document.addEventListener("change", e => { const k = e.target.dataset && e.target.dataset.oddeven; if (k === undefined) return;
   const o = [...M.lanes.order], i = +k, j = o.indexOf(e.target.value); if (j < 0 || j === i) return;
   [o[i], o[j]] = [o[j], o[i]]; save({lanes: {...M.lanes, order: o}}); });

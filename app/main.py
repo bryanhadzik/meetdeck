@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from hy3 import POOL_LANES, _list, checksum, clean_hy3, combine_plan, lane_plan, parse_hy3, read_upload, seed_meet, validate
+from hy3 import POOL_LANES, _list, checksum, clean_hy3, combine_plan, lane_plan, table_plan, table_has_open, parse_hy3, read_upload, seed_meet, validate
 
 from paths import DATA_ROOT
 DATA = DATA_ROOT / "meets"
@@ -217,21 +217,22 @@ def _state(d: Path) -> dict:
         if c["selected"] and not c["fits"]:
             issues.append({"level": "error", "swimmer": None, "entries": [], "teams": [], "coach": "",
                            "msg": f"Combined {c['label']} no longer fits in one heat ({c.get('why', '')}) - it will be seeded normally"})
-    plan = lane_plan(order, POOL_LANES, 1)
+    plan, seed_why = _team_lanes(meta, order)
     preseed = meta.get("preseed", bool(meta.get("seed_moves")))   # seeded only after "Seed heats" is clicked
     min_heat = 3          # fixed: every heat gets at least 3 swimmers
     seed_lanes, seed_info = ({}, [])
-    if preseed and plan:
-        if not _time_seeded(meta):
+    if preseed and order:
+        if plan:
             seed_lanes, seed_info = seed_meet(entries, removed, plan, min_heat, skip=set(combo_lanes))
-        else:                       # invitational: seeded by time only, no team lanes
+        else:                       # seeded meet (NFHS 5-3): by time only, no team lanes
             seed_lanes, seed_info = _standard_seed_meet(entries, removed, min_heat, set(combo_lanes))
     seed_moved = _apply_seed_moves(meta.get("seed_moves", {}), entries, removed, seed_lanes, combo_lanes)
     host = next((h for h in _hosts() if h["id"] == meta.get("host", "THS")), None) or {"id": "THS", "team_codes": [], "short": "?"}
     st_lanes = {"order": order}
     auto_rt = _record_team({"lanes": st_lanes}, host, {})
     return {"id": d.name, "name": meta["name"], "kind": "invitational" if meta.get("kind") == "championship" else meta.get("kind", "dual"),
-            "championship": bool(meta.get("championship")) or meta.get("kind") == "championship", "time_seeded": _time_seeded(meta), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
+            "championship": bool(meta.get("championship")) or meta.get("kind") == "championship", "time_seeded": not plan, "seed_why": seed_why, "lane_mode": meta.get("lane_mode", "teams"),
+            "lane_choice": table_has_open(order, POOL_LANES), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),
             "run": meta.get("run", {}), "ended": meta.get("ended", ""), "contacts": meta.get("contacts", {}),
             "coach_emails": sorted({e.lower() for x in [t.get("email", "") for t in teams.values()] + [f.get("source", "") for f in files]
@@ -249,7 +250,7 @@ def _state(d: Path) -> dict:
             "combo_lanes": {k: list(v) for k, v in combo_lanes.items()},
             "preseed": preseed, "min_heat": min_heat, "seed_info": seed_info,
             "seed_lanes": {k: list(v) for k, v in seed_lanes.items()}, "seed_moved": sorted(seed_moved),
-            "lane_plan": plan}
+            "lane_plan": plan or []}
 
 
 @app.get("/")
@@ -712,7 +713,7 @@ def put_state(mid: str, body: dict):
     meta = _meta(d)
     before = json.loads(json.dumps(meta))
     for k in ("removed", "rules", "lanes", "name", "date", "location", "host", "combine", "combine_low", "expected_teams", "preseed", "min_heat",
-              "run", "ended", "contacts", "session_break", "kind", "championship"):
+              "run", "ended", "contacts", "session_break", "kind", "championship", "lane_mode"):
         if k in body:
             meta[k] = body[k]
     if "record_team" in body:
@@ -730,7 +731,7 @@ def put_state(mid: str, body: dict):
 SETUP_LABELS = {"removed": "removed entries", "rules": "rules", "lanes": "lane order", "name": "meet name", "date": "date",
                 "location": "location", "host": "host school", "combine": "combined heats", "combine_low": "combined heats",
                 "expected_teams": "teams expected", "preseed": "seeding", "min_heat": "seeding", "ended": "meet ended",
-                "contacts": "contacts", "session_break": "session break", "record_team": "record team", "kind": "meet type", "championship": "championship rules"}
+                "contacts": "contacts", "session_break": "session break", "record_team": "record team", "kind": "meet type", "championship": "championship rules", "lane_mode": "lane assignments"}
 
 
 def _setup_history_push(d: Path, before: dict, changed: list):
@@ -2035,9 +2036,21 @@ def _score_kind(d: Path) -> str:
     return "championship" if meta.get("championship") else meta.get("kind", "dual")
 
 
-def _time_seeded(meta: dict) -> bool:
-    """Seeded by time (no team lanes): invitationals, and any meet run under championship rules."""
-    return meta.get("kind", "dual") != "dual" or bool(meta.get("championship"))
+def _team_lanes(meta: dict, order: list):
+    """NFHS 5-3 lane assignments for this meet -> (plan or None when seeded by time, why it's seeded)."""
+    if meta.get("championship") or meta.get("kind") == "championship":
+        return None, "championship"
+    if len(order) > 5 or (len(order) > 2 and not hy3_table(order)):
+        return None, "teams"                 # more than five teams (or a count the table seeds) must be seeded
+    if table_has_open(order, POOL_LANES) and meta.get("lane_mode") == "seed":
+        return None, "chosen"
+    return table_plan(order, POOL_LANES, 1), ""
+
+
+def hy3_table(order):
+    return table_plan(order, POOL_LANES, 1)
+
+
 
 
 def _host_team_nos(d: Path, m: dict) -> list:
@@ -2077,7 +2090,7 @@ def _lane_order(meta: dict, codes: list) -> list:
     return order
 
 
-MEET_KINDS = {"dual": "Regular season (dual / double dual)", "invitational": "Invitational (championship-style)"}
+MEET_KINDS = {"dual": "Regular season (dual / double dual)", "invitational": "Invitational (multi-team)"}
 
 
 def _reseed_ctx(d: Path, m: dict):
@@ -2085,7 +2098,7 @@ def _reseed_ctx(d: Path, m: dict):
     meta = _meta(d)
     codes = [(t or {}).get("abbr") for t in m["teams"].values() if (t or {}).get("abbr")]
     order = _lane_order(meta, codes)
-    if _time_seeded(meta):
+    if _team_lanes(meta, order)[0] is None:
         order = reseed.Std(order)
     lanes = list(range(1, int(m["meet"].get("lanes") or 8) + 1))
     combined = set(meta.get("combine") or [])

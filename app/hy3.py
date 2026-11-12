@@ -340,6 +340,36 @@ def validate(swimmers: dict, entries: list[dict], removed: set[str], rules: dict
     return issues
 
 
+# NFHS Rule 5-3 (2026-27 Rules Book p. 45-46), lane assignments for team-lane meets:
+#  2 teams (dual meet, 5-3-1): odd / even lanes.
+#  3 or 4 teams (non-championship multi-team, double dual / triple dual, 5-3-2 TABLE 5-1), by number of lanes.
+#  5+ teams, or a lane count the table seeds: by seeding.
+TABLE_5_1 = {
+    3: {6: [[1, 4], [2, 5], [3, 6]], 8: [[1, 4], [2, 5], [3, 6]], 9: [[1, 4, 7], [2, 5, 8], [3, 6, 9]], 10: [[1, 4, 7], [2, 5, 8], [3, 6, 9]]},
+    4: {8: [[1, 5], [2, 6], [3, 7], [4, 8]], 9: [[1, 5], [2, 6], [3, 7], [4, 8]], 10: [[1, 5], [2, 6], [3, 7], [4, 8]]},
+    5: {10: [[1, 6], [2, 7], [3, 8], [4, 9], [5, 10]]},
+}
+
+
+def table_plan(team_codes: list[str], lanes: int, first_lane: int = 1):
+    """Team lanes per NFHS 5-3: [{lane, team}] (lanes not listed stay open), or None when the meet is seeded."""
+    n = len(team_codes)
+    if n == 0:
+        return []
+    if n <= 2:
+        return lane_plan(team_codes, lanes, first_lane)
+    sets = TABLE_5_1.get(n, {}).get(lanes)
+    if not sets:
+        return None
+    return sorted(({"lane": first_lane - 1 + ln, "team": t} for t, s_ in zip(team_codes, sets) for ln in s_), key=lambda p: p["lane"])
+
+
+def table_has_open(team_codes: list[str], lanes: int) -> bool:
+    """True when TABLE 5-1 leaves lanes open - meet management may seed instead (5-3-2)."""
+    p = table_plan(team_codes, lanes)
+    return bool(p) and len(team_codes) > 2 and len(p) < lanes
+
+
 def lane_plan(team_codes: list[str], lanes: int, first_lane: int = 1) -> list[dict]:
     """Alternate lanes across teams in the given order (home team first)."""
     if not team_codes:

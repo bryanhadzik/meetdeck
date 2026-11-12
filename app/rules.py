@@ -5,6 +5,28 @@ from pathlib import Path
 
 from paths import DATA_ROOT
 RULES = DATA_ROOT / "rules"
+SEED = Path(__file__).parent / "rules_seed"     # official / free documents that ship with the app
+
+
+def ensure_seed() -> None:
+    """Copy shipped documents this copy doesn't have yet. Each is offered once, so one you
+    removed stays removed (rules/.seeded lists what was already offered)."""
+    import shutil
+    if not SEED.is_dir():
+        return
+    RULES.mkdir(parents=True, exist_ok=True)
+    mark = RULES / ".seeded"
+    done = set(mark.read_text().splitlines()) if mark.exists() else set()
+    new = False
+    for f in sorted(SEED.glob("*.pdf")):
+        if f.name in done:
+            continue
+        if not (RULES / f.name).exists():
+            shutil.copy2(f, RULES / f.name)
+        done.add(f.name)
+        new = True
+    if new:
+        mark.write_text("\n".join(sorted(done)))
 
 
 def _cache(f: Path) -> Path:
@@ -128,7 +150,7 @@ def book_page(text: str, i: int, secs: list[dict]) -> tuple[str, bool]:
 
 
 def listing() -> list[dict]:
-    RULES.mkdir(parents=True, exist_ok=True)
+    ensure_seed()
     docs = []
     for f in sorted(RULES.glob("*.pdf")):
         pg = pages(f)
@@ -149,6 +171,7 @@ def search(q: str, limit: int = 60) -> list[dict]:
             return re.compile(r"(?<![\d.-])" + r"[-.]".join(re.escape(p) for p in re.split(r"[-.]", w)) + r"(?![\d])", re.I)
         return re.compile(re.escape(w), re.I)
     pats = [pat(w) for w in words]
+    ensure_seed()
     hits = []
     for f in sorted(RULES.glob("*.pdf")):
         secs = sections(f)

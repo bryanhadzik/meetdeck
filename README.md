@@ -134,7 +134,9 @@ from ./.env (Bryan sets it; not in code). Tests: tests/make_cl2.py builds an SDI
 - The email links open your mail app pre-addressed. Initial results BCC every coach email found in the entry files. The 48-hour email cc's the referee, AO and host coach emails entered on the page. Attach the results and the scanned Final Meet Report yourself.
 - Sources: the 2026-27 process slide, and the UHSAA Handbook swimming section (qualifying conditions: electronic timing, two certified officials, results signed by both officials and head coaches, end time on the results). The handbook still says results within one week; the newer 48-hour rule is stricter, so it applies.
 - Section index: each PDF's own table of contents is read, and each heading is matched to the page where it actually appears. Pages that print from an app reflow, so the offset is followed as it drifts. The UHSAA Handbook's running page header ("SWIMMING", "BY-LAWS") wins over its contents page. Search results show "document · section · page" and open the PDF at that page. Each document has a clickable Contents list. Index files: `<pdf>.json` (page text) and `<pdf>.toc.json` (sections).
-- Also on file: the 2025-26 & 2026-27 NFHS Swimming & Diving Officials Manual (90 pages, Bryan's purchased copy, kept for private reference).
+- Also on file: the 2025-26 & 2026-27 NFHS Swimming & Diving Officials Manual (90 pages, Bryan's purchased copy, kept for private reference). It is not in the repo.
+- The free/official documents and the AO training slides ship in `app/rules_seed/`. Every copy adds any it doesn't have yet when the Rules library is opened or searched. Each is offered once (`rules/.seeded`), so a document you remove stays removed.
+- Search results show the page printed in the book ("book p. 123", read off the page; "~" when estimated from the contents page) plus the PDF page.
 - Get times previews the chosen time and console place in the heat table below (dashed outline = not saved) until Apply to meet. Cancel clears the preview.
 
 ### Results report (Print ▾ → Results)

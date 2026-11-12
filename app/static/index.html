@@ -1153,7 +1153,7 @@ function render() {
   const si = M.seed_info || [];
   const fixed = si.filter(x => x.moved);
   $("#seedInfo").innerHTML = mmSeeded ? "" : !M.preseed ? `<div class="muted" style="font-size:13px">Not seeded yet &mdash; click <b>Seed heats</b>, or seed in Meet Manager instead (it can leave a swimmer alone in heat 1).</div>` :
-    !si.length ? "" : `<div class="${fixed.length ? "issue warn" : "okbox"}" style="font-size:13px">${si.length} events seeded${fixed.length ? ` &middot; ${fixed.length} would have had a swimmer alone in heat 1 and were fixed: ${fixed.map(x => `Ev ${esc(x.event_no)}`).join(", ")}` : " &middot; no lone swimmers"}</div>
+    !si.length ? "" : `<div class="okbox" style="font-size:13px">&#10003; ${si.length} events seeded${fixed.length ? ` &middot; nothing to do: in ${fixed.map(x => `Ev ${esc(x.event_no)}`).join(", ")} a swimmer would have been alone in heat 1, so the slowest of the next heat were moved down to keep 3 together` : " &middot; no lone swimmers"}</div>
     <details><summary class="muted" style="font-weight:400">Heats per event</summary><table style="font-size:13px"><tr><th>Event</th><th>Entries</th><th>Heats (heat 1 first)</th></tr>` +
     si.map(x => `<tr><td>#${esc(x.event_no)} ${esc(x.event)}</td><td>${x.entries}</td><td>${x.heats.join(" · ")}${x.moved ? ` <span class="muted">(moved ${x.moved} down)</span>` : ""}</td></tr>`).join("") + `</table></details>`;
   if (mmSeeded && DBH && !DBH.loading) DBH = null;   // pick up changes made in the meet database

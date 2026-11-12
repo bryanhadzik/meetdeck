@@ -595,9 +595,13 @@ SCORING = {
 }
 
 
-def default_scoring(m) -> str:
+def default_scoring(m, kind: str = "dual") -> str:
+    """Regular season: 2 teams = dual meet, 3 teams = double dual (each pair scored as a dual meet).
+    Invitational / championship (or 4+ teams): championship scoring."""
+    if kind in ("invitational", "championship"):
+        return "champ"
     n = len({e["team"] for e in m["entries"] if not e["scr"]})
-    return "dual3" if n <= 2 else "champ"
+    return "dual3" if n <= 2 else "doubledual" if n == 3 else "champ"
 
 
 def event_sig(m, ptr) -> str:

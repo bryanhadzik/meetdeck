@@ -1762,7 +1762,7 @@ def _adopt_scoring(d: Path):
                 ops, scored, _, _ = meetdb.score_events(m, k, *limits(k), set(done), False, fastest)
                 bad = sum(1 for o in ops if abs(o["set"]["Ev_score"] - have.get((o["table"], repr(sorted(o["match"].items()))), 0)) > 0.001)
                 return bad + 100 * len(set(done) - set(scored))
-            default = meetdb.default_scoring(m)
+            default = meetdb.default_scoring(m, _meta(d).get("kind", "dual"))
             method = min(meetdb.SCORING, key=lambda k: (misses(k), k != default))
             cfg = meetdb.SCORING[method]
             im, rm = limits(method)
@@ -1810,7 +1810,7 @@ def db_get(mid: str):
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
             "scoring_methods": {k: {"name": c["name"], "ind_max": c["ind_max"], "rel_max": c["rel_max"]} for k, c in meetdb.SCORING.items()},
-            "scoring_default": scoring.get("method") or meetdb.default_scoring(m),
+            "scoring_default": scoring.get("method") or meetdb.default_scoring(m, _meta(d).get("kind", "dual")),
             "versions": [{"id": v.name, "label": (v.with_name(v.name + ".txt").read_text() if v.with_name(v.name + ".txt").exists() else ""),
                           "when": datetime.strptime(v.name[:15], "%Y%m%d-%H%M%S").strftime("%Y-%m-%d %H:%M:%S")} for v in versions[:30]]}
 
@@ -2187,7 +2187,7 @@ def db_score(mid: str, body: dict):
     info = _dbinfo(d)
     prev = info.get("scoring") or {}
     m = meetdb.load(db)
-    method = body.get("method") or prev.get("method") or meetdb.default_scoring(m)
+    method = body.get("method") or prev.get("method") or meetdb.default_scoring(m, _meta(d).get("kind", "dual"))
     if method not in meetdb.SCORING:
         raise HTTPException(400, "Unknown scoring method")
     cfg = meetdb.SCORING[method]

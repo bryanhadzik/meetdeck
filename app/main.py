@@ -330,6 +330,11 @@ def put_settings(body: dict):
         st["public_auto"] = bool(body["public_auto"])
     if "backup_drive" in body:
         st["backup_drive"] = bool(body["backup_drive"])
+    if "drive_token" in body:            # write-only: the token in an Apps Script deployed from another MeetDeck copy
+        tok = str(body["drive_token"] or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{16,80}", tok):
+            raise HTTPException(400, "That doesn't look like a MeetDeck Drive token")
+        st["drive_token"] = tok
     if "drive_url" in body:
         u = (body["drive_url"] or "").strip()
         if u and not re.match(r"https://script\.google\.com/(?:a/macros/[\w.-]+|macros)/s/[\w-]+/exec", u):

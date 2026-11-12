@@ -28,6 +28,11 @@ section{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 h2{font-size:16px;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 h3{font-size:15px;margin:14px 0 6px}
 h2 .n{background:var(--accent);color:var(--accent-ink);border-radius:50%;width:22px;height:22px;display:inline-grid;place-items:center;font-size:12px}
+section.fold > h2{cursor:pointer;user-select:none}
+section.fold > h2::after{content:"▾";float:right;color:var(--muted, #8a96a0);font-size:15px;transition:transform .15s}
+section.fold.shut > h2::after{transform:rotate(-90deg)}
+section.fold.shut > :not(h2){display:none !important}
+section.fold.shut{padding-bottom:6px}
 button,select,input{font:inherit;color:inherit}
 button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:7px 12px;cursor:pointer}
 button:disabled{opacity:.5;cursor:default}
@@ -1929,6 +1934,24 @@ document.addEventListener("click", e => { if (e.target.id === "updBanGo") instal
 </script>
 <script>
 fetch("/api/version").then(r => r.json()).then(v => { const t = document.getElementById("verTag"); if (t && v.version) t.textContent = "v" + v.version; }).catch(() => {});
+
+// numbered steps (1 Team entries, 2 Meet files ...) fold up: click the heading; remembered on this computer
+(function () {
+  let shut;
+  try { shut = new Set(JSON.parse(localStorage.getItem("shutSteps") || "[]")); } catch (e) { shut = new Set(); }
+  document.querySelectorAll("section > h2 > .n").forEach(n => {
+    const sec = n.parentElement.parentElement, k = n.textContent.trim();
+    sec.classList.add("fold");
+    sec.classList.toggle("shut", shut.has(k));
+    n.parentElement.title = "Click to fold or unfold";
+    n.parentElement.addEventListener("click", e => {
+      if (e.target.closest("button,a,input,select,label")) return;
+      sec.classList.toggle("shut");
+      sec.classList.contains("shut") ? shut.add(k) : shut.delete(k);
+      try { localStorage.setItem("shutSteps", JSON.stringify([...shut])); } catch (x) {}
+    });
+  });
+})();
 </script>
 </body>
 </html>

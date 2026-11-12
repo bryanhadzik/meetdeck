@@ -772,7 +772,7 @@ function renderSwimmers() {
       <td>${es.map(e => `<span class="chip ${e.scr ? "x" : ""}">#${evOf(e.event)?.no}${e.kind === "R" ? " relay" : ""}</span>`).join("") || `<span class="muted">none</span>`}</td>
       <td style="white-space:nowrap"><button class="ghost small" data-editsw="${a.no}">Edit</button>
         <button class="ghost small" data-relaysw="${a.no}" title="Put this swimmer on one of their team's relays">+ Relay</button>
-        ${live.length ? `<button class="ghost small danger" data-scrsw="${a.no}" data-on="1" title="Scratch from every event and take off relays">Scratch from meet</button>`
+        ${live.length ? `<button class="ghost small danger" data-scrsw="${a.no}" data-on="1" title="Scratch from every event and remove from relays">Scratch from meet</button>`
           : es.length ? `<button class="ghost small" data-scrsw="${a.no}" data-on="0">Un-scratch</button>` : ""}</td></tr>`;
   }).map((row, i) => row + (RELAY_SW && list[i] && list[i].no === RELAY_SW ? relayPicker(list[i]) : "")).join("") + `</table>${list.length ? "" : `<div class="muted">No swimmers match.</div>`}`;
   relayPickerWire();

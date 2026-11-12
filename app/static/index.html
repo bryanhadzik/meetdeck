@@ -762,7 +762,7 @@ function runRender(fromLoad) {
   const pill = (s, manualOn) => manualOn && s !== 1 ? `<span class="opst done">Checked off</span>` :
     s === 1 ? `<span class="opst done">&#10003; Done</span>` : s === -1 ? `<span class="opst part">In progress</span>` : `<span class="opst todo">Not yet</span>`;
   const opsHtml = `<section class="opsec"><h3 style="margin:0 0 2px">Computer operator</h3>
-    <div class="muted" style="font-size:12.5px;margin-bottom:6px">MeetDeck checks these from the meet itself. Tick one by hand only if you did it outside MeetDeck.</div>` +
+    <div class="muted" style="font-size:12.5px;margin-bottom:6px">MeetDeck checks these from the meet itself. Check one by hand only if you did it outside MeetDeck.</div>` +
     OPS.map((i, n) => { const [s, msg] = opState(i), man = !!run[i.id];
       return `<div class="oprow ${s === 1 || man ? "ok" : s === -1 ? "warn" : ""}">
         <div class="opn">${n + 1}</div>
@@ -1254,14 +1254,14 @@ function renderTable() {
       const ent = es.find(e => e.kind === "ind" && e.event_no === v.no && !e.removed) ;
       const old = es.find(e => e.kind === "ind" && e.event_no === v.no && e.removed);
       return `<label class="${ent ? "on" : ""}"><input type="checkbox" data-tbev="${esc(v.no)}" data-sw="${esc(s.key)}" ${ent ? "checked" : ""}> #${esc(v.no)} ${esc(v.name.replace(/^(Girls|Boys|Women|Men) /, ""))}` +
-        (ent ? `<span class="sd">${esc(ent.seed_fmt || "NT")}</span>` : old ? `<span class="sd" title="Was entered; ticking puts it back">${esc(old.seed_fmt || "NT")}</span>` : `<input type="text" placeholder="NT" data-tbseed="${esc(v.no)}">`) + `</label>`;
+        (ent ? `<span class="sd">${esc(ent.seed_fmt || "NT")}</span>` : old ? `<span class="sd" title="Was entered; checking it puts it back">${esc(old.seed_fmt || "NT")}</span>` : `<input type="text" placeholder="NT" data-tbseed="${esc(v.no)}">`) + `</label>`;
     }).join("");
     const rels = es.filter(e => e.kind === "relay" && !e.removed).map(e => {
       const pos = relayLegs(e).indexOf(s.key) + 1;
-      return `<div class="leg"><span>#${esc(e.event_no)} ${esc(e.event)} <b>${esc(e.relay)}</b>, leg ${pos}</span> <button class="ghost small" data-tboff="${esc(e.id)}" data-sw="${esc(s.key)}">Take off</button> <a href="#" data-tbrel="${esc(e.id)}" style="font-size:13px">open relay</a></div>`;
+      return `<div class="leg"><span>#${esc(e.event_no)} ${esc(e.event)} <b>${esc(e.relay)}</b>, leg ${pos}</span> <button class="ghost small" data-tboff="${esc(e.id)}" data-sw="${esc(s.key)}">Remove from relay</button> <a href="#" data-tbrel="${esc(e.id)}" style="font-size:13px">open relay</a></div>`;
     }).join("");
     return row + `<tr><td colspan="4"><div class="ed">
-      <div class="muted" style="font-size:12px;margin-bottom:4px">INDIVIDUAL EVENTS &mdash; tick to enter, untick to drop</div><div class="evgrid">${grid || `<span class="muted">No individual events in this meet yet.</span>`}</div>
+      <div class="muted" style="font-size:12px;margin-bottom:4px">INDIVIDUAL EVENTS &mdash; check to enter, uncheck to drop</div><div class="evgrid">${grid || `<span class="muted">No individual events in this meet yet.</span>`}</div>
       <div class="muted" style="font-size:12px;margin:10px 0 4px">RELAYS</div>${rels || `<span class="muted" style="font-size:13px">Not on a relay. Put them on one in the relay cards below.</span>`}
       <div class="row" style="margin-top:10px"><button class="ghost small danger" data-tbpull="${esc(s.key)}">Pull from the meet</button><span class="muted" style="font-size:12px">drops every event and takes them off their relays</span><span class="grow"></span><button class="ghost small" data-tbclose="1">Close</button></div>
     </div></td></tr>`;

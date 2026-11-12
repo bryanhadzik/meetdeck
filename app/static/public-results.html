@@ -135,6 +135,9 @@ async function load() {
     const d = await r.json();
     if (!D || d.updated !== D.updated) {
       if (D) { const old = Object.fromEntries((D.events || []).map(v => [v.no, v.sig])); for (const v of d.events || []) if (v.sig && old[v.no] !== v.sig) FRESH.add(String(v.no)); }
+      // a new meet on the page: forget which events were opened for the last one (stars stay - same swimmers)
+      const mid = (d.meet && (d.meet.id || d.meet.name + d.meet.date)) || "";
+      if (mid && store.get("meet", "") !== mid) { store.set("meet", mid); OPEN = new Set(); store.set("open", []); FRESH = new Set(); }
       D = d; render();
     }
     else $("#msub").textContent = sub();

@@ -1761,7 +1761,12 @@ def db_get(mid: str):
               for s in heatsheet.timeline(m, gap)]
     except Exception:
         tl = []
-    return {"exists": True, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
+    try:
+        rs = _reseed_view(d, m)
+    except Exception as x:
+        print("reseed view:", x)
+        rs = {"events": [], "teams": []}
+    return {"exists": True, "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
             "model": meetdb.json_safe(m), "problems": meetdb.check(m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
@@ -1928,6 +1933,103 @@ def _jet3(db: Path) -> bool:
             return f.read(0x15)[0x14] == 0
     except Exception:
         return False
+
+
+# ---- last-minute changes: re-seeding and each team's "done" -----------------------------------------
+def _reseed_ctx(d: Path, m: dict):
+    meta = _meta(d)
+    order = list((meta.get("lanes") or {}).get("order") or [])
+    lanes = list(range(1, int(m["meet"].get("lanes") or 8) + 1))
+    combined = set(meta.get("combine") or [])
+    skip = {v["ptr"] for v in m["events"]
+            if f"{'relay' if v.get('ind_rel') == 'R' else 'ind'}-{v.get('dist')}-{v.get('stroke')}" in combined}
+    return order, lanes, skip
+
+
+def _reseed_view(d: Path, m: dict) -> dict:
+    import reseed
+    info = _dbinfo(d)
+    base = info.get("seed_base")
+    if base is None:                      # first look: the database as built/imported counts as seeded
+        info["seed_base"] = {str(v["ptr"]): reseed.sig(m, v["ptr"]) for v in m["events"]}
+        (_dbdir(d) / "info.json").write_text(json.dumps(info))
+        base = info["seed_base"]
+    order, lanes, skip = _reseed_ctx(d, m)
+    try:
+        evs = reseed.review(m, base, order, lanes, skip)
+    except Exception as x:
+        print("reseed review:", x)
+        evs = []
+    done = _meta(d).get("changes_done") or {}
+    teams = [{"code": t.get("abbr", ""), "name": t.get("name", ""), "done": done.get(t.get("abbr", ""), "")}
+             for _, t in sorted(m["teams"].items()) if any(e["team"] == _ for e in m["entries"])
+             or any((m["athletes"].get(e.get("ath")) or {}).get("team") == _ for e in m["entries"])]
+    return {"events": evs, "teams": teams}
+
+
+@app.post("/api/meets/{mid}/db/reseed")
+def db_reseed(mid: str, body: dict):
+    """Re-seed the given events (ptrs) - never one that has results."""
+    import reseed
+    d = _dir(mid)
+    db = _dbfile(d)
+    m = meetdb.load(db)
+    order, lanes, skip = _reseed_ctx(d, m)
+    ptrs = [int(p) for p in body.get("ptrs") or []]
+    all_ops, done, moved = [], [], 0
+    for v in m["events"]:
+        if v["ptr"] not in ptrs or v["ptr"] in skip or reseed.swum(m, v["ptr"]):
+            continue
+        o, n = reseed.ops(m, v["ptr"], order, lanes)
+        all_ops += o
+        moved += n
+        done.append(f"#{v['no']}")
+    if not done:
+        raise HTTPException(400, "Nothing to re-seed (events with results are never re-seeded)")
+    msg = f"Re-seeded {', '.join(done)} ({moved} swimmer{'s' if moved != 1 else ''} moved)"
+    _snapshot(d, "before: " + msg)
+    meetdb.apply(db, all_ops)
+    _dblog(d, msg)
+    m = meetdb.load(db)
+    info = _dbinfo(d)
+    base = info.get("seed_base") or {}
+    for v in m["events"]:
+        if v["ptr"] in ptrs:
+            base[str(v["ptr"])] = reseed.sig(m, v["ptr"])
+    info["seed_base"] = base
+    (_dbdir(d) / "info.json").write_text(json.dumps(info))
+    return db_get(mid)
+
+
+@app.post("/api/meets/{mid}/db/reseed/ok")
+def db_reseed_ok(mid: str, body: dict):
+    """Leave an event as it is: its current heats count as seeded."""
+    import reseed
+    d = _dir(mid)
+    m = meetdb.load(_dbfile(d))
+    info = _dbinfo(d)
+    base = info.get("seed_base") or {}
+    for p in body.get("ptrs") or []:
+        base[str(int(p))] = reseed.sig(m, int(p))
+    info["seed_base"] = base
+    (_dbdir(d) / "info.json").write_text(json.dumps(info))
+    return db_get(mid)
+
+
+@app.post("/api/meets/{mid}/db/changes_done")
+def db_changes_done(mid: str, body: dict):
+    """A team's coach is done with last-minute changes (or not)."""
+    d = _dir(mid)
+    meta = _meta(d)
+    done = meta.get("changes_done") or {}
+    t = str(body.get("team") or "")
+    if body.get("done", True):
+        done[t] = time.strftime("%H:%M")
+    else:
+        done.pop(t, None)
+    meta["changes_done"] = done
+    _save(d, meta)
+    return db_get(mid)
 
 
 @app.post("/api/meets/{mid}/db/op")

@@ -97,7 +97,8 @@ tr.relaybad td{background:rgba(248,81,73,.10)} tr.relaybad td:first-child{box-sh
 .pill.stale{background:var(--err-bg);color:var(--err)}
 .legend{font-size:11.5px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;padding:2px 6px 8px;border-bottom:1px solid var(--line);margin-bottom:6px}
 a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;color:#111;border-radius:2px;padding:0 1px}
-body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanels) #timing { display:none !important; }
+body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanels) #timing, body:not(.meetPanels) #lastMin { display:none !important; }
+.lmEv{padding:2px 0}.lmEv a{font-size:12px;margin-left:6px}
 </style>
 <script src="/static/ao.js"></script>
 </head>
@@ -186,6 +187,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
   </section>
 
   <div id="app" class="hidden">
+    <section id="lastMin"></section>
     <div id="problems"></div>
 
     <div id="tab-events" class="split">
@@ -217,7 +219,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
     </section>
 
     <section id="tab-changes" class="hidden">
-      <h2>Changes</h2><div id="logList"></div>
+      <h2>Changes <button class="small undoAny" style="margin-left:8px">Undo last change</button></h2><div id="logList"></div>
       <h2 style="margin-top:16px">Saved versions</h2>
       <div class="muted" style="font-size:13px;margin-bottom:6px">A copy is kept before every change. Restoring one keeps the current database as a version too.</div>
       <div id="verList"></div>
@@ -243,7 +245,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const MID = new URLSearchParams(location.search).get("meet");
 const API = `/api/meets/${MID}/db`;
-let S = null, M = null, EV = null, TAB = "events", EDIT_SW = null, TOL = 0.30;
+let S = null, M = null, EV = null, TAB = "events", EDIT_SW = null, RELAY_SW = null, TOL = 0.30;
 let MB = {url: "", auto: false, sig: null, timer: null, busy: false};
 fetch("/api/settings").then(r => r.json()).then(st => { if (st.time_tolerance) TOL = st.time_tolerance; MB.url = st.meetboard_url || ""; MB.auto = !!st.meetboard_auto; mbShow(); }).catch(() => {});
 try { EV = +sessionStorage.getItem("db-ev-" + MID) || null; } catch (e) {}
@@ -279,9 +281,52 @@ function show() {
   $("#undoBtn").disabled = !S.versions.length;
   $("#undoBtn").title = S.versions.length ? "Undo: " + (S.versions[0].label || "").replace(/^before: /, "") : "Nothing to undo";
   mbShow(); mbWatch();
+  lastMinShow();
   $("#problems").innerHTML = scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "");
   render();
 }
+// ---- last-minute changes: teams check off, events that need re-seeding ----
+function lastMinShow() {
+  const r = S.reseed || {events: [], teams: []};
+  const teams = r.teams || [], evs = r.events || [];
+  const left = teams.filter(t => !t.done);
+  if (!teams.length) { $("#lastMin").innerHTML = ""; return; }
+  const chips = teams.map(t => `<button class="small ${t.done ? "" : "ghost"} lmTeam" data-team="${esc(t.code)}" data-done="${t.done ? 1 : 0}"
+      title="${t.done ? "Done at " + esc(t.done) + " - click to reopen" : "Click when this coach is done with changes"}">${t.done ? "✓ " : "☐ "}${esc(t.name || t.code)}${t.done ? ` <span class="muted">${esc(t.done)}</span>` : ""}</button>`).join(" ");
+  const evRows = evs.map(e => `<div class="lmEv"><label><input type="checkbox" class="lmPick" value="${e.ptr}" checked>
+      <b>#${esc(e.no)}</b> ${esc(e.label)}</label> <span class="muted">${e.reasons.map(esc).join("; ")}${e.moves ? ` &middot; ${e.moves} lane change${e.moves == 1 ? "" : "s"}` : ""}</span>
+      <a href="#" class="lmKeep" data-ptr="${e.ptr}" title="Leave this event's heats as they are">keep as is</a></div>`).join("");
+  $("#lastMin").innerHTML = `<div class="${evs.length ? "issue" : "okbox"}" style="margin-bottom:10px">
+    <div class="row" style="gap:8px;align-items:center"><b>Last-minute changes</b>
+      <span class="muted" style="font-size:12.5px">${left.length ? `waiting on ${left.map(t => esc(t.code)).join(", ")}` : "all teams done"}</span>
+      <span class="grow"></span>${chips}</div>
+    ${evs.length ? `<div style="margin-top:8px;font-size:13.5px">${evs.length} event${evs.length == 1 ? "" : "s"} should be re-seeded after the changes${left.length ? " (you can wait until every team is done)" : ""}:</div>
+      <div style="margin:6px 0 4px;font-size:13.5px">${evRows}</div>
+      <button class="small" id="lmGo">Re-seed checked events</button> <button class="ghost small undoAny">Undo last change</button>
+      <span class="muted" style="font-size:12px">Events with results are never re-seeded. Undo puts the old heats back.</span>`
+      : `<div class="muted" style="font-size:12.5px;margin-top:4px">No event needs re-seeding.</div>`}</div>`;
+}
+document.addEventListener("click", async e => {
+  const t = e.target.closest(".lmTeam");
+  if (t) {
+    try { S = await api(`/api/meets/${MID}/db/changes_done`, J({team: t.dataset.team, done: t.dataset.done !== "1"})); show(); }
+    catch (x) { toast("Not saved: " + x.message); }
+    return;
+  }
+  const k = e.target.closest(".lmKeep");
+  if (k) {
+    e.preventDefault();
+    try { S = await api(`/api/meets/${MID}/db/reseed/ok`, J({ptrs: [+k.dataset.ptr]})); toast("Left as is"); show(); }
+    catch (x) { toast("Not saved: " + x.message); }
+    return;
+  }
+  if (e.target.id === "lmGo") {
+    const ptrs = [...document.querySelectorAll(".lmPick:checked")].map(x => +x.value);
+    if (!ptrs.length) return toast("Nothing checked");
+    try { S = await api(`/api/meets/${MID}/db/reseed`, J({ptrs})); toast(S.log[0]?.msg || "Re-seeded"); show(); }
+    catch (x) { toast("Not re-seeded: " + x.message); }
+  }
+});
 function printPdf(url) {
   // load the PDF in a hidden frame and open the browser's print dialog for it
   toast("Preparing to print…");
@@ -726,9 +771,11 @@ function renderSwimmers() {
     return `<tr><td><b>${esc(a.last)}, ${esc(a.first)}</b>${a.pref ? ` <span class="muted">(${esc(a.pref)})</span>` : ""}</td><td>${esc(teamAbbr(a.team))}</td><td>${esc(a.sex)}</td><td>${a.age || ""}</td><td>${esc(a.yr)}</td>
       <td>${es.map(e => `<span class="chip ${e.scr ? "x" : ""}">#${evOf(e.event)?.no}${e.kind === "R" ? " relay" : ""}</span>`).join("") || `<span class="muted">none</span>`}</td>
       <td style="white-space:nowrap"><button class="ghost small" data-editsw="${a.no}">Edit</button>
+        <button class="ghost small" data-relaysw="${a.no}" title="Put this swimmer on one of their team's relays">+ Relay</button>
         ${live.length ? `<button class="ghost small danger" data-scrsw="${a.no}" data-on="1" title="Scratch from every event and take off relays">Scratch from meet</button>`
           : es.length ? `<button class="ghost small" data-scrsw="${a.no}" data-on="0">Un-scratch</button>` : ""}</td></tr>`;
-  }).join("") + `</table>${list.length ? "" : `<div class="muted">No swimmers match.</div>`}`;
+  }).map((row, i) => row + (RELAY_SW && list[i] && list[i].no === RELAY_SW ? relayPicker(list[i]) : "")).join("") + `</table>${list.length ? "" : `<div class="muted">No swimmers match.</div>`}`;
+  relayPickerWire();
   if (EDIT_SW && $("#eSave")) {
     $("#eCancel").onclick = () => { EDIT_SW = null; renderSwimmers(); };
     $("#eSave").onclick = () => {
@@ -738,6 +785,36 @@ function renderSwimmers() {
       if (Object.keys(ch).length) change("athlete", {ath: a.no, fields: ch}); else renderSwimmers();
     };
   }
+}
+// put a swimmer on one of their team's relays (same gender, not swum yet), in a chosen leg
+function relayPicker(a) {
+  const girl = a.sex === "F";
+  const rel = M.entries.filter(e => e.kind === "R" && e.team === a.team && !e.scr && !e.time && !e.legs.includes(a.no) && (() => {
+    const v = evOf(e.event) || {}, g = v.gender || v.sex || "";
+    return g === "X" || (girl ? ["F", "W", "G"].includes(g) : !["F", "W", "G"].includes(g));
+  })()).sort((x, y) => (evOf(x.event)?.no || 0) - (evOf(y.event)?.no || 0) || x.ltr.localeCompare(y.ltr));
+  if (!rel.length) return `<tr class="edit"><td colspan="7"><span class="muted">No open ${girl ? "girls" : "boys"} relays for ${esc(teamAbbr(a.team))} to add ${esc(a.first)} to.</span>
+    <button class="ghost small" data-relaysw="0">Close</button></td></tr>`;
+  const opt = e => { const v = evOf(e.event); const legs = [0, 1, 2, 3].map(i => e.legs[i] ? athName(e.legs[i]).split(" ").slice(-1)[0] : "open").join(", ");
+    return `<option value="${esc(e.key)}">#${v?.no} ${esc(v?.label || "")} "${esc(e.ltr)}" — ${esc(legs)}</option>`; };
+  return `<tr class="edit"><td colspan="7"><div class="row" style="gap:8px;align-items:center">Put <b>${esc(a.first)} ${esc(a.last)}</b> on
+    <select id="rpRel">${rel.map(opt).join("")}</select> as leg <select id="rpLeg"></select>
+    <button class="small" id="rpGo">Save</button><button class="ghost small" data-relaysw="0">Cancel</button></div></td></tr>`;
+}
+function relayPickerWire() {
+  if (!$("#rpRel")) return;
+  const fill = () => {
+    const e = M.entries.find(x => x.key === $("#rpRel").value);
+    const open = [0, 1, 2, 3].find(i => !e.legs[i]);
+    $("#rpLeg").innerHTML = [0, 1, 2, 3].map(i => `<option value="${i}" ${i === (open ?? 3) ? "selected" : ""}>${i + 1}${e.legs[i] ? " (replaces " + esc(athName(e.legs[i])) + ")" : " (open)"}</option>`).join("");
+  };
+  $("#rpRel").onchange = fill; fill();
+  $("#rpGo").onclick = () => {
+    const e = M.entries.find(x => x.key === $("#rpRel").value), i = +$("#rpLeg").value;
+    const legs = [0, 1, 2, 3].map(k => e.legs[k] || null);
+    legs[i] = RELAY_SW; RELAY_SW = null;
+    change("legs", {key: e.key, legs});
+  };
 }
 $("#swFind").oninput = renderSwimmers; $("#swTeam").onchange = renderSwimmers;
 $("#addSwBtn").onclick = () => {
@@ -1254,6 +1331,7 @@ document.addEventListener("click", async ev => {
   if (d.score) { ev.preventDefault(); scoreReq({events: [+d.score]}); return; }
   if (d.undq) { change("undq", {key: d.undq}); return; }
   if (d.editsw) { EDIT_SW = +d.editsw; renderSwimmers(); return; }
+  if (d.relaysw !== undefined) { RELAY_SW = +d.relaysw || null; renderSwimmers(); return; }
   if (d.scrsw) {
     const a = M.athletes[d.scrsw];
     if (d.on === "1" && !confirm(`Scratch ${a.first} ${a.last} from every event and take them off their relays?`)) return;
@@ -1311,6 +1389,7 @@ document.addEventListener("change", async ev => {
   }
 });
 document.addEventListener("keydown", ev => { if (ev.key === "Enter" && ev.target.matches("input.t")) ev.target.blur(); });
+document.addEventListener("click", e => { if (e.target.closest(".undoAny")) $("#undoBtn").click(); });
 $("#undoBtn").onclick = async () => { try { S = await api(`${API}/undo`, J({})); toast(S.log[0]?.msg || "Undone"); show(); } catch (e) { toast(e.message); } };
 $("#buildBtn").onclick = async () => {
   $("#startMsg").textContent = "Building…";

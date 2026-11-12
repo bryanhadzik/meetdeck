@@ -231,7 +231,7 @@ def _state(d: Path) -> dict:
     st_lanes = {"order": order}
     auto_rt = _record_team({"lanes": st_lanes}, host, {})
     return {"id": d.name, "name": meta["name"], "kind": "invitational" if meta.get("kind") == "championship" else meta.get("kind", "dual"),
-            "championship": bool(meta.get("championship")) or meta.get("kind") == "championship", "time_seeded": not plan, "seed_why": seed_why, "lane_mode": meta.get("lane_mode", "teams"),
+            "championship": bool(meta.get("championship")) or meta.get("kind") == "championship", "time_seeded": not plan, "seed_why": seed_why, "lane_mode": meta.get("lane_mode", "teams"), "lane_draw": meta.get("lane_draw"),
             "lane_choice": table_has_open(order, POOL_LANES), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),
             "run": meta.get("run", {}), "ended": meta.get("ended", ""), "contacts": meta.get("contacts", {}),
@@ -713,7 +713,7 @@ def put_state(mid: str, body: dict):
     meta = _meta(d)
     before = json.loads(json.dumps(meta))
     for k in ("removed", "rules", "lanes", "name", "date", "location", "host", "combine", "combine_low", "expected_teams", "preseed", "min_heat",
-              "run", "ended", "contacts", "session_break", "kind", "championship", "lane_mode"):
+              "run", "ended", "contacts", "session_break", "kind", "championship", "lane_mode", "lane_draw"):
         if k in body:
             meta[k] = body[k]
     if "record_team" in body:
@@ -731,7 +731,7 @@ def put_state(mid: str, body: dict):
 SETUP_LABELS = {"removed": "removed entries", "rules": "rules", "lanes": "lane order", "name": "meet name", "date": "date",
                 "location": "location", "host": "host school", "combine": "combined heats", "combine_low": "combined heats",
                 "expected_teams": "teams expected", "preseed": "seeding", "min_heat": "seeding", "ended": "meet ended",
-                "contacts": "contacts", "session_break": "session break", "record_team": "record team", "kind": "meet type", "championship": "championship rules", "lane_mode": "lane assignments"}
+                "contacts": "contacts", "session_break": "session break", "record_team": "record team", "kind": "meet type", "championship": "championship rules", "lane_mode": "lane assignments", "lane_draw": "lane draw"}
 
 
 def _setup_history_push(d: Path, before: dict, changed: list):

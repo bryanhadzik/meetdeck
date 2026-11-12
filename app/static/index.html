@@ -1186,7 +1186,9 @@ function render() {
       `<span class="muted" style="font-size:12.5px;flex-basis:100%" data-tip="NFHS 5-3-1 (p. 45): in dual meets the visiting team chooses the odd or the even lanes for all swimming events.">Dual meet: the visiting team picks odd or even (NFHS 5-3-1, p. 45).</span>` +
       [0, 1].map(k => `<label class="muted" style="display:flex;flex-direction:column;gap:4px">${k ? "Even" : "Odd"} lanes (${lanesOf(k)})
         <select data-oddeven="${k}">${o.map(t => `<option value="${esc(t)}" ${t === o[k] ? "selected" : ""}>${tn(t)}</option>`).join("")}</select></label>`).join("") :
-      laneChoice + `<span class="muted" style="font-size:13px;flex-basis:100%">NFHS Table 5-1 (p. 46) lanes for ${o.length} teams${M.lane_plan.length < (M.lanes.count || 8) ? `, lanes ${Array.from({length: M.lanes.count || 8}, (_, i) => i + 1).filter(l => !M.lane_plan.some(p => p.lane === l)).join(" & ")} open &mdash; that's the rule for 3 teams; choose <b>Seed by time</b> to use all 8` : ""}. The rule assigns them by lot &mdash; reorder with the arrows:</span> ` +
+      laneChoice + `<span class="muted" style="font-size:13px;flex-basis:100%">NFHS Table 5-1 (p. 46) lanes for ${o.length} teams${M.lane_plan.length < (M.lanes.count || 8) ? `, lanes ${Array.from({length: M.lanes.count || 8}, (_, i) => i + 1).filter(l => !M.lane_plan.some(p => p.lane === l)).join(" & ")} open &mdash; that's the rule for 3 teams; choose <b>Seed by time</b> to use all 8` : ""}. The rule assigns them by lot (a random draw):</span>
+      <span style="flex-basis:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="small" id="drawLots" data-tip="Randomly draws which team gets which set of lanes (NFHS 5-3-2, Table 5-1: 'by lot'). The draw is saved with the time; Undo takes it back.">Draw lots</button>
+      ${M.lane_draw && M.lane_draw.order && M.lane_draw.order.join() === o.join() ? `<span class="muted" style="font-size:12.5px">Drawn ${esc(M.lane_draw.when)}</span>` : `<span class="muted" style="font-size:12.5px">or set the order by hand with the arrows</span>`}</span> ` +
       o.map((t, i) => `<span class="chip">${i + 1}. ${tn(t)} <span class="muted" style="font-size:12px">lanes ${lanesOf(i)}</span>
         ${i ? `<a href="#" data-up="${i}" title="Move earlier">▲</a>` : ""}</span>`).join("");
   $("#lanePlan").innerHTML = Array.from({length: M.lanes.count || 8}, (_, i) => i + 1).map(n => { const l = M.lane_plan.find(p => p.lane === n);
@@ -1583,6 +1585,15 @@ $("#seedBtn").onclick = () => save({preseed: true});
 $("#unseedBtn").onclick = () => { if (confirm("Clear the seeding here? You'd seed in Meet Manager instead. Hand moves are kept if you seed again.")) save({preseed: false}); };
 $("#mKind").addEventListener("change", e => save({kind: e.target.value}));
 $("#mChamp").addEventListener("change", e => save({championship: e.target.checked}));
+document.addEventListener("click", e => {
+  if (!e.target.closest || !e.target.closest("#drawLots")) return;
+  const o = [...M.lanes.order];
+  for (let i = o.length - 1; i > 0; i--) {          // Fisher-Yates with a crypto-random pick
+    const r = new Uint32Array(1); crypto.getRandomValues(r); const j = r[0] % (i + 1); [o[i], o[j]] = [o[j], o[i]];
+  }
+  const when = new Date().toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"});
+  save({lanes: {...M.lanes, order: o}, lane_draw: {when, order: o}});
+});
 document.addEventListener("change", e => { if (e.target.name === "laneMode") save({lane_mode: e.target.value}); });
 document.addEventListener("change", e => { const k = e.target.dataset && e.target.dataset.oddeven; if (k === undefined) return;
   const o = [...M.lanes.order], i = +k, j = o.indexOf(e.target.value); if (j < 0 || j === i) return;

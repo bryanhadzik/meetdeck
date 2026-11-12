@@ -1102,13 +1102,24 @@ def lanes_pdf(info: dict, printed=None) -> bytes:
         c.setFillGray(0)
         c.setFont(reg, 9)
         c.drawCentredString(x + box_w / 2, y - 14, f"Lane {ln}")
-        c.setFont(bold, 15)
         label = "seeded" if info.get("seeded") else (team or "OPEN")
-        c.drawCentredString(x + box_w / 2, y - 38, label if len(label) <= 7 else label[:7])
+        fs = 15
+        while fs > 8 and pdfmetrics.stringWidth(label, bold, fs) > box_w - 8:      # shrink to fit the box
+            fs -= 0.5
+        c.setFont(bold, fs)
+        c.drawCentredString(x + box_w / 2, y - 36, label)
         if team and not info.get("seeded"):
-            c.setFont(reg, 7)
             nm = teams.get(team, "")
-            c.drawCentredString(x + box_w / 2, y - 52, nm[:22])
+            nfs = 7
+            lines = simpleSplit(nm, reg, nfs, box_w - 6)
+            if len(lines) > 2:                                                    # keep it to two lines
+                lines = lines[:2]
+                while lines[1] and pdfmetrics.stringWidth(lines[1] + "...", reg, nfs) > box_w - 6:
+                    lines[1] = lines[1][:-1]
+                lines[1] = lines[1].rstrip() + "..."
+            c.setFont(reg, nfs)
+            for k, ln in enumerate(lines):
+                c.drawCentredString(x + box_w / 2, y - 48 - k * 8, ln)
     y -= box_h + 18
     if not info.get("seeded") and len(teams) > 1:
         for code, name in info.get("teams") or []:

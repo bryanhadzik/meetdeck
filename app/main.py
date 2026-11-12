@@ -1829,7 +1829,12 @@ def db_get(mid: str):
     except Exception as x:
         print("reseed view:", x)
         rs = {"events": [], "teams": []}
-    return {"exists": True, "started": _meet_started(m), "championship": bool(_meta(d).get("championship")), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
+    try:                                   # teams in meet setup that the database doesn't have (sync can't add teams)
+        have = {(t.get("abbr") or "").upper() for t in m["teams"].values()}
+        missing = [t for t in _state(d)["lanes"]["order"] if t.upper() not in have]
+    except Exception:
+        missing = []
+    return {"exists": True, "started": _meet_started(m), "missing_teams": missing, "championship": bool(_meta(d).get("championship")), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
             "model": meetdb.json_safe(m), "problems": meetdb.check(m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},

@@ -189,6 +189,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
   </section>
 
   <div id="app" class="hidden">
+    <div id="missingTeams"></div>
     <section id="lastMin"></section>
     <div id="problems"></div>
 
@@ -294,8 +295,23 @@ function show() {
   $("#undoBtn").title = S.versions.length ? "Undo: " + (S.versions[0].label || "").replace(/^before: /, "") : "Nothing to undo";
   mbShow(); mbWatch();
   lastMinShow();
+  missingTeamsShow();
   $("#problems").innerHTML = scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "");
   render();
+}
+// ---- teams added in meet setup after the database was built: a database can't take new teams, so offer a rebuild ----
+function missingTeamsShow() {
+  const mt = S.missing_teams || [], el = $("#missingTeams");
+  if (!el) return;
+  if (!mt.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="issue warn" style="margin-bottom:10px"><b>${mt.map(esc).join(", ")} ${mt.length > 1 ? "are" : "is"} in meet setup but not in this meet database.</b>
+    A team can't be added to a database that's already built. Rebuild it from the team entries to bring ${mt.length > 1 ? "them" : "it"} in.
+    ${S.started ? "<b>Results already entered will be lost</b> and " : ""}changes made here since the build are lost too &mdash; the current database is kept as a version you can go back to (Changes tab).
+    <div style="margin-top:6px"><button class="small" id="rebuildDb">Rebuild from the team entries</button></div></div>`;
+  $("#rebuildDb").onclick = async () => {
+    if (!confirm(`Rebuild the meet database from the team entries?${S.started ? " Results already entered will be lost." : ""} The current database is kept as a version you can go back to.`)) return;
+    try { S = await api(`${API}/create`, {method: "POST"}); toast("Rebuilt from the team entries"); show(); } catch (x) { toast(x.message); }
+  };
 }
 // ---- last-minute changes: teams check off, events that need re-seeding ----
 function lastMinShow() {

@@ -63,11 +63,15 @@ def _ents(m, ptr):
             for e in _active(m, ptr)]
 
 
+class Std(list):
+    """A team order for a meet that is seeded the standard way (invitational / championship), whatever the team count."""
+
+
 def fresh(m, ptr, team_order: list[str], lanes: list[int], min_heat: int = MIN_HEAT) -> tuple[dict, str]:
     ents = _ents(m, ptr)
     in_meet = {(t or {}).get("abbr") for t in m["teams"].values()}
     order = [t for t in team_order if t in in_meet] + sorted(t for t in in_meet if t and t not in team_order)
-    if 1 < len(order) <= 3:
+    if not isinstance(team_order, Std) and 1 < len(order) <= 3:
         plan = hy3.lane_plan(order, len(lanes), min(lanes))
         res, _ = hy3.seed_event(ents, plan, min_heat)
         return res, "dual"

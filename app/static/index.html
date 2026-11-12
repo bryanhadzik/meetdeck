@@ -171,6 +171,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       </div>
       <div id="meetFields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 16px">
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Meet name <input id="mName"></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:4px">Meet type <select id="mKind"></select></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Date <input id="mDate" type="date"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Location <input id="mLoc" placeholder="from host's master file"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Host school <select id="hostSel"></select></label>
@@ -230,7 +231,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
 
     <section>
       <h2><span class="n">5</span> Lanes &amp; records</h2>
-      <div class="muted">8 lanes. Team order (home team first) &mdash; lanes alternate through this order.</div>
+      <div class="muted">Which team swims in which lanes. The home team gets the odd lanes unless you change it.</div>
       <div id="order" class="row" style="margin-top:6px"></div>
       <div class="lanes" id="lanePlan"></div>
       <h3>Combined heats</h3>
@@ -818,7 +819,7 @@ async function rulesLoad() {
   try {
     const r = await api("/api/rules");
     $("#rdocs").innerHTML = r.docs.length ? `<table><tr><th>Document</th><th>Pages</th><th></th></tr>` + r.docs.map(d => `<tr><td><a href="/api/rules/file/${encodeURIComponent(d.name)}" target="_blank">${esc(d.name.replace(/\.pdf$/i, ""))}</a>${d.searchable ? "" : ' <span class="badge no" title="No text layer - it\'s a scan">not searchable</span>'}
-      ${d.sections && d.sections.length ? `<details style="margin-top:2px"><summary class="muted" style="font-weight:400;font-size:12.5px">Contents · ${d.sections.length} sections</summary><div style="columns:2;column-gap:24px;font-size:13px;padding:4px 0">${d.sections.map(x => `<div><a href="/api/rules/file/${encodeURIComponent(d.name)}#page=${x.page}" target="_blank">${esc(x.title)}</a> <span class="muted">p.${x.page}</span></div>`).join("")}</div></details>` : ""}</td><td>${d.pages}</td><td><button class="ghost small" data-rdel="${esc(d.name)}">Remove</button></td></tr>`).join("") + `</table>` : `<div class="muted">No documents yet.</div>`;
+      ${d.sections && d.sections.length ? `<details style="margin-top:2px"><summary class="muted" style="font-weight:400;font-size:12.5px">Contents · ${d.sections.length} sections</summary><div style="columns:2;column-gap:24px;font-size:13px;padding:4px 0">${d.sections.map(x => `<div><a href="/api/rules/file/${encodeURIComponent(d.name)}#page=${x.page}" target="_blank">${esc(x.title)}</a> <span class="muted">${x.book ? `book p. ${x.book}` : `PDF p. ${x.page}`}</span></div>`).join("")}</div></details>` : ""}</td><td>${d.pages}</td><td><button class="ghost small" data-rdel="${esc(d.name)}">Remove</button></td></tr>`).join("") + `</table>` : `<div class="muted">No documents yet.</div>`;
   } catch (e) { $("#rdocs").textContent = e.message; }
 }
 async function rulesSearch() {
@@ -829,7 +830,7 @@ async function rulesSearch() {
     .map(w => /^\d+([-.]\d+)+[a-z]?$/i.test(w) ? w.split(/[-.]/).join("[-.]") : w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const re = new RegExp("(" + words.join("|") + ")", "gi");
   $("#rhits").innerHTML = r.hits.length ? `<div class="muted" style="font-size:13px;margin-bottom:6px">${r.hits.length} page${r.hits.length > 1 ? "s" : ""}</div>` + r.hits.map(h =>
-    `<div style="padding:7px 0;border-top:1px solid var(--line)"><a href="/api/rules/file/${encodeURIComponent(h.file)}#page=${h.page}" target="_blank"><b>${esc(h.file.replace(/\.pdf$/i, ""))}</b>${h.section ? ` · ${esc(h.section)}` : ""} · page ${h.page}</a>
+    `<div style="padding:7px 0;border-top:1px solid var(--line)"><a href="/api/rules/file/${encodeURIComponent(h.file)}#page=${h.page}" target="_blank"><b>${esc(h.file.replace(/\.pdf$/i, ""))}</b>${h.section ? ` · ${esc(h.section)}` : ""} · ${h.book_page ? `<b>${/^slide/.test(h.book_page) ? "" : "book p. "}${h.book_exact ? "" : "~"}${esc(h.book_page)}</b> <span class="muted">(PDF p. ${h.page})</span>` : `PDF p. ${h.page}`}</a>
      <div style="font-size:13.5px;margin-top:2px">${esc(h.snippet).replace(re, "<mark>$1</mark>")}</div></div>`).join("") : `<div class="muted">Nothing found for “${esc(q)}”.</div>`;
 }
 $("#rgo").onclick = rulesSearch;
@@ -1096,6 +1097,8 @@ function render() {
   $("#meet").classList.remove("hidden");
   $("#newBox").classList.add("hidden");
   $("#openDb").href = `/db?meet=${M.id}`;
+  { const k = $("#mKind"), o = Object.entries(M.kinds || {}).map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("");
+    if (k.dataset.k !== o) { k.innerHTML = o; k.dataset.k = o; } k.value = M.kind || "dual"; }
   [["#mName", M.name], ["#mDate", M.date || ""], ["#mLoc", M.location || ""]].forEach(([k, v]) => { if (document.activeElement !== $(k)) $(k).value = v; });
   $("#hostSel").value = M.host;
   const h = HOSTS.find(x => x.id === M.host);
@@ -1153,8 +1156,14 @@ function render() {
     si.map(x => `<tr><td>#${esc(x.event_no)} ${esc(x.event)}</td><td>${x.entries}</td><td>${x.heats.join(" · ")}${x.moved ? ` <span class="muted">(moved ${x.moved} down)</span>` : ""}</td></tr>`).join("") + `</table></details>`;
   if (mmSeeded && DBH && !DBH.loading) DBH = null;   // pick up changes made in the meet database
   renderHeatSheet();
-  $("#order").innerHTML = M.lanes.order.map((t, i) => `<span class="chip">${i + 1}. ${esc(M.teams[t]?.name || t)}
-    ${i ? `<a href="#" data-up="${i}" title="Move earlier">▲</a>` : ""}</span>`).join("") || `<span class="muted">Upload entries first.</span>`;
+  { const o = M.lanes.order, tn = t => esc(M.teams[t]?.name || t);
+    const lanesOf = k => M.lane_plan.filter(l => l.team === o[k]).map(l => l.lane).join(", ");
+    $("#order").innerHTML = !o.length ? `<span class="muted">Upload entries first.</span>` : o.length === 2 ?
+      [0, 1].map(k => `<label class="muted" style="display:flex;flex-direction:column;gap:4px">${k ? "Even" : "Odd"} lanes (${lanesOf(k)})
+        <select data-oddeven="${k}">${o.map(t => `<option value="${esc(t)}" ${t === o[k] ? "selected" : ""}>${tn(t)}</option>`).join("")}</select></label>`).join("") :
+      `<span class="muted" style="font-size:13px">Lanes go 1, 2, 3&hellip; through this order:</span> ` +
+      o.map((t, i) => `<span class="chip">${i + 1}. ${tn(t)} <span class="muted" style="font-size:12px">lanes ${lanesOf(i)}</span>
+        ${i ? `<a href="#" data-up="${i}" title="Move earlier">▲</a>` : ""}</span>`).join(""); }
   $("#lanePlan").innerHTML = M.lane_plan.map(l => `<div class="lane"><b>Lane ${l.lane}</b>${esc(l.team)}</div>`).join("");
   $("#comboLow").value = M.combine_low || "F";
   $("#combos").innerHTML = !M.combos.length ? `<div class="muted">No 200 Free, 500 Free or 400 Free Relay entries yet.</div>` :
@@ -1215,6 +1224,35 @@ async function tbCall(url, opts, flash) {
   try { M = await api(url, opts); TB.flash = flash || null; render(); }
   catch (x) { alert(x.message); }
 }
+// "Put on a relay": the team's relays this swimmer could join (same gender, not scratched, not already on it)
+function tbRelayPick(s, es) {
+  const on = new Set(es.filter(e => e.kind === "relay").map(e => e.id));
+  const opts = TD().entries.filter(e => e.kind === "relay" && e.team === s.team && !e.removed && !on.has(e.id) &&
+      (!s.gender || ["X", s.gender].includes(gNorm(e.gender))))
+    .sort((a, b) => (+a.event_no) - (+b.event_no) || (a.relay || "").localeCompare(b.relay || ""));
+  if (!opts.length) return `<div class="muted" style="font-size:13px;margin-top:6px">No other ${s.gender === "F" ? "girls " : s.gender === "M" ? "boys " : ""}relays for this team to put them on. Use <b>+ Add relay</b> below to make one.</div>`;
+  const o = opts.map(e => { const legs = relayLegs(e).map(k => k ? (TD().swimmers[k]?.last || "?") : "open").join(", ");
+    return `<option value="${esc(e.id)}">#${esc(e.event_no)} ${esc(e.event)} ${esc(e.relay)} — ${esc(legs)}</option>`; }).join("");
+  return `<div class="row" style="gap:6px;align-items:center;margin-top:8px;font-size:13.5px"><b>Put on a relay:</b>
+    <select data-tbrp="${esc(s.key)}">${o}</select> as <select data-tbrpleg="${esc(s.key)}"></select>
+    <button class="small" data-tbrpgo="${esc(s.key)}">Put on relay</button></div>`;
+}
+function tbRelayPickFill() {
+  document.querySelectorAll("#tableSec select[data-tbrp]").forEach(sel => {
+    const leg = sel.parentElement.querySelector("select[data-tbrpleg]");
+    const fill = () => {
+      const e = TD().entries.find(x => x.id === sel.value); if (!e) return;
+      const legs = relayLegs(e), medley = /Medley/.test(e.event), open = legs.findIndex(k => !k);
+      leg.innerHTML = legs.map((k, i) => `<option value="${i}" ${i === (open < 0 ? 3 : open) ? "selected" : ""}>${medley ? LEG_MEDLEY[i] : "leg " + (i + 1)}${k ? " (replaces " + esc(tbName(k)) + ")" : " (open)"}</option>`).join("");
+    };
+    sel.onchange = fill; fill();
+  });
+}
+async function tbUndo() {
+  try { await api(`/api/meets/${M.id}/db/undo`, J("POST", {})); TB.note = "Undid the last change"; TV = null; await tvLoad();
+    if (typeof DBH !== "undefined") { DBH = null; renderHeatSheet(); } }
+  catch (x) { alert(x.message); }
+}
 function renderTable() {
   if (M.has_db && TV && TV.id === M.id && TV._msig !== tvSig() && !TV_LOADING) { tvLoad(); }
   if (M.has_db && TD() === M) { $("#tbSwimmers").innerHTML = `<div class="muted">Loading the meet database…</div>`; $("#tbRelays").innerHTML = ""; $("#tbProblems").innerHTML = ""; if (!TV_LOADING) tvLoad(); return; }
@@ -1224,7 +1262,7 @@ function renderTable() {
   const opts = codes.map(c => `<option value="${esc(c)}">${esc(TD().teams[c]?.name || c)} (${esc(c)})</option>`).join("");
   if (sel.dataset.k !== opts) { sel.innerHTML = opts; sel.dataset.k = opts; }
   sel.value = TB.team;
-  $("#tbDbNote").innerHTML = M.has_db ? `<div class="okbox" style="font-size:13px;margin-bottom:8px">Changes here go straight into the meet database${(M.files || []).length ? "" : " (opened from Meet Manager)"}. Every change is logged and can be undone in <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> &rarr; Changes. A swimmer or relay added here has no heat yet &mdash; place them in Seeding below or in Run the meet.${(M.files || []).length ? ` Changes to the entries above (new files, removed entries, relay swimmers) are brought in automatically.` : ""}</div>` +
+  $("#tbDbNote").innerHTML = M.has_db ? `<div class="okbox" style="font-size:13px;margin-bottom:8px">Changes here go straight into the meet database${(M.files || []).length ? "" : " (opened from Meet Manager)"}. Every change is logged &mdash; <button class="ghost small" data-tbundo="1">Undo last change</button> (full list in <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> &rarr; Changes). A swimmer or relay added here has no heat yet &mdash; place them in Seeding below or in Run the meet.${(M.files || []).length ? ` Changes to the entries above (new files, removed entries, relay swimmers) are brought in automatically.` : ""}</div>` +
     (TB.note ? `<div class="okbox" style="font-size:13px;margin-bottom:8px;background:var(--ok-bg, #e6f5ec)"><b>${esc(TB.note)}.</b> New entries have no heat yet.</div>` : "") : "";
   // problems for this team, each one a link to the swimmer or relay to fix
   const probs = tbIssues();
@@ -1262,10 +1300,11 @@ function renderTable() {
     }).join("");
     return row + `<tr><td colspan="4"><div class="ed">
       <div class="muted" style="font-size:12px;margin-bottom:4px">INDIVIDUAL EVENTS &mdash; check to enter, uncheck to drop</div><div class="evgrid">${grid || `<span class="muted">No individual events in this meet yet.</span>`}</div>
-      <div class="muted" style="font-size:12px;margin:10px 0 4px">RELAYS</div>${rels || `<span class="muted" style="font-size:13px">Not on a relay. Put them on one in the relay cards below.</span>`}
+      <div class="muted" style="font-size:12px;margin:10px 0 4px">RELAYS</div>${rels || `<span class="muted" style="font-size:13px">Not on a relay yet.</span>`}${tbRelayPick(s, es)}
       <div class="row" style="margin-top:10px"><button class="ghost small danger" data-tbpull="${esc(s.key)}">Pull from the meet</button><span class="muted" style="font-size:12px">drops every event and takes them off their relays</span><span class="grow"></span><button class="ghost small" data-tbclose="1">Close</button></div>
     </div></td></tr>`;
   }).join("") + `</table>` + (sws.length ? "" : `<div class="muted">No swimmers match.</div>`);
+  tbRelayPickFill();
   // relays
   const allRels = TD().entries.filter(e => e.kind === "relay" && e.team === TB.team).sort((a, b) => (+a.event_no) - (+b.event_no) || (a.relay || "").localeCompare(b.relay || ""));
   // filter: one relay event, girls / boys, or relays with a problem / with an empty leg
@@ -1372,9 +1411,17 @@ $("#tbAddRelay").onclick = () => {
   };
 };
 document.addEventListener("click", async ev => {
-  const t = ev.target.closest("[data-tbsw],[data-tbrel],[data-tbpull],[data-tbclose],[data-tboff],[data-tbup],[data-tbdn],[data-tbrscr]");
+  const t = ev.target.closest("[data-tbsw],[data-tbrel],[data-tbpull],[data-tbclose],[data-tboff],[data-tbup],[data-tbdn],[data-tbrscr],[data-tbundo],[data-tbrpgo]");
   if (!t || !t.closest("#tableSec")) return;
   const d = t.dataset;
+  if (d.tbundo) { ev.preventDefault(); return tbUndo(); }
+  if (d.tbrpgo) {
+    ev.preventDefault();
+    const box = t.parentElement, rel = TD().entries.find(e => e.id === box.querySelector("select[data-tbrp]").value);
+    if (!rel) return;
+    const legs = relayLegs(rel); legs[+box.querySelector("select[data-tbrpleg]").value] = d.tbrpgo;
+    return tbSaveLegs(rel, legs);
+  }
   if (d.tbrscr) { ev.preventDefault(); return tbDb("relay_scratch", {id: d.tbrscr, on: d.on === "1"}, d.tbrscr); }
   if (d.tbsw) {
     if (ev.target.closest("input,button,select")) return;
@@ -1447,6 +1494,10 @@ $("#hpFind").addEventListener("input", renderHeatSheet);
   save({rules: {max_individual: +$("#rInd").value, max_total: +$("#rTot").value, team_cap_per_event: +$("#rCap").value, meet_type: $("#rType").value}})));
 $("#seedBtn").onclick = () => save({preseed: true});
 $("#unseedBtn").onclick = () => { if (confirm("Clear the seeding here? You'd seed in Meet Manager instead. Hand moves are kept if you seed again.")) save({preseed: false}); };
+$("#mKind").addEventListener("change", e => save({kind: e.target.value}));
+document.addEventListener("change", e => { const k = e.target.dataset && e.target.dataset.oddeven; if (k === undefined) return;
+  const o = [...M.lanes.order], i = +k, j = o.indexOf(e.target.value); if (j < 0 || j === i) return;
+  [o[i], o[j]] = [o[j], o[i]]; save({lanes: {...M.lanes, order: o}}); });
 [["#mName", "name"], ["#mDate", "date"], ["#mLoc", "location"]].forEach(([k, f]) => $(k).addEventListener("change", async e => {
   const v = e.target.value.trim();
   if (f === "name" && !v) { e.target.value = M.name; return; }

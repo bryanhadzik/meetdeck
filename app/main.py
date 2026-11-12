@@ -141,7 +141,7 @@ def _state(d: Path) -> dict:
     lanes = meta.get("lanes", {})
     # Teams with no swimmers (e.g. a stray parent-team block) don't get lanes.
     racing = [t for t in teams if any(s["team"] == t for s in swimmers.values())] or list(teams)
-    order = [t for t in lanes.get("order", []) if t in racing] + [t for t in racing if t not in lanes.get("order", [])]
+    order = _lane_order(meta, racing)
     for t in teams:
         if t not in racing:
             n = sum(1 for e in entries if e["team"] == t and e["id"] not in removed)
@@ -226,7 +226,7 @@ def _state(d: Path) -> dict:
     host = next((h for h in _hosts() if h["id"] == meta.get("host", "THS")), None) or {"id": "THS", "team_codes": [], "short": "?"}
     st_lanes = {"order": order}
     auto_rt = _record_team({"lanes": st_lanes}, host, {})
-    return {"id": d.name, "name": meta["name"], "date": meta.get("date", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
+    return {"id": d.name, "name": meta["name"], "kind": meta.get("kind", "dual"), "kinds": MEET_KINDS, "date": meta.get("date", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),
             "run": meta.get("run", {}), "ended": meta.get("ended", ""), "contacts": meta.get("contacts", {}),
             "coach_emails": sorted({e.lower() for x in [t.get("email", "") for t in teams.values()] + [f.get("source", "") for f in files]
@@ -707,7 +707,7 @@ def put_state(mid: str, body: dict):
     meta = _meta(d)
     before = json.loads(json.dumps(meta))
     for k in ("removed", "rules", "lanes", "name", "date", "location", "host", "combine", "combine_low", "expected_teams", "preseed", "min_heat",
-              "run", "ended", "contacts", "session_break"):
+              "run", "ended", "contacts", "session_break", "kind"):
         if k in body:
             meta[k] = body[k]
     if "record_team" in body:
@@ -725,7 +725,7 @@ def put_state(mid: str, body: dict):
 SETUP_LABELS = {"removed": "removed entries", "rules": "rules", "lanes": "lane order", "name": "meet name", "date": "date",
                 "location": "location", "host": "host school", "combine": "combined heats", "combine_low": "combined heats",
                 "expected_teams": "teams expected", "preseed": "seeding", "min_heat": "seeding", "ended": "meet ended",
-                "contacts": "contacts", "session_break": "session break", "record_team": "record team"}
+                "contacts": "contacts", "session_break": "session break", "record_team": "record team", "kind": "meet type"}
 
 
 def _setup_history_push(d: Path, before: dict, changed: list):
@@ -1975,9 +1975,27 @@ def _jet3(db: Path) -> bool:
 
 
 # ---- last-minute changes: re-seeding and each team's "done" -----------------------------------------
+def _lane_order(meta: dict, codes: list) -> list:
+    """Teams in lane order: the saved order, else the host team first (home team takes the odd lanes)."""
+    saved = list((meta.get("lanes") or {}).get("order") or [])
+    order = [t for t in saved if t in codes] + [t for t in codes if t not in saved]
+    if not saved:
+        h = next((h for h in _hosts() if h["id"] == meta.get("host", "THS")), None) or {}
+        hc = set(h.get("team_codes") or [])
+        order = [t for t in order if t in hc] + [t for t in order if t not in hc]
+    return order
+
+
+MEET_KINDS = {"dual": "Regular season (dual / tri)", "invitational": "Invitational", "championship": "Championship (region / state)"}
+
+
 def _reseed_ctx(d: Path, m: dict):
+    import reseed
     meta = _meta(d)
-    order = list((meta.get("lanes") or {}).get("order") or [])
+    codes = [(t or {}).get("abbr") for t in m["teams"].values() if (t or {}).get("abbr")]
+    order = _lane_order(meta, codes)
+    if meta.get("kind", "dual") != "dual":
+        order = reseed.Std(order)
     lanes = list(range(1, int(m["meet"].get("lanes") or 8) + 1))
     combined = set(meta.get("combine") or [])
     skip = {v["ptr"] for v in m["events"]

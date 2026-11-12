@@ -597,7 +597,7 @@ async function rulesSearch() {
     .map(w => /^\d+([-.]\d+)+[a-z]?$/i.test(w) ? w.split(/[-.]/).join("[-.]") : w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const re = new RegExp("(" + words.join("|") + ")", "gi");
   $("#rhits").innerHTML = r.hits.length ? `<div class="muted" style="font-size:13px;margin-bottom:6px">${r.hits.length} page${r.hits.length > 1 ? "s" : ""}</div>` + r.hits.map(h =>
-    `<div style="padding:7px 0;border-top:1px solid var(--line)"><a href="/api/rules/file/${encodeURIComponent(h.file)}#page=${h.page}" target="_blank"><b>${esc(h.file.replace(/\.pdf$/i, ""))}</b>${h.section ? ` · ${esc(h.section)}` : ""} · page ${h.page}</a>
+    `<div style="padding:7px 0;border-top:1px solid var(--line)"><a href="/api/rules/file/${encodeURIComponent(h.file)}#page=${h.page}" target="_blank"><b>${esc(h.file.replace(/\.pdf$/i, ""))}</b>${h.section ? ` · ${esc(h.section)}` : ""} · ${h.book_page ? `<b>${/^slide/.test(h.book_page) ? "" : "book p. "}${h.book_exact ? "" : "~"}${esc(h.book_page)}</b> <span class="muted">(PDF p. ${h.page})</span>` : `PDF p. ${h.page}`}</a>
      <div style="font-size:13.5px;margin-top:2px">${esc(h.snippet).replace(re, "<mark>$1</mark>")}</div></div>`).join("") : `<div class="muted">Nothing found for “${esc(q)}”.</div>`;
 }
 $("#rgo").onclick = rulesSearch;

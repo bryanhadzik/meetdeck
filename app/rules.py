@@ -105,6 +105,28 @@ def section_of(secs: list[dict], page: int) -> str:
     return cur
 
 
+def book_page(text: str, i: int, secs: list[dict]) -> tuple[str, bool]:
+    """The page number printed in the physical book for PDF page i (0-based) -> (label, exact).
+    Read off the page itself (running header / lone number at top or bottom); else estimated
+    from the contents page of the nearest heading before it; slides give their slide number."""
+    head = text[:200]
+    m = re.search(r"HANDBOOK\s*\n?\s*(\d{1,4})\b", head)
+    if m:
+        return m.group(1), True
+    m = re.match(r"\s*Slide (\d+):", text)
+    if m:
+        return "slide " + m.group(1), True
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    for ln in lines[:2] + lines[-2:]:
+        if re.fullmatch(r"\d{1,3}", ln) and abs(int(ln) - (i + 1)) <= 40:
+            return ln, True
+    prev = [x for x in secs if x.get("book") and x["page"] <= i + 1]
+    if prev:
+        x = prev[-1]
+        return str(x["book"] + (i + 1 - x["page"])), False
+    return "", False
+
+
 def listing() -> list[dict]:
     RULES.mkdir(parents=True, exist_ok=True)
     docs = []
@@ -139,6 +161,8 @@ def search(q: str, limit: int = 60) -> list[dict]:
             score = sum(len(p.findall(text)) for p in pats)
             run = re.match(r"\s*\d{4}-\d{2}\s+[A-Z]+\s+HANDBOOK\s+\d+\s+([A-Z][A-Z0-9 &/,'-]{2,40}?)\s*\n", text)
             sec = run.group(1).strip().title() if run else section_of(secs, i + 1)   # running page header wins
-            hits.append({"file": f.name, "page": i + 1, "snippet": snip, "score": score, "section": sec})
+            bp, exact = book_page(text, i, secs)
+            hits.append({"file": f.name, "page": i + 1, "book_page": bp, "book_exact": exact,
+                         "snippet": snip, "score": score, "section": sec})
     hits.sort(key=lambda h: -h["score"])
     return hits[:limit]

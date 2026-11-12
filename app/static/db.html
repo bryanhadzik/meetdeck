@@ -619,8 +619,9 @@ const TIP = {
   pull: "<b>Scratch &mdash; pull from the meet.</b> The swimmer is out of <i>the rest of the meet</i>: every event not swum yet, " +
         "and they come off relays still to swim (those legs need a new swimmer). Results already swum stay. (NFHS 1-4-10)",
   pullPre: "<b>Pull from the meet</b> (before it starts): drops every event they're entered in and takes them off their relays.",
-  noshow: "<b>No show</b> &mdash; didn't come to the blocks and the coach didn't declare a false start. In a regular meet that's a DQ in this event only " +
-          "(in a championship meet it would end their meet).",
+  get noshow() { return S && S.championship
+    ? "<b>No show</b> &mdash; didn't come to the blocks and the coach didn't declare a false start. <b>Championship rules:</b> they're out of the rest of the meet unless a doctor or the referee excused them (NFHS 3-2-2, p. 16)."
+    : "<b>No show</b> &mdash; didn't come to the blocks and the coach didn't declare a false start. It's a DQ in this event only (NFHS 3-2-2, p. 16)."; },
 };
 // first click arms a button ("Scratch Alton?"), a second click within 4 s does it
 function armed(btn, label) {
@@ -1447,7 +1448,16 @@ document.addEventListener("change", async ev => {
     change("result", {key: d.key, t1_s: t1, t2_s: t2, stat: e.stat === "R" && (t1 || t2) ? "" : (e.stat === "F" || e.stat === "D") && (t1 || t2) ? "Q" : e.stat, dq: e.dq});
   }
   else if (d.time) { const e = M.entries.find(x => x.key === d.time); change("result", {key: d.time, time_s: ev.target.value, stat: e.stat === "R" ? "" : (e.stat === "F" || e.stat === "D") && ev.target.value ? "Q" : e.stat, dq: e.dq}); }
-  else if (d.stat) { const e = M.entries.find(x => x.key === d.stat); change("result", {key: d.stat, time_s: fmt(e.time), stat: ev.target.value, dq: ""}); }
+  else if (d.stat) {
+    const e = M.entries.find(x => x.key === d.stat);
+    await change("result", {key: d.stat, time_s: fmt(e.time), stat: ev.target.value, dq: ""});
+    // championship rules: a no-show is out of the rest of the meet (NFHS 3-2-2 penalty 3), unless excused for illness/injury
+    if (ev.target.value === "R" && S.championship && e.kind === "I") {
+      const a = M.athletes[e.ath] || {};
+      if (confirm(`Championship rules: a swimmer who doesn't compete is out of the rest of the meet unless a doctor or the referee excused them for illness or injury (NFHS 3-2-2, penalty 3, book p. 16).\n\nPull ${a.first || ""} ${a.last || ""} from the rest of the meet now? (Cancel if they were excused.)`))
+        change("scratch_athlete", {ath: e.ath, on: true});
+    }
+  }
   else if (d.move) {
     const e = M.entries.find(x => x.key === d.move);
     const heat = d.part === "heat" ? +ev.target.value : e.heat, lane = d.part === "lane" ? +ev.target.value : e.lane;

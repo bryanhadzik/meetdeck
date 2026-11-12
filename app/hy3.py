@@ -320,10 +320,23 @@ def validate(swimmers: dict, entries: list[dict], removed: set[str], rules: dict
         for (t, evn), ents in counts.items():
             if len(ents) > team_cap:
                 names = [f"{swimmers[e['swimmers'][0]]['first']} {swimmers[e['swimmers'][0]]['last']}" for e in ents if e["swimmers"][0] in swimmers]
-                issues.append({"level": "warn", "swimmer": None, "entries": [e["id"] for e in ents], "teams": [t], "rule": "Meet limit you set",
+                issues.append({"level": "warn", "swimmer": None, "entries": [e["id"] for e in ents], "teams": [t],
+                               "rule": "NFHS 3-1-1: championship meets allow 4 entries per team in an individual event" if rules.get("championship") else "Meet limit you set",
                                "msg": f"{t} has {len(ents)} scoring entries in event {evn} (cap {team_cap})",
                                "coach": f"{ents[0]['event']} (Ev {evn}) has {len(ents)} scoring entries ({_list(names)}); the limit is "
                                         f"{team_cap} per team. Please tell me which to make exhibition."})
+    if rules.get("championship"):          # NFHS 3-1-1: one relay team per event in championship meets
+        rel: dict[tuple, list] = {}
+        for e in active:
+            if e["kind"] == "relay" and not e.get("exhibition"):
+                rel.setdefault((e["team"], e["event_no"]), []).append(e)
+        for (t, evn), ents in rel.items():
+            if len(ents) > 1:
+                issues.append({"level": "warn", "swimmer": None, "entries": [e["id"] for e in ents], "teams": [t],
+                               "rule": "NFHS 3-1-1: championship meets allow one relay team per team in each relay event",
+                               "msg": f"{t} has {len(ents)} relays in event {evn} (championship rules allow 1)",
+                               "coach": f"{ents[0]['event']} (Ev {evn}) has {len(ents)} relays for your team; championship rules allow one. "
+                                        f"Please tell me which one swims (the others can be exhibition)."})
     return issues
 
 

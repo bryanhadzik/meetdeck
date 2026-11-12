@@ -172,7 +172,9 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       </div>
       <div id="meetFields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 16px">
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Meet name <input id="mName"></label>
-        <label class="muted" style="display:flex;flex-direction:column;gap:4px">Meet type <select id="mKind"></select></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:4px">Meet type <select id="mKind"></select>
+          <span id="mChampWrap" style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="mChamp" style="margin:0"> Championship rules
+          <span id="mChampTip" style="cursor:help;border:1px solid var(--line);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">?</span></span></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Date <input id="mDate" type="date"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Location <input id="mLoc" placeholder="from host's master file"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Host school <select id="hostSel"></select></label>
@@ -1100,7 +1102,9 @@ function render() {
   $("#newBox").classList.add("hidden");
   $("#openDb").href = `/db?meet=${M.id}`;
   { const k = $("#mKind"), o = Object.entries(M.kinds || {}).map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("");
-    if (k.dataset.k !== o) { k.innerHTML = o; k.dataset.k = o; } k.value = M.kind || "dual"; }
+    if (k.dataset.k !== o) { k.innerHTML = o; k.dataset.k = o; } k.value = M.kind || "dual";
+    $("#mChamp").checked = !!M.championship;
+    $("#mChampWrap").dataset.tip = CHAMP_TIP; $("#mChampTip").dataset.tip = CHAMP_TIP; }
   [["#mName", M.name], ["#mDate", M.date || ""], ["#mLoc", M.location || ""]].forEach(([k, v]) => { if (document.activeElement !== $(k)) $(k).value = v; });
   $("#hostSel").value = M.host;
   const h = HOSTS.find(x => x.id === M.host);
@@ -1158,13 +1162,14 @@ function render() {
     si.map(x => `<tr><td>#${esc(x.event_no)} ${esc(x.event)}</td><td>${x.entries}</td><td>${x.heats.join(" · ")}${x.moved ? ` <span class="muted">(moved ${x.moved} down)</span>` : ""}</td></tr>`).join("") + `</table></details>`;
   if (mmSeeded && DBH && !DBH.loading) DBH = null;   // pick up changes made in the meet database
   renderHeatSheet();
-  $("#laneIntro").style.display = M.kind === "invitational" ? "none" : "";
+  const timeSeeded = M.time_seeded;
+  $("#laneIntro").style.display = timeSeeded ? "none" : "";
   if ($("#seedHow") && !$("#seedHow").dataset.dual) $("#seedHow").dataset.dual = $("#seedHow").textContent;
-  if ($("#seedHow")) $("#seedHow").textContent = M.kind === "invitational"
-    ? "Invitational seeding: by seed time only, fastest heat last and fastest swimmers in the middle lanes, with at least 3 swimmers in every heat."
+  if ($("#seedHow")) $("#seedHow").textContent = timeSeeded
+    ? (M.championship ? "Championship seeding:" : "Invitational seeding:") + " by seed time only, fastest heat last and fastest swimmers in the middle lanes, with at least 3 swimmers in every heat."
     : $("#seedHow").dataset.dual;
-  if (M.kind === "invitational") {
-    $("#order").innerHTML = `<span class="muted" style="font-size:13px">Invitational: lanes are seeded by time, not by team &mdash; the fastest heat swims last, with the fastest swimmers in the middle lanes. Switch the meet type to Regular season to give teams their own lanes.</span>`;
+  if (timeSeeded) {
+    $("#order").innerHTML = `<span class="muted" style="font-size:13px">${M.championship ? "Championship rules" : "Invitational"}: lanes are seeded by time, not by team &mdash; the fastest heat swims last, with the fastest swimmers in the middle lanes.${M.championship ? "" : " Switch the meet type to Regular season to give teams their own lanes."}</span>`;
     $("#lanePlan").innerHTML = "";
   } else { const o = M.lanes.order, tn = t => esc(M.teams[t]?.name || t);
     const lanesOf = k => M.lane_plan.filter(l => l.team === o[k]).map(l => l.lane).join(", ");
@@ -1173,7 +1178,7 @@ function render() {
         <select data-oddeven="${k}">${o.map(t => `<option value="${esc(t)}" ${t === o[k] ? "selected" : ""}>${tn(t)}</option>`).join("")}</select></label>`).join("") :
       `<span class="muted" style="font-size:13px">Lanes go 1, 2, 3&hellip; through this order:</span> ` +
       o.map((t, i) => `<span class="chip">${i + 1}. ${tn(t)} <span class="muted" style="font-size:12px">lanes ${lanesOf(i)}</span>
-        ${i ? `<a href="#" data-up="${i}" title="Move earlier">▲</a>` : ""}</span>`).join(""); }
+        ${i ? `<a href="#" data-up="${i}" title="Move earlier">▲</a>` : ""}</span>`).join("");
   $("#lanePlan").innerHTML = M.lane_plan.map(l => `<div class="lane"><b>Lane ${l.lane}</b>${esc(l.team)}</div>`).join(""); }
   $("#comboLow").value = M.combine_low || "F";
   $("#combos").innerHTML = !M.combos.length ? `<div class="muted">No 200 Free, 500 Free or 400 Free Relay entries yet.</div>` :
@@ -1239,6 +1244,14 @@ async function tbDb(op, args, flash) {
   document.addEventListener("mouseover", e => { if (e.target.closest && e.target.closest("[data-tip]")) show(e.target); });
   document.addEventListener("mouseout", e => { if (e.target.closest && e.target.closest("[data-tip]")) box.style.display = "none"; });
 })();
+const CHAMP_TIP = "<b>Championship rules</b> (NFHS; usually region/state, but any meet may use them &mdash; 1-4-10 NOTE, p. 4). What changes in MeetDeck:" +
+  "<ul style='margin:6px 0 0;padding-left:18px'>" +
+  "<li><b>Entries:</b> up to 4 swimmers per team in each individual event and 1 relay per team per event (3-1-1, p. 14) &mdash; extras are flagged.</li>" +
+  "<li><b>Seeding:</b> by time, not team lanes.</li>" +
+  "<li><b>Scoring:</b> championship scoring (16 places, relays double) by default.</li>" +
+  "<li><b>No show:</b> a swimmer who doesn't compete is out of the rest of the meet unless a doctor or the referee excuses them (3-2-2 penalty 3, p. 16) &mdash; MeetDeck offers to pull them.</li>" +
+  "<li><b>False starts:</b> need written dual confirmation by the referee and starter (8-1-3, p. 59&ndash;60).</li>" +
+  "<li><b>Officials:</b> a full crew &mdash; at least two stroke judges, turn and takeoff judges, dual confirmation on relay takeoffs (4-1-1, 4-4-1, 4-6-3).</li></ul>";
 const TBTIP = {
   dfs: "<b>DFS &mdash; declared false start.</b> The swimmer won't swim <i>one event</i>. Not a DQ, and their other events are fine, but it still counts as one of their entries. (NFHS 1-4-11)",
   pull: "<b>Scratch &mdash; pull from the meet.</b> Out of <i>the rest of the meet</i>: every event not swum yet and their relays. Results already swum stay. (NFHS 1-4-10)",
@@ -1549,6 +1562,7 @@ $("#hpFind").addEventListener("input", renderHeatSheet);
 $("#seedBtn").onclick = () => save({preseed: true});
 $("#unseedBtn").onclick = () => { if (confirm("Clear the seeding here? You'd seed in Meet Manager instead. Hand moves are kept if you seed again.")) save({preseed: false}); };
 $("#mKind").addEventListener("change", e => save({kind: e.target.value}));
+$("#mChamp").addEventListener("change", e => save({championship: e.target.checked}));
 document.addEventListener("change", e => { const k = e.target.dataset && e.target.dataset.oddeven; if (k === undefined) return;
   const o = [...M.lanes.order], i = +k, j = o.indexOf(e.target.value); if (j < 0 || j === i) return;
   [o[i], o[j]] = [o[j], o[i]]; save({lanes: {...M.lanes, order: o}}); });

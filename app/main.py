@@ -2442,6 +2442,25 @@ _usc = utahswimcoach.Store(DATA_ROOT)
 _usc.refresh()
 
 
+def _usc_nightly():
+    """During the high school season (Nov through Feb) pull utahswimcoach.com's lists every night: from 4 AM on,
+    once per day, retrying every half hour until it works (the pool's internet is off overnight)."""
+    import datetime as _dt
+    while True:
+        try:
+            now = _dt.datetime.now()
+            in_season = now.month in (11, 12, 1, 2)
+            got = _usc.data.get("fetched_at") or ""
+            if in_season and now.hour >= 4 and not got.startswith(now.date().isoformat()) and _settings().get("usc_on", True):
+                _usc.refresh(force=True)
+        except Exception as e:
+            print("utahswimcoach nightly:", e)
+        time.sleep(1800)
+
+
+threading.Thread(target=_usc_nightly, daemon=True).start()
+
+
 @app.get("/api/statecoach")
 def statecoach_status():
     return {**_usc.status(), "on": _settings().get("usc_on", True)}

@@ -40,3 +40,10 @@ def test_review_flags_changed_unswum_events_only():
     assert "no heat or lane" in got[0]["reasons"][0]
     ops, moved = reseed.ops(m, 1, [], list(range(1, 9)))
     assert len(ops) == 7 and moved >= 1
+
+
+def test_unseeded_event_is_flagged_even_when_unchanged():
+    m = meet(["T1", "T2"], [ent(i, 1, 1 + i % 2, 25 + i) for i in range(5)])   # no heats or lanes at all
+    base = {"1": reseed.sig(m, 1)}
+    got = reseed.review(m, base, ["T1", "T2"], list(range(1, 9)))
+    assert [g["ptr"] for g in got] == [1] and "no heat or lane" in got[0]["reasons"][0]

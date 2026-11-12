@@ -112,7 +112,8 @@ def review(m, base: dict, team_order, lanes, skip_ptrs=(), min_heat=MIN_HEAT) ->
         if p in skip_ptrs or swum(m, p) or not _active(m, p):
             continue
         b = base.get(str(p))
-        if b is None or b == sig(m, p):
+        unplaced = any(not e["heat"] or not e["lane"] for e in _active(m, p))
+        if (b is None or b == sig(m, p)) and not unplaced:     # a swimmer with no heat or lane always counts
             continue
         c = check(m, p, team_order, lanes, min_heat)
         if c["reasons"]:

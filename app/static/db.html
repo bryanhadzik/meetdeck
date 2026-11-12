@@ -237,7 +237,12 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
     </section>
 
     <section id="tab-changes" class="hidden">
-      <h2>Changes <button class="small undoAny" style="margin-left:8px">Undo last change</button></h2><div id="logList"></div>
+      <h2>Meet changes <button class="small undoAny" style="margin-left:8px">Undo last change</button></h2>
+      <div class="muted" style="font-size:12.5px;margin:-4px 0 8px">Times, DQs, scratches and declared false starts, entries, seeding and scoring.</div>
+      <div id="logList"></div>
+      <h2 style="margin-top:18px">Publishing &amp; exports</h2>
+      <div class="muted" style="font-size:12.5px;margin:-4px 0 8px">Phone results, start lists sent, backups and files downloaded.</div>
+      <div id="logOther"></div>
       <h2 style="margin-top:16px">Saved versions</h2>
       <div class="muted" style="font-size:13px;margin-bottom:6px">A copy is kept before every change. Restoring one keeps the current database as a version too.</div>
       <div id="verList"></div>
@@ -958,7 +963,10 @@ function renderMeet() {
     <div class="mgrid4">${inp("city", "City", mt.city, 'maxlength="30"')}${inp("state", "State", mt.state, 'maxlength="3" size="4"')}${inp("zip", "Zip", mt.zip, 'maxlength="10" size="10"')}${inp("country", "Country", mt.country, 'maxlength="3" size="4"')}</div>`;
 }
 function renderChanges() {
-  $("#logList").innerHTML = S.log.length ? `<table>${S.log.map(l => `<tr><td style="white-space:nowrap" class="muted">${esc(l.when)}</td><td>${esc(l.msg)}</td></tr>`).join("")}</table>` : `<div class="muted">No changes yet.</div>`;
+  { const other = l => l.kind === "export" || /^(Published|Sent|Downloaded|Exported)\b/.test(l.msg || "");
+    const tbl = (rows, none) => rows.length ? `<table>${rows.map(l => `<tr><td style="white-space:nowrap" class="muted">${esc(l.when)}</td><td>${esc(l.msg)}</td></tr>`).join("")}</table>` : `<div class="muted">${none}</div>`;
+    $("#logList").innerHTML = tbl(S.log.filter(l => !other(l)), "No changes yet.");
+    $("#logOther").innerHTML = tbl(S.log.filter(other), "Nothing published or exported yet."); }
   $("#verList").innerHTML = S.versions.length ? `<table>${S.versions.map(v => `<tr><td class="muted" style="white-space:nowrap">${esc(v.when)}</td><td>${esc(v.label)}</td><td><button class="ghost small" data-ver="${esc(v.id)}">Restore</button></td></tr>`).join("")}</table>` : `<div class="muted">None yet.</div>`;
 }
 

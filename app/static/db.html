@@ -945,15 +945,34 @@ function renderChanges() {
 
 // ---------------- timing console (via the bridge on the timing laptop) ----------------
 let TM = {connected: false};
-const tmUrl = () => { try { return localStorage.getItem("bridge") || "http://localhost:8766"; } catch (e) { return "http://localhost:8766"; } };
-async function bridge(path, body) {
-  const r = await fetch(tmUrl() + path, body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+// The bridge listens only on the computer the console is plugged into. Default: reach it through the
+// MeetDeck server (/api/bridge - works from any browser on the network), and fall back to this computer's
+// own localhost:8766 (a bridge on the timing laptop when MeetDeck runs on a server). A typed address wins.
+const BRIDGE_VIA_SERVER = "/api/bridge", BRIDGE_HERE = "http://localhost:8766";
+let TM_BASE = null;   // whichever way reached the bridge last
+const tmUrl = () => { try { return localStorage.getItem("bridge") || ""; } catch (e) { return ""; } };
+const tmWhere = () => tmUrl() || (TM_BASE === BRIDGE_HERE ? "this computer (localhost:8766)" : "the MeetDeck computer");
+async function bridgeAt(base, path, body) {
+  let r;
+  try { r = await fetch(base + path, body === undefined ? {cache: "no-store"} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)}); }
+  catch (e) { const x = new TypeError(`Can't reach the bridge at ${base}`); x.unreachable = true; throw x; }
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error || `bridge said ${r.status}`);
+  if (!r.ok) { const x = new Error(d.error || `bridge said ${r.status}`); x.unreachable = !!d.no_bridge || (base === BRIDGE_VIA_SERVER && r.status === 404 && !d.error); throw x; }
   return d;
+}
+async function bridge(path, body) {
+  if (tmUrl()) return bridgeAt(tmUrl(), path, body);
+  const order = TM_BASE === BRIDGE_HERE ? [BRIDGE_HERE, BRIDGE_VIA_SERVER] : [BRIDGE_VIA_SERVER, BRIDGE_HERE];
+  let last;
+  for (const b of order) {
+    try { const d = await bridgeAt(b, path, body); TM_BASE = b; return d; }
+    catch (e) { if (!e.unreachable) throw e; last = e; }
+  }
+  throw last;
 }
 function tmShow() {
   $("#tmState").textContent = TM.connected ? `${TM.sim ? "simulator" : TM.port} · ${TM.identity || "connected"}` : (TM.err ? "bridge not running" : "not connected");
+  $("#tmState").title = TM.err ? "" : "Bridge on " + tmWhere();
   $("#tmState").className = "badge" + (TM.connected ? "" : "");
   $("#tmState").style.background = TM.connected ? "var(--ok-bg)" : "";
   $("#tmState").style.color = TM.connected ? "var(--ok)" : "";
@@ -965,11 +984,11 @@ async function tmStatus() {
   try { TM = await bridge("/status"); TM.err = null; } catch (e) { TM = {connected: false, err: e.message}; }
   tmShow();
   if (!TM.err && /bridge isn't running|Can't reach the bridge/.test($("#tmMsg").textContent)) $("#tmMsg").textContent = "Bridge found. Pick the COM port and Connect, or use Simulator.";
-  if (TM.err) $("#tmMsg").innerHTML = `The bridge isn't running on this computer. <a href="/timing/bridge.zip">Download it</a>, unzip, and double-click <b>start-simulator.bat</b> to practice (or <b>start-bridge.bat</b> with the console plugged in) &mdash; it needs Python from python.org. Then <a href="#" id="tmRetry">check again</a>.`;
+  if (TM.err) $("#tmMsg").innerHTML = `The bridge isn't running on the MeetDeck computer or this one. <a href="/timing/bridge.zip">Download it</a>, unzip, and double-click <b>start-simulator.bat</b> to practice (or <b>start-bridge.bat</b> with the console plugged in) &mdash; it needs Python from python.org. Then <a href="#" id="tmRetry">check again</a>.`;
   if ($("#tmRetry")) $("#tmRetry").onclick = e => { e.preventDefault(); tmStatus(); };
 }
 const tmMsg = (t, bad) => { $("#tmMsg").innerHTML = bad ? `<span style="color:var(--err)">${esc(t)}</span>` : esc(t); };
-$("#tmUrl").value = tmUrl();
+$("#tmUrl").value = tmUrl(); $("#tmUrl").placeholder = "automatic";
 $("#tmUrl").onchange = e => { try { localStorage.setItem("bridge", e.target.value.trim().replace(/\/$/, "")); } catch (x) {} tmStatus(); };
 $("#tmToggle").onclick = () => { const b = $("#tmBody"); b.classList.toggle("hidden"); $("#tmToggle").textContent = b.classList.contains("hidden") ? "Show" : "Hide"; if (!b.classList.contains("hidden")) tmStatus(); };
 $("#tmConnect").onclick = async () => {
@@ -979,7 +998,7 @@ $("#tmConnect").onclick = async () => {
 };
 $("#tmSim").onclick = async () => {
   try { TM = await bridge("/connect", {sim: true, lanes: (M && M.meet && M.meet.lanes) || 8}); tmShow(); tmMsg("Connected to the simulator."); }
-  catch (e) { tmMsg(e instanceof TypeError ? "Can't reach the bridge at " + tmUrl() + " — is start-bridge.bat (or start-simulator.bat) running on this computer?" : e.message, true); }
+  catch (e) { tmMsg(e instanceof TypeError ? "Can't reach the bridge on the MeetDeck computer or this one — is MeetDeck (or start-bridge.bat / start-simulator.bat) running where the console is plugged in?" : e.message, true); }
 };
 // keep checking for the bridge until it's connected, so starting it after the page loads just works
 setInterval(() => { if (!TM.connected && !document.hidden) tmStatus(); }, 4000);
@@ -993,7 +1012,7 @@ async function tmDbgLoad() {
   const el = $("#tmDbgBody"); if (!el) return;
   const d = TMDBG;
   $("#tmDbgWhen").textContent = "updated " + new Date().toLocaleTimeString();
-  if (d.err) { el.innerHTML = `<div style="color:var(--err)">Can't reach the bridge at ${esc(tmUrl())}: ${esc(d.err)}</div>`; return; }
+  if (d.err) { el.innerHTML = `<div style="color:var(--err)">Can't reach the bridge (${esc(tmWhere())}): ${esc(d.err)}</div>`; return; }
   const ports = (d.ports_detail || []).slice().sort((a, b) => (a.desc === "n/a") - (b.desc === "n/a"));
   const real = ports.filter(p => p.desc && p.desc !== "n/a"), other = ports.filter(p => !p.desc || p.desc === "n/a");
   const sel = $("#tmPort").value;

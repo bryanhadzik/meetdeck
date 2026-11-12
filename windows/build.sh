@@ -27,6 +27,7 @@ printf 'python312.zip\n.\nLib\\site-packages\n..\\app\nimport site\n' > "$PTH"
 # the app
 cp app/*.py app/mmdb_profile.json "$B/MeetDeck/app/"
 cp -r app/static "$B/MeetDeck/app/static"
+cp -r app/rules_seed "$B/MeetDeck/app/rules_seed"     # official rules documents + AO slides; every copy adds them
 mkdir -p "$B/MeetDeck/app/timing" && cp timing/*.py timing/README.txt "timing/Console emulator.bat" "$B/MeetDeck/app/timing/"
 cp windows/launcher.py "$B/MeetDeck/app/launcher.py"
 mkdir -p "$B/MeetDeck/app/tools" && cp windows/MeetDeck-Launcher.ps1 "$B/MeetDeck/app/tools/"

@@ -1795,7 +1795,11 @@ def db_get(mid: str):
     d = _dir(mid)
     info = _dbinfo(d)
     if not _dbfile(d).exists():
-        return {"exists": False, "meet": _meta(d)["name"]}
+        try:
+            can = bool(_state(d)["entries"])          # team entries are in: the database can be built from them
+        except Exception:
+            can = False
+        return {"exists": False, "meet": _meta(d)["name"], "can_build": can}
     if not info.get("scoring") and not info.get("adopted"):
         _adopt_scoring(d)
         info = _dbinfo(d)

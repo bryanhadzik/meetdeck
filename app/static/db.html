@@ -245,6 +245,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const MID = new URLSearchParams(location.search).get("meet");
 const API = `/api/meets/${MID}/db`;
+let AUTO_BUILT = false;
 let S = null, M = null, EV = null, TAB = "events", EDIT_SW = null, RELAY_SW = null, TOL = 0.30;
 let MB = {url: "", auto: false, sig: null, timer: null, busy: false};
 fetch("/api/settings").then(r => r.json()).then(st => { if (st.time_tolerance) TOL = st.time_tolerance; MB.url = st.meetboard_url || ""; MB.auto = !!st.meetboard_auto; mbShow(); }).catch(() => {});
@@ -272,6 +273,13 @@ function show() {
   $("#backBtn").href = `/?meet=${encodeURIComponent(MID)}`;
   $("#title").textContent = S.meet_name || S.meet || "Meet database";
   $("#tmNoDb").classList.toggle("hidden", !!S.exists); ["#tmSend", "#tmPractice"].forEach(x => $(x).disabled = !S.exists);
+  if (!S.exists && S.can_build && !AUTO_BUILT) {      // team entries are in: build the database right away
+    AUTO_BUILT = true; $("#startMsg").textContent = "Building the meet database from the team entries…";
+    $("#start").classList.remove("hidden"); $("#app").classList.add("hidden");
+    api(`${API}/create`, {method: "POST"}).then(r => { S = r; toast("Meet database built from the team entries"); show(); })
+      .catch(e => { $("#startMsg").textContent = "Couldn't build it automatically: " + e.message; });
+    return;
+  }
   if (!S.exists) { $("#start").classList.remove("hidden"); $("#app").classList.add("hidden"); ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn"].forEach(s => $(s).classList.add("hidden")); return; }
   M = S.model;
   $("#start").classList.add("hidden"); $("#app").classList.remove("hidden");

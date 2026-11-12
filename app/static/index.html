@@ -514,11 +514,16 @@ async function loadHosts() {
 let SET = {season: "", seasons: []};
 async function loadSeasons() {
   SET = await api("/api/settings");
+  seasonSelFill();
+}
+function seasonSelFill() {          // fill the Season box from whatever settings were loaded last
+  if (!SET.seasons || !SET.seasons.length) return;
   $("#seasonSel").innerHTML = SET.seasons.map(x => `<option value="${x}">${x}${x === SET.current ? " (now)" : ""}</option>`).join("");
   $("#seasonSel").value = SET.season;
 }
 async function loadMeets(select) {
-  if (!SET.season) await loadSeasons();
+  if (!SET.season || !SET.seasons || !SET.seasons.length) await loadSeasons();
+  else seasonSelFill();   // settings may have been loaded elsewhere (Setup) before the Season box was filled
   const all = await api("/api/meets");
   if (select) { const m = all.find(x => x.id === select); if (m && m.season !== SET.season) { SET = await api("/api/settings", J("PUT", {season: m.season})); await loadSeasons(); } }
   const meets = all.filter(m => m.season === SET.season);
@@ -620,6 +625,7 @@ document.addEventListener("click", async ev => {
 let PLAN = null, scanTimer = null;
 async function loadSetup() {
   SET = await api("/api/settings");
+  seasonSelFill();
   $("#sDrive").value = SET.drive_folder ? `https://drive.google.com/drive/folders/${SET.drive_folder}` : "";
   $("#sDriveMsg").textContent = "";
   if (SET.drive_folder) {

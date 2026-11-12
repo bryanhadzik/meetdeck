@@ -129,6 +129,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   #meetFields label,#ctForm label{text-align:left;align-items:stretch}
   #ctForm input,#ctForm select{width:100%;box-sizing:border-box}
   #meetFields input,#meetFields select{width:100%;box-sizing:border-box}
+#tableSec.tbLocked #tbSwimmers, #tableSec.tbLocked #tbRelays, #tableSec.tbLocked #tbAddRelay { pointer-events: none; opacity: .55; }
 </style>
 <script src="/static/ao.js"></script>
 </head>
@@ -1212,6 +1213,29 @@ async function tbDb(op, args, flash) {
     if (typeof DBH !== "undefined") { DBH = null; renderHeatSheet(); } }
   catch (x) { alert(x.message); }
 }
+
+// little pop-up explanations on anything with data-tip
+(function () {
+  const box = document.createElement("div");
+  box.style.cssText = "position:fixed;z-index:9999;max-width:320px;padding:8px 10px;border-radius:8px;font-size:13px;line-height:1.4;" +
+    "background:#1d2633;color:#f2f5f8;border:1px solid #3a4a5e;box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none;display:none";
+  const add = () => document.body && !box.parentNode && document.body.appendChild(box);
+  add(); document.addEventListener("DOMContentLoaded", add);
+  const show = el => {
+    const t = el.closest && el.closest("[data-tip]"); if (!t) return;
+    box.innerHTML = t.dataset.tip; box.style.display = "block";
+    const r = t.getBoundingClientRect(), b = box.getBoundingClientRect();
+    let top = r.top - b.height - 8; if (top < 6) top = r.bottom + 8;
+    box.style.top = top + "px"; box.style.left = Math.max(6, Math.min(innerWidth - b.width - 6, r.left + r.width / 2 - b.width / 2)) + "px";
+  };
+  document.addEventListener("mouseover", e => { if (e.target.closest && e.target.closest("[data-tip]")) show(e.target); });
+  document.addEventListener("mouseout", e => { if (e.target.closest && e.target.closest("[data-tip]")) box.style.display = "none"; });
+})();
+const TBTIP = {
+  dfs: "<b>DFS &mdash; declared false start.</b> The swimmer won't swim <i>one event</i>. Not a DQ, and their other events are fine, but it still counts as one of their entries. (NFHS 1-4-11)",
+  pull: "<b>Scratch &mdash; pull from the meet.</b> Out of <i>the rest of the meet</i>: every event not swum yet and their relays. Results already swum stay. (NFHS 1-4-10)",
+  pullPre: "Before the meet starts: drops every event they're entered in and takes them off their relays (those legs need a new swimmer).",
+};
 const LEG_MEDLEY = ["Back", "Breast", "Fly", "Free"];
 const tbIssues = () => TD().issues.filter(i => i.teams.includes(TB.team) || i.entries.some(id => TD().entries.find(e => e.id === id && e.team === TB.team)));
 const swEntries = key => TD().entries.filter(e => e.kind === "ind" ? e.swimmers.includes(key) : Object.values(e.legs || {}).includes(key));
@@ -1263,9 +1287,16 @@ function renderTable() {
   const opts = codes.map(c => `<option value="${esc(c)}">${esc(TD().teams[c]?.name || c)} (${esc(c)})</option>`).join("");
   if (sel.dataset.k !== opts) { sel.innerHTML = opts; sel.dataset.k = opts; }
   sel.value = TB.team;
-  $("#tbDbNote").innerHTML = M.has_db ? `<div class="okbox" style="font-size:13px;margin-bottom:8px">Changes here go straight into the meet database${(M.files || []).length ? "" : " (opened from Meet Manager)"}. Every change is logged &mdash; <button class="ghost small" data-tbundo="1">Undo last change</button> (full list in <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> &rarr; Changes). A swimmer or relay added here has no heat yet &mdash; place them in Seeding below or in Run the meet.${(M.files || []).length ? ` Changes to the entries above (new files, removed entries, relay swimmers) are brought in automatically.` : ""}</div>` +
+  const locked = TD() !== M && TV.started;
+  $("#tableSec").classList.toggle("tbLocked", !!locked);
+  if (locked) TB.open = null;
+  if (locked) { $("#tbDbNote").innerHTML = `<div class="issue warn" style="font-size:13.5px;margin-bottom:8px"><b>The meet has started &mdash; changes at the table are closed.</b>
+      From here on NFHS rules apply. Open <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> and use
+      <b data-tip="${TBTIP.dfs}" style="text-decoration:underline dotted">DFS</b> to take a swimmer out of one event, or
+      <b data-tip="${TBTIP.pull}" style="text-decoration:underline dotted">Pull from meet</b> to scratch them from the rest of the meet. Relay swimmers are changed there too.</div>`; }
+  else $("#tbDbNote").innerHTML = M.has_db ? `<div class="okbox" style="font-size:13px;margin-bottom:8px">Changes here go straight into the meet database${(M.files || []).length ? "" : " (opened from Meet Manager)"}. Every change is logged &mdash; <button class="ghost small" data-tbundo="1">Undo last change</button> (full list in <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> &rarr; Changes). A swimmer or relay added here has no heat yet &mdash; place them in Seeding below or in Run the meet.${(M.files || []).length ? ` Changes to the entries above (new files, removed entries, relay swimmers) are brought in automatically.` : ""}</div>` +
     (TB.note ? `<div class="okbox" style="font-size:13px;margin-bottom:8px;background:var(--ok-bg, #e6f5ec)"><b>${esc(TB.note)}.</b> New entries have no heat yet.</div>` : "") : "";
-  { const done = M.changes_done || {}, codes2 = codes;
+  if (locked) $("#tbDone").innerHTML = ""; else { const done = M.changes_done || {}, codes2 = codes;
     $("#tbDone").innerHTML = `<span class="muted" style="font-size:13px">Done with changes:</span> ` + codes2.map(c => {
       const t = done[c];
       return `<button class="small ${t ? "" : "ghost"}" data-tbdone="${esc(c)}" data-on="${t ? 1 : 0}" title="${t ? "Done at " + esc(t) + " - click to reopen" : "Click when this coach is done with changes"}">${t ? "&#10003;" : "&#9744;"} ${esc(TD().teams[c]?.name || c)}${t ? ` <span class="muted">${esc(t)}</span>` : ""}</button>`;
@@ -1307,7 +1338,7 @@ function renderTable() {
     return row + `<tr><td colspan="4"><div class="ed">
       <div class="muted" style="font-size:12px;margin-bottom:4px">INDIVIDUAL EVENTS &mdash; check to enter, uncheck to drop</div><div class="evgrid">${grid || `<span class="muted">No individual events in this meet yet.</span>`}</div>
       <div class="muted" style="font-size:12px;margin:10px 0 4px">RELAYS</div>${rels || `<span class="muted" style="font-size:13px">Not on a relay yet.</span>`}${tbRelayPick(s, es)}
-      <div class="row" style="margin-top:10px"><button class="ghost small danger" data-tbpull="${esc(s.key)}">Pull from the meet</button><span class="muted" style="font-size:12px">drops every event and takes them off their relays</span><span class="grow"></span>${M.has_db ? `<button class="ghost small" data-tbundo="1">Undo last change</button>` : ""}<button class="ghost small" data-tbclose="1">Close</button></div>
+      <div class="row" style="margin-top:10px"><button class="ghost small danger" data-tbpull="${esc(s.key)}" data-tip="${TBTIP.pullPre}">Pull from the meet</button><span class="muted" style="font-size:12px">drops every event and takes them off their relays</span><span class="grow"></span>${M.has_db ? `<button class="ghost small" data-tbundo="1">Undo last change</button>` : ""}<button class="ghost small" data-tbclose="1">Close</button></div>
     </div></td></tr>`;
   }).join("") + `</table>` + (sws.length ? "" : `<div class="muted">No swimmers match.</div>`);
   tbRelayPickFill();

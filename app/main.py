@@ -905,13 +905,24 @@ def _sync_db(d: Path) -> str | None:
     return msg
 
 
+def _meet_started(m: dict) -> bool:
+    """The first race has been swum (a time is on record). From then on NFHS rules apply to changes:
+    a declared false start for one event, or a scratch (pulled from the rest of the meet)."""
+    return any(e.get("time") for e in m["entries"])
+
+
+STARTED_MSG = ("The meet has started, so changes at the table are closed. In Run the meet use DFS (declared false start) "
+               "to take a swimmer out of one event, or Pull from meet to scratch them from the rest of the meet.")
+
+
 @app.get("/api/meets/{mid}/table")
 def table_view(mid: str):
     d = _dir(mid)
     if not _dbfile(d).exists():
         raise HTTPException(400, "No meet database yet")
-    msg = _sync_db(d)
-    return {**_table_view(d), "synced": msg}
+    started = _meet_started(meetdb.load(_dbfile(d)))
+    msg = None if started else _sync_db(d)      # entry files no longer change the meet once it's under way
+    return {**_table_view(d), "synced": msg, "started": started}
 
 
 def _db_apply(d: Path, ops: list, msg: str):
@@ -937,6 +948,8 @@ def table_op(mid: str, body: dict):
     if not _dbfile(d).exists():
         raise HTTPException(400, "No meet database yet")
     m = meetdb.load(_dbfile(d))
+    if _meet_started(m):
+        raise HTTPException(409, STARTED_MSG)
     evno = lambda v: f"{v['no']}{v.get('ltr') or ''}"
     ath_of = lambda k: int(str(k).split(":", 1)[1])
     def ptr_of(no):
@@ -1805,7 +1818,7 @@ def db_get(mid: str):
     except Exception as x:
         print("reseed view:", x)
         rs = {"events": [], "teams": []}
-    return {"exists": True, "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
+    return {"exists": True, "started": _meet_started(m), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
             "model": meetdb.json_safe(m), "problems": meetdb.check(m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
@@ -1953,7 +1966,7 @@ def db_import_drive(mid: str, body: dict):
     return db_get(mid)
 
 
-OPS = {"scratch": meetdb.op_scratch, "scratch_athlete": meetdb.op_scratch_athlete, "move": meetdb.op_move,
+OPS = {"dfs": meetdb.op_dfs, "scratch": meetdb.op_scratch, "scratch_athlete": meetdb.op_scratch_athlete, "move": meetdb.op_move,
        "seed": meetdb.op_seed, "result": meetdb.op_result, "delete": meetdb.op_delete, "add_entry": meetdb.op_add_entry,
        "athlete": meetdb.op_athlete, "add_athlete": meetdb.op_add_athlete, "team": meetdb.op_team, "legs": meetdb.op_legs,
        "heat_results": meetdb.op_heat_results, "dq": meetdb.op_dq, "undq": meetdb.op_undq, "meet": meetdb.op_meet}

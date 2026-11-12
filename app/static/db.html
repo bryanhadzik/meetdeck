@@ -261,6 +261,7 @@ const fmt = v => { if (!v) return ""; const m = Math.floor(v / 60), s = (v - m *
 const athName = no => { const a = M.athletes[no]; return a ? `${a.first} ${a.last}` : "?"; };
 const teamAbbr = no => M.teams[no]?.abbr || "?";
 const evOf = ptr => M.events.find(e => e.ptr === ptr);
+const isDfs = e => ["F", "D", "Q"].includes((e.stat || "").trim()) && ["7B", "7P"].includes((e.dq || "").toUpperCase()) && !e.time;
 
 async function load() {
   S = await api(API);
@@ -578,6 +579,41 @@ function raceBox(v, h) {
   return `<label class="muted" style="font-weight:400;font-size:12.5px" title="Console race number for this heat. Change it and the heats after it count up from here. Clear it to go back to automatic.">Race
     <input class="t" data-race="${h}" value="${n}" style="width:46px;text-align:center${manual ? ";border-color:var(--accent);font-weight:600" : ""}" inputmode="numeric"></label>${manual ? ` <a href="#" data-raceclear="${h}" class="muted" style="font-size:12px" title="Back to automatic numbering">auto</a>` : ""}`;
 }
+
+// little pop-up explanations: any element with data-tip shows it on hover / focus (and on the first tap of a two-click button)
+(function () {
+  const box = document.createElement("div");
+  box.id = "tipBox";
+  box.style.cssText = "position:fixed;z-index:9999;max-width:320px;padding:8px 10px;border-radius:8px;font-size:13px;line-height:1.4;" +
+    "background:#1d2633;color:#f2f5f8;border:1px solid #3a4a5e;box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none;display:none";
+  document.addEventListener("DOMContentLoaded", () => document.body.appendChild(box));
+  if (document.body) document.body.appendChild(box);
+  const show = el => {
+    const t = el.closest && el.closest("[data-tip]"); if (!t) return;
+    box.innerHTML = t.dataset.tip; box.style.display = "block";
+    const r = t.getBoundingClientRect(), b = box.getBoundingClientRect();
+    let top = r.top - b.height - 8; if (top < 6) top = r.bottom + 8;
+    box.style.top = top + "px"; box.style.left = Math.max(6, Math.min(innerWidth - b.width - 6, r.left + r.width / 2 - b.width / 2)) + "px";
+  };
+  document.addEventListener("mouseover", e => { if (e.target.closest && e.target.closest("[data-tip]")) show(e.target); });
+  document.addEventListener("mouseout", e => { if (e.target.closest && e.target.closest("[data-tip]")) box.style.display = "none"; });
+  document.addEventListener("focusin", e => show(e.target));
+  document.addEventListener("focusout", () => { box.style.display = "none"; });
+  window.showTip = show;
+})();
+const TIP = {
+  dfs: "<b>DFS &mdash; declared false start.</b> The swimmer won't swim <i>this one event</i>. It isn't a DQ and doesn't hurt their other events, " +
+       "but it still counts as one of their entries, so they can't swap into a different event. The coach tells the referee before the heat. (NFHS 1-4-11)",
+  undfs: "Take back the declared false start &mdash; the swimmer swims this event after all.",
+  drop: "<b>Drop from this event</b> (before the meet starts). A normal entry change at the table. " +
+        "Once the first race has been swum, use <b>DFS</b> instead.",
+  putback: "Put this entry back in the event.",
+  pull: "<b>Scratch &mdash; pull from the meet.</b> The swimmer is out of <i>the rest of the meet</i>: every event not swum yet, " +
+        "and they come off relays still to swim (those legs need a new swimmer). Results already swum stay. (NFHS 1-4-10)",
+  pullPre: "<b>Pull from the meet</b> (before it starts): drops every event they're entered in and takes them off their relays.",
+  noshow: "<b>No show</b> &mdash; didn't come to the blocks and the coach didn't declare a false start. In a regular meet that's a DQ in this event only " +
+          "(in a championship meet it would end their meet).",
+};
 // first click arms a button ("Scratch Alton?"), a second click within 4 s does it
 function armed(btn, label) {
   if (btn.dataset.armed) return true;
@@ -586,6 +622,7 @@ function armed(btn, label) {
   btn.innerHTML = esc(label);
   btn.style.background = "var(--err)"; btn.style.color = "#fff"; btn.style.borderColor = "var(--err)";
   btn.title = "Click again to confirm";
+  if (btn.dataset.tip && window.showTip) showTip(btn);
   btn._t = setTimeout(() => { delete btn.dataset.armed; btn.innerHTML = old; btn.setAttribute("style", oldStyle); btn.title = ""; }, 4000);
   return false;
 }
@@ -684,10 +721,12 @@ function renderEvent() {
       ${MOVING ? `<td style="white-space:nowrap">${e.scr ? "" : hsel(e) + " " + lsel(e)}</td>` : ""}
       <td style="white-space:nowrap">${e.scr ? "" : timerCells(e)}</td>
       <td class="plc" data-plc="${e.key}">${e.place || ""} ${(e.stat || "").trim() === "R" ? statBadge(e) : ""}</td>
-      <td class="st" style="white-space:nowrap">${e.scr ? "" : (e.stat === "Q" || e.stat === "F" || e.stat === "D") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" || e.stat === "D" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
-        : `<select data-stat="${e.key}" title="Status"><option value="">OK</option><option value="R" ${e.stat === "R" ? "selected" : ""}>No show</option></select> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>`}
+      <td class="st" style="white-space:nowrap">${e.scr ? "" : isDfs(e) ? `<span class="badge dq" data-tip="${TIP.dfs}">DFS</span> <button class="ghost small" data-undfs="${e.key}" data-tip="${TIP.undfs}">Undo DFS</button>` : (e.stat === "Q" || e.stat === "F" || e.stat === "D") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" || e.stat === "D" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
+        : `<select data-stat="${e.key}" data-tip="${TIP.noshow}"><option value="">OK</option><option value="R" ${e.stat === "R" ? "selected" : ""}>No show</option></select> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>`}
         ${(e.stat === "Q" || e.stat === "F" || e.stat === "D") && e.dq ? `<div class="legs" style="color:var(--err)">${esc(dqText(e))}</div>` : ""}</td>
-      <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}">Swimmers</button> ` : ""}<button class="ghost small" data-scr="${e.key}" data-on="${e.scr ? 0 : 1}">${e.scr ? "Un-scratch" : "Scratch"}</button>
+      <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}">Swimmers</button> ` : ""}${e.scr ? `<button class="ghost small" data-scr="${e.key}" data-on="0" data-tip="${TIP.putback}">Put back</button>`
+        : S.started ? (isDfs(e) || e.time || (e.stat || "").trim() ? "" : `<button class="ghost small" data-dfs="${e.key}" data-tip="${TIP.dfs}">DFS</button>`)
+        : `<button class="ghost small" data-scr="${e.key}" data-on="1" data-tip="${TIP.drop}">Drop</button>`}
         <button class="ghost small danger" data-del="${e.key}" title="Delete this entry">✕</button></td></tr>`;
   const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th>Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>${TIMERS() === 2 ? "Timers <span class=\"muted\" style=\"font-weight:400\">(1 · 2 → official)</span>" : "Timers"}</th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
   const unseeded = act.filter(e => !e.heat || !e.lane);
@@ -706,7 +745,7 @@ function renderEvent() {
     html += `<div class="heat newheat"><h3>New heat ${nh} <span class="muted" style="font-weight:400;font-size:12.5px">&middot; drag a swimmer here to start another heat</span></h3><table>${head}${Array.from({length: lanes}, (_, i) => row(null, i + 1, nh)).join("")}</table></div>`;
   }
   if (unseeded.length) html += `<div class="heat"><h3>Not in a heat yet ${MOVING ? "" : '<span class="muted" style="font-weight:400;font-size:12.5px">&middot; press Move swimmers to place them</span>'}</h3><table>${head}${unseeded.filter(e => !e.heat).map(e => row(e)).join("")}</table></div>`;
-  if (scr.length) html += `<div class="heat"><h3>Scratched</h3><table>${head}${scr.map(e => row(e)).join("")}</table></div>`;
+  if (scr.length) html += `<div class="heat"><h3>Dropped / pulled from the meet</h3><table>${head}${scr.map(e => row(e)).join("")}</table></div>`;
   $("#evDetail").innerHTML = html;
   $("#addEntryBtn").onclick = () => addEntryForm(v);
   $("#moveBtn").onclick = () => { MOVING = !MOVING; renderEvent(); };
@@ -772,8 +811,8 @@ function renderSwimmers() {
       <td>${es.map(e => `<span class="chip ${e.scr ? "x" : ""}">#${evOf(e.event)?.no}${e.kind === "R" ? " relay" : ""}</span>`).join("") || `<span class="muted">none</span>`}</td>
       <td style="white-space:nowrap"><button class="ghost small" data-editsw="${a.no}">Edit</button>
         <button class="ghost small" data-relaysw="${a.no}" title="Put this swimmer on one of their team's relays">+ Relay</button>
-        ${live.length ? `<button class="ghost small danger" data-scrsw="${a.no}" data-on="1" title="Scratch from every event and remove from relays">Scratch from meet</button>`
-          : es.length ? `<button class="ghost small" data-scrsw="${a.no}" data-on="0">Un-scratch</button>` : ""}</td></tr>`;
+        ${live.length ? `<button class="ghost small danger" data-scrsw="${a.no}" data-on="1" data-tip="${S.started ? TIP.pull : TIP.pullPre}">Pull from meet</button>`
+          : es.length ? `<button class="ghost small" data-scrsw="${a.no}" data-on="0" data-tip="Put the swimmer back in the events they were pulled from (relay legs have to be put back by hand).">Put back</button>` : ""}</td></tr>`;
   }).map((row, i) => row + (RELAY_SW && list[i] && list[i].no === RELAY_SW ? relayPicker(list[i]) : "")).join("") + `</table>${list.length ? "" : `<div class="muted">No swimmers match.</div>`}`;
   relayPickerWire();
   if (EDIT_SW && $("#eSave")) {
@@ -1319,10 +1358,16 @@ document.addEventListener("click", async ev => {
   if (d.tab || (ev.target.closest("[data-tab]") && ev.target.closest("#problems"))) { ev.preventDefault(); TAB = d.tab || ev.target.closest("[data-tab]").dataset.tab; render(); return; }
   if (d.scr) {
     const e = M.entries.find(x => x.key === d.scr), btn = ev.target.closest("button");
-    if (d.on === "1" && !armed(btn, `Scratch ${e.kind === "R" ? "relay" : (M.athletes[e.ath] || {}).first || ""}?`)) return;   // two clicks to scratch
+    if (d.on === "1" && !armed(btn, `Drop ${e.kind === "R" ? "relay" : (M.athletes[e.ath] || {}).first || ""}?`)) return;   // two clicks to drop
     change("scratch", {key: d.scr, on: d.on === "1"}); return;
   }
-  if (d.del) { const e = M.entries.find(x => x.key === d.del); if (confirm(`Delete this entry completely? (Scratch keeps it on record.)`)) change("delete", {key: d.del}); return; }
+  if (d.dfs) {
+    const e = M.entries.find(x => x.key === d.dfs), btn = ev.target.closest("button");
+    if (!armed(btn, `DFS ${e.kind === "R" ? "relay" : (M.athletes[e.ath] || {}).first || ""}?`)) return;
+    change("dfs", {key: d.dfs, on: true}); return;
+  }
+  if (d.undfs) { change("dfs", {key: d.undfs, on: false}); return; }
+  if (d.del) { const e = M.entries.find(x => x.key === d.del); if (confirm(`Delete this entry completely? (Drop keeps it on record.)`)) change("delete", {key: d.del}); return; }
   if (d.legs) { legsDialog(d.legs); return; }
   if (d.gettimes) { getTimes(+d.gettimes); return; }
   if (d.savedtimes) { getTimes(+d.savedtimes, true); return; }
@@ -1334,7 +1379,8 @@ document.addEventListener("click", async ev => {
   if (d.relaysw !== undefined) { RELAY_SW = +d.relaysw || null; renderSwimmers(); return; }
   if (d.scrsw) {
     const a = M.athletes[d.scrsw];
-    if (d.on === "1" && !confirm(`Scratch ${a.first} ${a.last} from every event and take them off their relays?`)) return;
+    if (d.on === "1" && !confirm(S.started ? `Scratch ${a.first} ${a.last} from the rest of the meet? Every event not swum yet is dropped and they come off relays still to swim. Results already swum stay.`
+      : `Pull ${a.first} ${a.last} from the meet? Every event is dropped and they come off their relays.`)) return;
     change("scratch_athlete", {ath: +d.scrsw, on: d.on === "1"}); return;
   }
   if (d.ver) { if (confirm("Go back to this version? (The current database is kept as a version too.)")) { S = await api(`${API}/undo`, J({id: d.ver})); toast(S.log[0]?.msg || "Restored"); show(); } return; }

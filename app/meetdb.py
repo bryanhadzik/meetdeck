@@ -246,16 +246,33 @@ def op_scratch(m, key, on=True):
         f"{'Scratched' if on else 'Un-scratched'} {who(m, e)} in {ev_label(m, e['event'])}"
 
 
+def _swum(m, ptr) -> bool:
+    return any(x.get("time") or (x.get("stat") or "").strip() for x in m["entries"] if x["event"] == ptr)
+
+
+def op_dfs(m, key, on=True):
+    """Declared false start (NFHS): the swimmer withdraws from this one event. It still counts as one of their
+    entries and doesn't affect their other events. Recorded as Meet Manager does: DQ code 7B with no time."""
+    e = find(m, key)
+    if on:
+        ops, _ = op_dq(m, key, "7B", keep_time=False)
+        return ops, f"Declared false start: {who(m, e)} in {ev_label(m, e['event'])}"
+    ops, _ = op_undq(m, key)
+    return ops, f"Took back the declared false start for {who(m, e)} in {ev_label(m, e['event'])}"
+
+
 def op_scratch_athlete(m, ath, on=True):
+    """Pull a swimmer from the meet (an NFHS scratch: out of the rest of their events). Events already swum keep
+    their results; only the events still to come are scratched, and they come off relays not yet swum."""
     ops, n = [], 0
     for e in m["entries"]:
-        if e["kind"] == "I" and e["ath"] == ath and e["scr"] != on:
+        if e["kind"] == "I" and e["ath"] == ath and e["scr"] != on and not _swum(m, e["event"]):
             ops += op_scratch(m, e["key"], on)[0]
             n += 1
     removed = []
     if on:   # take them off relays too; the leg is left open for a replacement
         for e in m["entries"]:
-            if e["kind"] == "R" and ath in e["legs"]:
+            if e["kind"] == "R" and ath in e["legs"] and not _swum(m, e["event"]):
                 ops.append({"op": "delete", "table": "RelayNames", "match": {"Relay_no": e["relay"], "Ath_no": ath}})
                 removed.append(ev_label(m, e["event"]))
     a = m["athletes"][ath]

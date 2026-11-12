@@ -1976,6 +1976,31 @@ OPS = {"dfs": meetdb.op_dfs, "scratch": meetdb.op_scratch, "scratch_athlete": me
        "heat_results": meetdb.op_heat_results, "dq": meetdb.op_dq, "undq": meetdb.op_undq, "meet": meetdb.op_meet}
 
 
+_DQR = {}
+
+
+@app.get("/api/dqrules")
+def dq_rules():
+    """Each DQ code's NFHS rule, with the Rules Book's own wording and printed page, when the Rules Book
+    is in this computer's rules library (it isn't shipped with MeetDeck)."""
+    import dqrules
+    f = rules_mod.rules_book()
+    if not f:
+        return {"book": None, "codes": {}}
+    key = (f.name, f.stat().st_mtime)
+    if _DQR.get("key") != key:
+        codes = {}
+        for code, refs in dqrules.CODE_RULES.items():
+            out = []
+            for ref, phrase in refs:
+                r = rules_mod.rule_text(ref, phrase)
+                if r:
+                    out.append(r)
+            codes[code] = {"rules": out, "note": dqrules.NOTES.get(code, "")}
+        _DQR.update(key=key, data={"book": f.name, "codes": codes})
+    return _DQR["data"]
+
+
 @app.get("/api/dqcodes")
 def dq_codes():
     import dqcodes

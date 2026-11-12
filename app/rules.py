@@ -31,6 +31,13 @@ def ensure_seed() -> None:
 
 HTML_EXT = (".htm", ".html")
 HEAD_RE = re.compile(r"<h[1-4]\b", re.I)
+PAGE_RE = re.compile(r'<[a-z0-9]+\b[^>]*data-page-start="true"', re.I)   # NFHS Digital marks each printed page
+
+
+def _split_re(raw: str):
+    """Pages saved from the NFHS Digital reader mark where each printed page starts - split there.
+    Other web pages are split at their headings."""
+    return PAGE_RE if PAGE_RE.search(raw) else HEAD_RE
 
 
 def is_html(f) -> bool:
@@ -66,7 +73,7 @@ def html_parts(f: Path) -> list[str]:
     raw = _html_raw(f)
     body = re.search(r"(?is)<body\b[^>]*>(.*)</body>", raw)
     raw = body.group(1) if body else raw
-    cuts = [m.start() for m in HEAD_RE.finditer(raw)]
+    cuts = [m.start() for m in _split_re(raw).finditer(raw)]
     bounds = [0] + cuts + [len(raw)]
     parts = [raw[a:b] for a, b in zip(bounds, bounds[1:])]
     if parts and not _html_text(parts[0]).strip() and len(parts) > 1:
@@ -83,14 +90,92 @@ def html_served(f: Path) -> str:
     body = re.search(r"(?is)<body\b[^>]*>", raw)
     start = body.end() if body else 0
     n = [0]
-    first_text = bool(_html_text(raw[start:(HEAD_RE.search(raw, start).start() if HEAD_RE.search(raw, start) else len(raw))]).strip())
+    rx = _split_re(raw)
+    m0 = rx.search(raw, start)
+    first_text = bool(_html_text(raw[start:(m0.start() if m0 else len(raw))]).strip())
     def anchor(m):
         n[0] += 1
         k = n[0] + (1 if first_text else 0)
         return f'<a id="mdk-{k}"></a>' + m.group(0)
     head, rest = raw[:start], raw[start:]
-    rest = '<a id="mdk-1"></a>' + HEAD_RE.sub(anchor, rest)
+    rest = '<a id="mdk-1"></a>' + rx.sub(anchor, rest)
     return head + rest
+
+
+def html_book_offset(f: Path):
+    """For a book saved page by page (NFHS Digital), the difference between page count and printed page number,
+    found from the book's own cross-reference ("For comments on the rules changes, see page 99")."""
+    if not is_html(f):
+        return None
+    pg = pages(f)
+    if not PAGE_RE.search(_html_raw(f)[:2_000_000]):
+        return None
+    for t in pg[:6]:
+        m = re.search(r"(?i)comments on the [\d-]+ rules changes, see page (\d+)", t)
+        if m:
+            k = next((i for i, x in enumerate(pg) if x.lstrip().upper().startswith("COMMENTS ON THE")), None)
+            if k is not None:
+                return (k + 1) - int(m.group(1))
+    return None
+
+
+def rules_book() -> Path | None:
+    """The NFHS Swimming & Diving Rules Book, if it's in the library (PDF or saved web page)."""
+    for f in docs():
+        pg = pages(f)
+        if any("RULE 8 - Swimming Events" in t or "RULE 8 - SWIMMING EVENTS" in t for t in pg) and \
+                any("RULES BOOK" in t.upper() for t in pg[:3]):
+            return f
+    return None
+
+
+def _norm_ws(t: str) -> str:
+    return re.sub(r"\s+", " ", t or "").strip().lower()
+
+
+def rule_lines(f: Path) -> list[dict]:
+    """Every line of the rules book with the rule-section-article it sits in and its page."""
+    out, r, sec, art = [], None, None, None
+    for i, t in enumerate(pages(f)):
+        for ln in t.splitlines():
+            m = re.match(r"RULE (\d+) - ", ln)
+            if m:
+                r, sec, art = m.group(1), None, None
+            m = re.match(r"SECTION (\d+)\s", ln)
+            if m:
+                sec, art = m.group(1), None
+            m = re.match(r"ART\. (\d+)", ln)
+            if m:
+                art = m.group(1)
+            if re.match(r"(RULE \d+, SECTION|SITUATIONS? AND RULINGS?)", ln):
+                art = "sit"                      # the rulings that follow each section are not the rule itself
+            out.append({"ref": f"{r}-{sec}-{art}", "text": ln.strip(), "page": i + 1,
+                        "situation": bool(re.match(r"\d+\.\d+(\.\d+)?\s+SITUATION", ln)) or art == "sit"})
+    return out
+
+
+def rule_text(ref: str, phrase: str = "") -> dict | None:
+    """The rules-book text for a rule like '8-2-3' (optionally the line in it containing phrase)."""
+    f = rules_book()
+    if not f:
+        return None
+    nums = re.findall(r"\d+", ref)[:3]
+    base = "-".join(nums)
+    lines = [x for x in rule_lines(f) if not x["situation"] and
+             (x["ref"] == base or (len(nums) == 2 and x["ref"].startswith(base + "-")))]
+    if not lines:
+        return None
+    head = lines[0]
+    hit = next((x for x in lines if phrase and _norm_ws(phrase) in _norm_ws(x["text"])), None)
+    pick = hit or head
+    off = html_book_offset(f) if is_html(f) else None
+    if is_html(f):
+        book = pick["page"] - off if off is not None else None
+    else:
+        bp, exact = book_page(pages(f)[pick["page"] - 1], pick["page"] - 1, sections(f))
+        book = bp if exact else None
+    return {"ref": ref, "head": head["text"] if hit and hit is not head else "", "text": pick["text"],
+            "page": pick["page"], "book_page": book, "file": f.name, "html": is_html(f)}
 
 
 def _cache(f: Path) -> Path:
@@ -131,7 +216,17 @@ def sections(f: Path) -> list[dict]:
         return json.loads(c.read_text())
     pg = pages(f)
     if is_html(f):
-        out = [{"title": (t.splitlines() or [""])[0][:90], "page": i + 1} for i, t in enumerate(pg) if t.strip()]
+        off = html_book_offset(f)
+        out = []
+        for i, t in enumerate(pg):
+            heads = [ln for ln in t.splitlines() if re.match(r"(RULE \d+ - |SECTION \d+\s|APPENDIX|INDEX$|STATE ASSOCIATION ADOPTION)", ln)]
+            for h in heads:
+                d = {"title": h[:90], "page": i + 1}
+                if off is not None and i + 1 - off > 0:
+                    d["book"] = i + 1 - off
+                out.append(d)
+        if not out:
+            out = [{"title": (t.splitlines() or [""])[0][:90], "page": i + 1} for i, t in enumerate(pg) if t.strip()]
         c.write_text(json.dumps(out))
         return out
     toc, toc_pages = [], set()
@@ -256,7 +351,11 @@ def search(q: str, limit: int = 60) -> list[dict]:
             score = sum(len(p.findall(text)) for p in pats)
             run = re.match(r"\s*\d{4}-\d{2}\s+[A-Z]+\s+HANDBOOK\s+\d+\s+([A-Z][A-Z0-9 &/,'-]{2,40}?)\s*\n", text)
             sec = run.group(1).strip().title() if run else section_of(secs, i + 1)   # running page header wins
-            bp, exact = ("", False) if is_html(f) else book_page(text, i, secs)
+            if is_html(f):
+                off = html_book_offset(f)
+                bp, exact = (str(i + 1 - off), True) if off is not None and i + 1 - off > 0 else ("", False)
+            else:
+                bp, exact = book_page(text, i, secs)
             hits.append({"file": f.name, "page": i + 1, "html": is_html(f), "book_page": bp, "book_exact": exact,
                          "snippet": snip, "score": score, "section": sec})
     hits.sort(key=lambda h: -h["score"])

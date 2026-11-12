@@ -1240,6 +1240,21 @@ async function getTimes(h, saved) {
 // ---------------- disqualifications ----------------
 let DQ = null;
 fetch("/api/dqcodes").then(r => r.json()).then(d => { DQ = d; DQ.by = Object.fromEntries(d.codes.map(c => [c.code, c])); }).catch(() => {});
+let DQR = null;   // NFHS rule text per DQ code (from the Rules Book in the rules library)
+fetch("/api/dqrules").then(r => r.json()).then(d => { DQR = d; }).catch(() => {});
+function dqRuleHtml(code) {
+  if (!code) return "";
+  if (!DQR || !DQR.book) return `<div class="muted" style="font-size:12.5px">Add the NFHS Rules Book on the Rules tab and the rule for each code shows here.</div>`;
+  const c = DQR.codes[code];
+  if (!c || !c.rules.length) return `<div class="muted" style="font-size:12.5px">No rule linked to ${esc(code)}.</div>`;
+  const href = r => `/api/rules/file/${encodeURIComponent(r.file)}#${r.html ? "mdk-" : "page="}${r.page}`;
+  return c.rules.map(r => `<div style="margin-bottom:10px"><div style="font-size:12.5px"><b>NFHS ${esc(r.ref)}</b>${r.book_page ? ` &middot; <b>book p. ${esc(r.book_page)}</b>` : ""}
+      &middot; <a href="${href(r)}" target="_blank">open</a></div>
+      ${r.head ? `<div class="muted" style="font-size:12.5px;margin-top:2px">${esc(r.head)}</div>` : ""}
+      <div style="font-size:13.5px;line-height:1.45;margin-top:3px">${esc(r.text)}</div></div>`).join("") +
+    (c.note ? `<div class="muted" style="font-size:12.5px">${esc(c.note)}</div>` : "") +
+    `<div class="muted" style="font-size:11.5px;margin-top:4px">${esc(DQR.book.replace(/\.(pdf|html?)$/i, ""))}</div>`;
+}
 const STROKE_GROUP = {A: "free", B: "back", C: "breast", D: "fly", E: "IM"};
 function dqDesc(code, e) {
   const c = DQ && DQ.by[code]; if (!c) return "";
@@ -1268,11 +1283,12 @@ function dqEditor(key) {
     ${aoTip("dq", true)}
     <div class="row"><b>Disqualify ${esc(e.kind === "I" ? athName(e.ath) : (M.teams[e.team]?.abbr || "") + ' "' + e.ltr + '" relay')}</b>
       <input id="dqFind" placeholder="Search codes (e.g. kick, 15 m, false start)" size="30"></div>
-    <div class="row" style="margin-top:6px"><select id="dqCode" size="8" style="min-width:360px">${opts(e.dq)}</select>
+    <div class="row" style="margin-top:6px"><select id="dqCode" size="11" style="min-width:470px;font-size:15px">${opts(e.dq)}</select>
       <div>${e.kind === "R" ? `<label class="muted" style="font-size:12.5px;display:block;margin-bottom:6px"><span id="dqCode2Lbl">Second infraction (optional)</span><br><select id="dqCode2">${opts(e.dq2, "— none —")}</select></label>` : ""}
         <label style="font-size:13px;display:block"><input type="checkbox" id="dqKeep" ${e.time ? "checked" : "disabled"}> Keep the time on record${e.time ? ` (${fmt(e.time)})` : " (no time entered)"}</label>
         <div class="muted" style="font-size:12px;max-width:280px;margin-top:4px">Normal DQs keep the swimmer's time; it just doesn't place or score. A declared false start or did-not-finish has no time.</div>
-        <div class="row" style="margin-top:8px"><button class="small" id="dqSave">Disqualify</button><button class="ghost small" id="dqCancel">Cancel</button></div></div></div>
+        <div class="row" style="margin-top:8px"><button class="small" id="dqSave">Disqualify</button><button class="ghost small" id="dqCancel">Cancel</button></div></div>
+      <div id="dqRule" style="flex:1;min-width:300px;max-width:560px;border-left:3px solid var(--accent);padding:2px 0 2px 12px;align-self:flex-start"></div></div>
     <div id="dqDesc" class="muted" style="font-size:12.5px;margin-top:4px"></div></td></tr>`);
   const sel = $("#dqCode");
   // relay "stroke infraction swimmer #n" (6A-6D): the second box lists only that swimmer's stroke
@@ -1291,7 +1307,7 @@ function dqEditor(key) {
     }
     s2.value = [...s2.options].some(o => o.value === keep) ? keep : "";
   };
-  const sync = () => { const c = sel.value; $("#dqDesc").textContent = c ? `${c}: ${dqDesc(c, e)}` : "Pick the infraction."; if (DQ.no_time.includes(c)) $("#dqKeep").checked = false; sync2(); };
+  const sync = () => { const c = sel.value; $("#dqDesc").textContent = c ? `${c}: ${dqDesc(c, e)}` : "Pick the infraction."; $("#dqRule").innerHTML = dqRuleHtml(c); if (DQ.no_time.includes(c)) $("#dqKeep").checked = false; sync2(); };
   sel.onchange = sync; sync();
   $("#dqFind").oninput = () => {
     const q = $("#dqFind").value.trim().toLowerCase();

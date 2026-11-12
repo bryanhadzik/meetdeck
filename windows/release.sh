@@ -5,6 +5,7 @@
 set -e
 cd "$(dirname "$0")/.."
 NOTES="${1:?say what changed: windows/release.sh \"Fixed ...\"}"
+windows/check_js.sh || { echo "Not released: fix the JavaScript error above"; exit 1; }
 # Version: MEETDECK_VERSION=1.1 windows/release.sh "..." sets it; otherwise the last number goes up
 # (1.0 -> 1.0.1 -> 1.0.2). Old dated builds (2026.11.10.6) sort before 1.0 in the updater.
 CUR=$(cat app/VERSION 2>/dev/null || echo 0)

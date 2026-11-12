@@ -446,7 +446,7 @@ def combine_plan(entries, removed, lane_count, first_lane, low="F", selected=())
 POOL_LANES = 8
 
 
-def seed_event(ents: list[dict], plan: list[dict], min_heat: int = 2):
+def seed_event(ents: list[dict], plan: list[dict], min_heat: int = 2, strict: bool = False):
     """Seed one event the way Meet Manager's dual-meet seeding does, plus a minimum heat size.
 
     plan: [{"lane": n, "team": code}] (the meet's lane assignments).
@@ -454,7 +454,11 @@ def seed_event(ents: list[dict], plan: list[dict], min_heat: int = 2):
     unused lanes go to the next-fastest swimmers of other teams (MM's non-strict mode). Heat 1 swims
     first and is the slowest. If heat 1 would have fewer than min_heat swimmers, the slowest swimmers
     of heat 2 move into it.
+    strict: NFHS 5-3-1 / 5-3-2 to the letter - every swimmer swims in their own team's lanes in every heat, even a
+    heat with only one team in it; a team with more swimmers than lanes gets more heats instead of borrowing lanes.
     Returns ({entry_id: (heat, lane)}, info)."""
+    if strict:
+        return _seed_event_strict(ents, plan, min_heat)
     lanes = [p["lane"] for p in plan]
     if not ents or not lanes:
         return {}, {"heats": []}
@@ -515,7 +519,57 @@ def seed_event(ents: list[dict], plan: list[dict], min_heat: int = 2):
                  "lone_before": len(heats) > 1 and len(heats[0]) - moved < min_heat}
 
 
-def seed_meet(entries, removed, plan, min_heat=2, skip=()):
+def _seed_event_strict(ents, plan, min_heat):
+    lanes = [p["lane"] for p in plan]
+    if not ents or not lanes:
+        return {}, {"heats": []}
+    center = (min(lanes) + max(lanes)) / 2
+    own = {}
+    for p in plan:
+        own.setdefault(p["team"], []).append(p["lane"])
+    for t in own:
+        own[t].sort(key=lambda l: (abs(l - center), l))
+    pool = {}
+    for e in sorted(ents, key=_seed_key):
+        pool.setdefault(e["team"], []).append(e)
+    stray = [e for t, q in pool.items() if t not in own for e in q]     # a team with no lanes (shouldn't happen)
+    pool = {t: q for t, q in pool.items() if t in own}
+    heats = []
+    while any(pool.values()):            # fastest heat first: each team's fastest, one per lane it owns
+        heat = []
+        for t, ls in own.items():
+            q = pool.get(t) or []
+            heat += q[:len(ls)]
+            pool[t] = q[len(ls):]
+        heats.append(heat)
+    heats.reverse()                      # heat 1 = slowest, swum first
+    moved = 0
+    if len(heats) > 1 and len(heats[0]) < min_heat:
+        # bring the slowest of heat 2 down - only into a free lane of their own team
+        for e in sorted(heats[1], key=_seed_key, reverse=True):
+            if len(heats[0]) >= min_heat or len(heats[1]) <= min_heat:
+                break
+            if sum(1 for x in heats[0] if x["team"] == e["team"]) < len(own[e["team"]]):
+                heats[1].remove(e)
+                heats[0].append(e)
+                moved += 1
+    out = {}
+    for hno, heat in enumerate(heats, 1):
+        used = {}
+        for e in sorted(heat, key=_seed_key):
+            i = used.get(e["team"], 0)
+            out[e["id"]] = (hno, own[e["team"]][i])
+            used[e["team"]] = i + 1
+    if stray:                            # never drop a swimmer: one extra heat, middle lanes
+        hno = len(heats) + 1
+        order = sorted(lanes, key=lambda l: (abs(l - center), l))
+        for i, e in enumerate(stray[:len(order)]):
+            out[e["id"]] = (hno, order[i])
+    return out, {"heats": [len(h) for h in heats], "moved": moved,
+                 "lone_before": len(heats) > 1 and len(heats[0]) - moved < min_heat, "strict": True}
+
+
+def seed_meet(entries, removed, plan, min_heat=2, skip=(), strict=False):
     """Seed every event (individual and relay) not in skip. Returns ({id: (heat, lane)}, [per-event info])."""
     active = [e for e in entries if e["id"] not in removed and e["id"] not in skip]
     by_ev: dict[str, list] = {}
@@ -523,7 +577,7 @@ def seed_meet(entries, removed, plan, min_heat=2, skip=()):
         by_ev.setdefault(e["event_no"], []).append(e)
     lanes, info = {}, []
     for evn in sorted(by_ev, key=lambda x: int(x or 0)):
-        res, inf = seed_event(by_ev[evn], plan, min_heat)
+        res, inf = seed_event(by_ev[evn], plan, min_heat, strict)
         lanes.update(res)
         info.append({"event_no": evn, "event": by_ev[evn][0]["event"], "entries": len(by_ev[evn]), **inf})
     return lanes, info

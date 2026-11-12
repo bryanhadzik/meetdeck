@@ -274,6 +274,8 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
         <span class="grow"></span>
         <button class="ghost small hidden" id="unseedBtn" title="Clear the heats here and seed in Meet Manager instead">Undo seeding</button>
       </div>
+      <div class="row" id="strictRow" style="margin-top:6px;font-size:13.5px"><label id="strictWrap" data-tipw="480"><input type="checkbox" id="strictLanes"> Keep every team in its own lanes in every heat (NFHS 5-3, to the letter)</label>
+        <span class="muted" id="strictTip" data-tipw="480" style="cursor:help;border-bottom:1px dotted currentColor;font-size:12.5px">the rule</span><span class="muted" id="strictMsg" style="font-size:13px"></span></div>
       <div class="muted" id="seedHow" style="font-size:13px;margin-top:4px">Same team lanes and fastest-in-the-middle as Meet Manager's dual seeding, but every heat has at least 3 swimmers &mdash; when heat 1 would be short, the slowest swimmers of the next heat move down. Once seeded, the heats update by themselves when entries change, and go into the Meet Manager backup.</div>
       <div id="seedInfo" class="scroll" style="margin-top:6px"></div>
       <h3 style="margin-top:12px">Heats after seeding</h3>
@@ -1199,6 +1201,10 @@ function render() {
   if ($("#seedHow")) $("#seedHow").textContent = timeSeeded
     ? (M.championship ? "Championship seeding:" : "Seeded meet:") + " by seed time only, fastest heat last and fastest swimmers in the middle lanes, with at least 3 swimmers in every heat."
     : $("#seedHow").dataset.dual;
+  $("#strictRow").style.display = timeSeeded ? "none" : "";
+  $("#strictLanes").checked = !!M.strict_lanes;
+  $("#strictWrap").dataset.tip = $("#strictTip").dataset.tip = STRICT_TIP;
+  if (!timeSeeded && M.strict_lanes) $("#seedHow").textContent = "Strict NFHS 5-3: every swimmer swims in their own team's lanes in every heat, even a heat with only one team in it. A team with more swimmers than lanes gets an extra heat instead of borrowing the other team's lanes. Every heat still gets at least 3 swimmers where the team's own lanes allow it.";
   const nT = M.lanes.order.length;
   const laneChoice = M.lane_choice ? `<div class="row" style="gap:14px;font-size:13.5px;margin:4px 0" data-tip="NFHS 5-3-2 (p. 45): with ${nT} teams in ${M.lanes.count || 8} lanes, Table 5-1 leaves lanes open, so meet management may seed instead.">
       <label><input type="radio" name="laneMode" value="teams" ${M.lane_mode !== "seed" ? "checked" : ""}> Team lanes (Table 5-1)</label>
@@ -1278,7 +1284,7 @@ async function tbDb(op, args, flash) {
   add(); document.addEventListener("DOMContentLoaded", add);
   const show = el => {
     const t = el.closest && el.closest("[data-tip]"); if (!t) return;
-    box.innerHTML = t.dataset.tip; box.style.display = "block";
+    box.innerHTML = t.dataset.tip; box.style.maxWidth = (t.dataset.tipw || 320) + "px"; box.style.display = "block";
     const r = t.getBoundingClientRect(), b = box.getBoundingClientRect();
     let top = r.top - b.height - 8; if (top < 6) top = r.bottom + 8;
     box.style.top = top + "px"; box.style.left = Math.max(6, Math.min(innerWidth - b.width - 6, r.left + r.width / 2 - b.width / 2)) + "px";
@@ -1610,6 +1616,17 @@ document.addEventListener("click", async ev => {
 $("#hpFind").addEventListener("input", renderHeatSheet);
 ["#rInd", "#rTot", "#rCap", "#rType"].forEach(s => $(s).addEventListener("change", () =>
   save({rules: {max_individual: +$("#rInd").value, max_total: +$("#rTot").value, team_cap_per_event: +$("#rCap").value, meet_type: $("#rType").value}})));
+const STRICT_TIP = `<b>Off</b> (the usual way, and how past Meet Manager meets here were seeded): a heat with only one team swims in the middle lanes, and a team's extra swimmers can use the other team's empty lanes.<br><br><b>On</b>: lanes follow the Rules Book exactly.<br><br><b>NFHS 5-3-1</b> (Rules Book p. 45): &ldquo;In dual meets, the visiting team shall have the choice of the odd or even numbered lanes for all swimming events. In pools with an odd number of lanes, a lane shall be voided and the lanes renumbered as necessary.&rdquo;<br><br><b>NFHS 5-3-2</b> (p. 45): &ldquo;In non-championship multi-team meets and double dual/triple dual meets, the lane assignments outlined in TABLE 5-1 shall be used. When the number of teams cannot be equally divided into the number of lanes, meet management shall have the option of seeding, or using these lane assignments and leaving lanes open.&rdquo;`;
+$("#strictLanes").onchange = async e => {
+  const on = e.target.checked;
+  try { await save({strict_lanes: on}); }
+  catch (x) { e.target.checked = !on; $("#strictMsg").textContent = " " + x.message; return; }
+  $("#strictMsg").textContent = "";
+  if (M.has_db && (M.files || []).length && confirm(`The meet database was built with the ${on ? "usual" : "strict"} heats.\n\nRebuild it now with the new heats? (The current database is kept as a version you can go back to. Re-send the start list to meet-board afterwards.)`)) {
+    try { await api(`/api/meets/${M.id}/db/create`, {method: "POST"}); $("#strictMsg").textContent = " Meet database rebuilt with the new heats - send the start list to meet-board again."; }
+    catch (x) { $("#strictMsg").textContent = " " + x.message; }
+  }
+};
 $("#seedBtn").onclick = () => save({preseed: true});
 $("#unseedBtn").onclick = () => { if (confirm("Clear the seeding here? You'd seed in Meet Manager instead. Hand moves are kept if you seed again.")) save({preseed: false}); };
 $("#mKind").addEventListener("change", e => save({kind: e.target.value}));

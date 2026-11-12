@@ -67,13 +67,17 @@ class Std(list):
     """A team order for a meet that is seeded the standard way (invitational / championship), whatever the team count."""
 
 
+class Strict(list):
+    """A team order for a team-lane meet seeded to the letter of NFHS 5-3-1 / 5-3-2: every swimmer in their own team's lanes."""
+
+
 def fresh(m, ptr, team_order: list[str], lanes: list[int], min_heat: int = MIN_HEAT) -> tuple[dict, str]:
     ents = _ents(m, ptr)
     in_meet = {(t or {}).get("abbr") for t in m["teams"].values()}
     order = [t for t in team_order if t in in_meet] + sorted(t for t in in_meet if t and t not in team_order)
     plan = None if isinstance(team_order, Std) else hy3.table_plan(order, len(lanes), min(lanes))
     if plan and len(order) > 1:
-        res, _ = hy3.seed_event(ents, plan, min_heat)
+        res, _ = hy3.seed_event(ents, plan, min_heat, isinstance(team_order, Strict))
         return res, "dual"
     return standard_seed(ents, lanes, min_heat), "standard"
 

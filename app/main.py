@@ -223,7 +223,8 @@ def _state(d: Path) -> dict:
     seed_lanes, seed_info = ({}, [])
     if preseed and order:
         if plan:
-            seed_lanes, seed_info = seed_meet(entries, removed, plan, min_heat, skip=set(combo_lanes))
+            seed_lanes, seed_info = seed_meet(entries, removed, plan, min_heat, skip=set(combo_lanes),
+                                              strict=bool(meta.get("strict_lanes")))
         else:                       # seeded meet (NFHS 5-3): by time only, no team lanes
             seed_lanes, seed_info = _standard_seed_meet(entries, removed, min_heat, set(combo_lanes))
     seed_moved = _apply_seed_moves(meta.get("seed_moves", {}), entries, removed, seed_lanes, combo_lanes)
@@ -231,7 +232,8 @@ def _state(d: Path) -> dict:
     st_lanes = {"order": order}
     auto_rt = _record_team({"lanes": st_lanes}, host, {})
     return {"id": d.name, "name": meta["name"], "kind": "invitational" if meta.get("kind") == "championship" else meta.get("kind", "dual"),
-            "championship": bool(meta.get("championship")) or meta.get("kind") == "championship", "time_seeded": not plan, "seed_why": seed_why, "lane_mode": meta.get("lane_mode", "teams"), "lane_draw": meta.get("lane_draw"),
+            "championship": bool(meta.get("championship")) or meta.get("kind") == "championship", "time_seeded": not plan,
+            "strict_lanes": bool(meta.get("strict_lanes")), "seed_why": seed_why, "lane_mode": meta.get("lane_mode", "teams"), "lane_draw": meta.get("lane_draw"),
             "lane_choice": table_has_open(order, POOL_LANES), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),
             "run": meta.get("run", {}), "ended": meta.get("ended", ""), "contacts": meta.get("contacts", {}),
@@ -717,8 +719,11 @@ def seed_move(mid: str, body: dict):
 def put_state(mid: str, body: dict):
     d = _dir(mid)
     meta = _meta(d)
+    if "strict_lanes" in body and bool(body["strict_lanes"]) != bool(meta.get("strict_lanes")) and (d / "db" / "meet.mdb").exists():
+        if _meet_started(meetdb.load(d / "db" / "meet.mdb")):
+            raise HTTPException(409, "The meet has started, so the heats can't be re-seeded now.")
     before = json.loads(json.dumps(meta))
-    for k in ("removed", "rules", "lanes", "name", "date", "location", "host", "combine", "combine_low", "expected_teams", "preseed", "min_heat",
+    for k in ("removed", "rules", "lanes", "name", "date", "location", "host", "combine", "combine_low", "expected_teams", "preseed", "min_heat", "strict_lanes",
               "run", "ended", "contacts", "session_break", "kind", "championship", "lane_mode", "lane_draw"):
         if k in body:
             meta[k] = body[k]
@@ -736,7 +741,7 @@ def put_state(mid: str, body: dict):
 
 SETUP_LABELS = {"removed": "removed entries", "rules": "rules", "lanes": "lane order", "name": "meet name", "date": "date",
                 "location": "location", "host": "host school", "combine": "combined heats", "combine_low": "combined heats",
-                "expected_teams": "teams expected", "preseed": "seeding", "min_heat": "seeding", "ended": "meet ended",
+                "expected_teams": "teams expected", "preseed": "seeding", "min_heat": "seeding", "strict_lanes": "strict team lanes", "ended": "meet ended",
                 "contacts": "contacts", "session_break": "session break", "record_team": "record team", "kind": "meet type", "championship": "championship rules", "lane_mode": "lane assignments", "lane_draw": "lane draw"}
 
 
@@ -2117,6 +2122,8 @@ def _reseed_ctx(d: Path, m: dict):
     order = _lane_order(meta, codes)
     if _team_lanes(meta, order)[0] is None:
         order = reseed.Std(order)
+    elif meta.get("strict_lanes"):
+        order = reseed.Strict(order)
     lanes = list(range(1, int(m["meet"].get("lanes") or 8) + 1))
     combined = set(meta.get("combine") or [])
     skip = {v["ptr"] for v in m["events"]

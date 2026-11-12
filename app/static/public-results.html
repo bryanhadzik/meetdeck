@@ -55,6 +55,10 @@ main{padding:12px;max-width:720px;margin:0 auto}
 .r:last-child{border-bottom:0}
 .r .pl{font-weight:700;font-size:17px;color:var(--acc);text-align:center}
 .r .ln{font-size:16px;line-height:1.05}.r .ln small{display:block;font-size:9.5px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+.card.hasme{border-color:color-mix(in srgb,var(--star) 60%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--star) 45%,transparent)}
+.card.hasme .ev{background:color-mix(in srgb,var(--star) 16%,transparent)}
+.card.hasme .ev .no{background:var(--star);color:#1c1500}
+.ev .mine{font-size:13px;font-weight:700;color:color-mix(in srgb,var(--star) 75%,var(--ink));margin-top:1px}
 .hh{padding:6px 14px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--mute);background:var(--acc2);border-bottom:1px solid var(--line)}
 .r .nm{font-weight:600}
 .r .nm small{font-weight:400;color:var(--mute)}
@@ -188,9 +192,15 @@ function render() {
     const nh = (v.heats || []).length;
     const meta = done ? (winner ? `1st ${esc(winner.name)} ${esc(winner.result)}` : `${v.rows.length} results`)
       : nh ? `Not swum yet &middot; ${nh} heat${nh == 1 ? "" : "s"}, ${lanes.length} ${lanes.length == 1 ? "entry" : "entries"}` : "Not swum yet";
-    out.push(`<div class="card ${open ? "open" : ""}" data-ev="${esc(v.no)}">
+    // starred swimmers in this event (themselves or on a relay): the whole listing turns star-colored
+    const mine = (done ? v.rows : lanes).filter(starredIn);
+    const mineTxt = mine.map(r => {
+      const who = STARS.has(starKey(r)) ? r.name.split(", ")[0] : starredLegs(r).map(n => n.split(" ").slice(-1)[0].replace(/^./, c => c.toUpperCase())).join(", ");
+      return `★ ${esc(who)} ` + (done ? esc(r.place ? ordinal(r.place) + " " + (r.result || "") : r.result || "") : `heat ${esc(r.heat)} lane ${esc(r.lane)}`);
+    }).join(" &middot; ");
+    out.push(`<div class="card ${open ? "open" : ""} ${mine.length ? "hasme" : ""}" data-ev="${esc(v.no)}">
       <button class="ev" data-tog="${esc(v.no)}"><span class="no">${esc(v.no)}</span>
-        <span class="t"><div>${esc(v.label)}${isNew ? `<span class="pill new">${D.latest == v.no ? "LATEST" : "NEW"}</span>` : done ? "" : `<span class="pill wait">upcoming</span>`}</div><div class="meta">${meta}</div></span>
+        <span class="t"><div>${esc(v.label)}${isNew ? `<span class="pill new">${D.latest == v.no ? "LATEST" : "NEW"}</span>` : done ? "" : `<span class="pill wait">upcoming</span>`}</div><div class="meta">${meta}</div>${mineTxt ? `<div class="mine">${mineTxt}</div>` : ""}</span>
         <span class="chev">›</span></button>
       <div class="rows">${done ? stateLines(v) + rows.map(r => rowHtml(r)).join("")
         : rows.length ? heatsHtml(rows) : `<div class="empty" style="padding:14px">No results yet.</div>`}</div></div>`);
@@ -244,6 +254,7 @@ function heatsHtml(lanes) {
   }
   return out;
 }
+function ordinal(n) { n = +n; const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
 function rowHtml(r) {
   const k = starKey(r), on = STARS.has(k), dq = /^(DQ|NS)/.test(r.result || "");
   return `<div class="r ${starredIn(r) ? "me" : ""}"><div class="pl">${esc(r.place || "–")}</div>

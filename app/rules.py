@@ -178,8 +178,11 @@ def rule_text(ref: str, phrase: str = "") -> dict | None:
             "page": pick["page"], "book_page": book, "file": f.name, "html": is_html(f)}
 
 
+HTML_CACHE_V = "v2"     # bump when the way saved web pages are split into pages changes
+
+
 def _cache(f: Path) -> Path:
-    return f.with_suffix(f.suffix + ".json")
+    return f.with_suffix(f.suffix + (f".{HTML_CACHE_V}.json" if is_html(f) else ".json"))
 
 
 def pages(f: Path) -> list[str]:
@@ -211,7 +214,7 @@ def _norm(t: str) -> str:
 def sections(f: Path) -> list[dict]:
     """[{title, page}] from the document's own table of contents (title lines followed by page numbers),
     each mapped to the PDF page where that heading actually appears. Falls back to the PDF outline."""
-    c = f.with_suffix(f.suffix + ".toc.json")
+    c = f.with_suffix(f.suffix + (f".{HTML_CACHE_V}.toc.json" if is_html(f) else ".toc.json"))
     if c.exists() and c.stat().st_mtime >= f.stat().st_mtime:
         return json.loads(c.read_text())
     pg = pages(f)

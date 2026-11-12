@@ -221,7 +221,10 @@ def _state(d: Path) -> dict:
     min_heat = 3          # fixed: every heat gets at least 3 swimmers
     seed_lanes, seed_info = ({}, [])
     if preseed and plan:
-        seed_lanes, seed_info = seed_meet(entries, removed, plan, min_heat, skip=set(combo_lanes))
+        if meta.get("kind", "dual") == "dual":
+            seed_lanes, seed_info = seed_meet(entries, removed, plan, min_heat, skip=set(combo_lanes))
+        else:                       # invitational: seeded by time only, no team lanes
+            seed_lanes, seed_info = _standard_seed_meet(entries, removed, min_heat, set(combo_lanes))
     seed_moved = _apply_seed_moves(meta.get("seed_moves", {}), entries, removed, seed_lanes, combo_lanes)
     host = next((h for h in _hosts() if h["id"] == meta.get("host", "THS")), None) or {"id": "THS", "team_codes": [], "short": "?"}
     st_lanes = {"order": order}
@@ -2017,6 +2020,25 @@ def _jet3(db: Path) -> bool:
 
 
 # ---- last-minute changes: re-seeding and each team's "done" -----------------------------------------
+def _standard_seed_meet(entries, removed, min_heat, skip):
+    """Invitational seeding: every event by seed time only (fastest heat last, fastest in the middle lanes)."""
+    import reseed
+    by_ev = {}
+    for e in entries:
+        if e["id"] not in removed and e["id"] not in skip:
+            by_ev.setdefault(e["event_no"], []).append(e)
+    lanes, info = {}, []
+    for evn in sorted(by_ev, key=lambda x: int(x or 0)):
+        res = reseed.standard_seed(by_ev[evn], list(range(1, POOL_LANES + 1)), min_heat)
+        lanes.update(res)
+        counts = {}
+        for h, _ in res.values():
+            counts[h] = counts.get(h, 0) + 1
+        info.append({"event_no": evn, "event": by_ev[evn][0]["event"], "entries": len(by_ev[evn]),
+                     "heats": [counts[h] for h in sorted(counts)], "moved": 0})
+    return lanes, info
+
+
 def _lane_order(meta: dict, codes: list) -> list:
     """Teams in lane order: the saved order, else the host team first (home team takes the odd lanes)."""
     saved = list((meta.get("lanes") or {}).get("order") or [])
@@ -2510,7 +2532,7 @@ def rules_delete(name: str):
     f = rules_mod.RULES / Path(name).name
     if f.exists():
         f.unlink()
-    for c in (f.with_suffix(f.suffix + ".json"), f.with_suffix(f.suffix + ".toc.json")):
+    for c in list(f.parent.glob(f.name + ".*json")):
         if c.exists():
             c.unlink()
     return {"docs": rules_mod.listing()}

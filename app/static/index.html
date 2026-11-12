@@ -232,7 +232,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
 
     <section>
       <h2><span class="n">5</span> Lanes &amp; records</h2>
-      <div class="muted">Which team swims in which lanes. The home team gets the odd lanes unless you change it.</div>
+      <div class="muted" id="laneIntro">Which team swims in which lanes. The home team gets the odd lanes unless you change it.</div>
       <div id="order" class="row" style="margin-top:6px"></div>
       <div class="lanes" id="lanePlan"></div>
       <h3>Combined heats</h3>
@@ -271,7 +271,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
         <span class="grow"></span>
         <button class="ghost small hidden" id="unseedBtn" title="Clear the heats here and seed in Meet Manager instead">Undo seeding</button>
       </div>
-      <div class="muted" style="font-size:13px;margin-top:4px">Same team lanes and fastest-in-the-middle as Meet Manager's dual seeding, but every heat has at least 3 swimmers &mdash; when heat 1 would be short, the slowest swimmers of the next heat move down. Once seeded, the heats update by themselves when entries change, and go into the Meet Manager backup.</div>
+      <div class="muted" id="seedHow" style="font-size:13px;margin-top:4px">Same team lanes and fastest-in-the-middle as Meet Manager's dual seeding, but every heat has at least 3 swimmers &mdash; when heat 1 would be short, the slowest swimmers of the next heat move down. Once seeded, the heats update by themselves when entries change, and go into the Meet Manager backup.</div>
       <div id="seedInfo" class="scroll" style="margin-top:6px"></div>
       <h3 style="margin-top:12px">Heats after seeding</h3>
       <div class="muted" style="font-size:13px">To move a swimmer, click them, then click the lane to move to &mdash; an empty lane moves them, a filled lane swaps the two. Each event has a spare empty heat to move into. Moved lanes are marked <span class="mvd">moved</span> and go into the Meet Manager backup.</div>
@@ -1158,7 +1158,15 @@ function render() {
     si.map(x => `<tr><td>#${esc(x.event_no)} ${esc(x.event)}</td><td>${x.entries}</td><td>${x.heats.join(" · ")}${x.moved ? ` <span class="muted">(moved ${x.moved} down)</span>` : ""}</td></tr>`).join("") + `</table></details>`;
   if (mmSeeded && DBH && !DBH.loading) DBH = null;   // pick up changes made in the meet database
   renderHeatSheet();
-  { const o = M.lanes.order, tn = t => esc(M.teams[t]?.name || t);
+  $("#laneIntro").style.display = M.kind === "invitational" ? "none" : "";
+  if ($("#seedHow") && !$("#seedHow").dataset.dual) $("#seedHow").dataset.dual = $("#seedHow").textContent;
+  if ($("#seedHow")) $("#seedHow").textContent = M.kind === "invitational"
+    ? "Invitational seeding: by seed time only, fastest heat last and fastest swimmers in the middle lanes, with at least 3 swimmers in every heat."
+    : $("#seedHow").dataset.dual;
+  if (M.kind === "invitational") {
+    $("#order").innerHTML = `<span class="muted" style="font-size:13px">Invitational: lanes are seeded by time, not by team &mdash; the fastest heat swims last, with the fastest swimmers in the middle lanes. Switch the meet type to Regular season to give teams their own lanes.</span>`;
+    $("#lanePlan").innerHTML = "";
+  } else { const o = M.lanes.order, tn = t => esc(M.teams[t]?.name || t);
     const lanesOf = k => M.lane_plan.filter(l => l.team === o[k]).map(l => l.lane).join(", ");
     $("#order").innerHTML = !o.length ? `<span class="muted">Upload entries first.</span>` : o.length === 2 ?
       [0, 1].map(k => `<label class="muted" style="display:flex;flex-direction:column;gap:4px">${k ? "Even" : "Odd"} lanes (${lanesOf(k)})
@@ -1166,7 +1174,7 @@ function render() {
       `<span class="muted" style="font-size:13px">Lanes go 1, 2, 3&hellip; through this order:</span> ` +
       o.map((t, i) => `<span class="chip">${i + 1}. ${tn(t)} <span class="muted" style="font-size:12px">lanes ${lanesOf(i)}</span>
         ${i ? `<a href="#" data-up="${i}" title="Move earlier">▲</a>` : ""}</span>`).join(""); }
-  $("#lanePlan").innerHTML = M.lane_plan.map(l => `<div class="lane"><b>Lane ${l.lane}</b>${esc(l.team)}</div>`).join("");
+  $("#lanePlan").innerHTML = M.lane_plan.map(l => `<div class="lane"><b>Lane ${l.lane}</b>${esc(l.team)}</div>`).join(""); }
   $("#comboLow").value = M.combine_low || "F";
   $("#combos").innerHTML = !M.combos.length ? `<div class="muted">No 200 Free, 500 Free or 400 Free Relay entries yet.</div>` :
     `<table><tr><th>Events</th><th>Girls</th><th>Boys</th><th>Lanes needed</th><th>Heat layout</th><th></th></tr>` + M.combos.map(c => `<tr>

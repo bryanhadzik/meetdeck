@@ -722,10 +722,10 @@ function renderEvent() {
       <td style="white-space:nowrap">${e.scr ? "" : timerCells(e)}</td>
       <td class="plc" data-plc="${e.key}">${e.place || ""} ${(e.stat || "").trim() === "R" ? statBadge(e) : ""}</td>
       <td class="st" style="white-space:nowrap">${e.scr ? "" : isDfs(e) ? `<span class="badge dq" data-tip="${TIP.dfs}">DFS</span> <button class="ghost small" data-undfs="${e.key}" data-tip="${TIP.undfs}">Undo DFS</button>` : (e.stat === "Q" || e.stat === "F" || e.stat === "D") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" || e.stat === "D" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
-        : `<select data-stat="${e.key}" data-tip="${TIP.noshow}"><option value="">OK</option><option value="R" ${e.stat === "R" ? "selected" : ""}>No show</option></select> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>`}
+        : `<select data-stat="${e.key}" data-tip="${TIP.noshow}"><option value="">OK</option><option value="R" ${e.stat === "R" ? "selected" : ""}>No show</option></select> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>${e.time ? "" : ` <button class="ghost small" data-dfs="${e.key}" data-tip="${TIP.dfs}">DFS</button>`}`}
         ${(e.stat === "Q" || e.stat === "F" || e.stat === "D") && e.dq ? `<div class="legs" style="color:var(--err)">${esc(dqText(e))}</div>` : ""}</td>
       <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}">Swimmers</button> ` : ""}${e.scr ? `<button class="ghost small" data-scr="${e.key}" data-on="0" data-tip="${TIP.putback}">Put back</button>`
-        : S.started ? (isDfs(e) || e.time || (e.stat || "").trim() ? "" : `<button class="ghost small" data-dfs="${e.key}" data-tip="${TIP.dfs}">DFS</button>`)
+        : S.started ? ""
         : `<button class="ghost small" data-scr="${e.key}" data-on="1" data-tip="${TIP.drop}">Drop</button>`}
         <button class="ghost small danger" data-del="${e.key}" title="Delete this entry">✕</button></td></tr>`;
   const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th>Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>${TIMERS() === 2 ? "Timers <span class=\"muted\" style=\"font-weight:400\">(1 · 2 → official)</span>" : "Timers"}</th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
@@ -1238,6 +1238,9 @@ function dqDesc(code, e) {
   const v = evOf(e.event);
   return c.desc + ((e.kind === "R" || v.stroke === "E") && ["fly", "back", "breast", "free"].includes(c.group) ? " - " + c.group : "");
 }
+// Meet Manager's code list has two "Declared false start" codes (7B, 7P) and two "Did not finish" (7C, 7Q) - same meaning.
+// DFS has its own button, so the picker shows neither DFS code, and only 7C for did not finish.
+const DQ_HIDE = ["7B", "7P", "7Q"];
 const dqText = e => [e.dq, e.dq2].filter(Boolean).map(c => `${c} ${dqDesc(c, e)}`).join(" / ");
 function dqGroupsFor(e) {
   const v = evOf(e.event), g = STROKE_GROUP[v.stroke];
@@ -1252,7 +1255,7 @@ function dqEditor(key) {
   const ex = document.getElementById("dqEditor"); if (ex) ex.remove();
   const groups = dqGroupsFor(e);
   const opts = (sel, blank) => (blank ? `<option value="">${blank}</option>` : "") + groups.map(g => `<optgroup label="${esc(DQ.groups[g] || g)}">` +
-    DQ.codes.filter(c => c.group === g).map(c => `<option value="${c.code}" ${c.code === sel ? "selected" : ""}>${c.code} · ${esc(c.desc)}</option>`).join("") + `</optgroup>`).join("");
+    DQ.codes.filter(c => c.group === g && (!DQ_HIDE.includes(c.code) || c.code === sel)).map(c => `<option value="${c.code}" ${c.code === sel ? "selected" : ""}>${c.code} · ${esc(c.desc)}</option>`).join("") + `</optgroup>`).join("");
   tr.insertAdjacentHTML("afterend", `<tr id="dqEditor" class="edit"><td></td><td colspan="8">
     ${aoTip("dq", true)}
     <div class="row"><b>Disqualify ${esc(e.kind === "I" ? athName(e.ath) : (M.teams[e.team]?.abbr || "") + ' "' + e.ltr + '" relay')}</b>
@@ -1272,7 +1275,7 @@ function dqEditor(key) {
     if (m) {
       const n = "ABCD".indexOf(m[1]) + 1, g = legStroke(n);
       s2.innerHTML = `<option value="">— none —</option><optgroup label="${esc(DQ.groups[g] || g)}">` +
-        DQ.codes.filter(c => c.group === g).map(c => `<option value="${c.code}">${c.code} · ${esc(c.desc)}</option>`).join("") + `</optgroup>`;
+        DQ.codes.filter(c => c.group === g && !DQ_HIDE.includes(c.code)).map(c => `<option value="${c.code}">${c.code} · ${esc(c.desc)}</option>`).join("") + `</optgroup>`;
       $("#dqCode2Lbl").textContent = `What swimmer #${n} did wrong (${(DQ.groups[g] || g).toLowerCase()})`;
     } else {
       s2.innerHTML = opts("", "— none —");

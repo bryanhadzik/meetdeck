@@ -54,6 +54,8 @@ main{padding:12px;max-width:720px;margin:0 auto}
 .r{display:grid;grid-template-columns:30px 1fr auto;gap:2px 10px;padding:9px 14px;border-bottom:1px solid var(--line);align-items:start}
 .r:last-child{border-bottom:0}
 .r .pl{font-weight:700;font-size:17px;color:var(--acc);text-align:center}
+.r .ln{font-size:16px;line-height:1.05}.r .ln small{display:block;font-size:9.5px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+.hh{padding:6px 14px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--mute);background:var(--acc2);border-bottom:1px solid var(--line)}
 .r .nm{font-weight:600}
 .r .nm small{font-weight:400;color:var(--mute)}
 .r .tm{font-size:13px;color:var(--mute)}
@@ -152,18 +154,23 @@ function render() {
   let shown = 0;
   for (const v of evs) {
     const done = v.rows && v.rows.length;
-    const rows = (v.rows || []).filter(r => match(r, q) && (!MINE || STARS.has(starKey(r))));
+    // not swum yet: the start list (heat, lane, seed) in place of results
+    const lanes = done ? [] : (v.heats || []).flatMap(h => h.lanes.map(l => Object.assign({heat: h.heat, heats: v.heats.length}, l)));
+    const rows = (done ? v.rows : lanes).filter(r => match(r, q) && (!MINE || STARS.has(starKey(r))));
     if ((q || MINE) && !rows.length) continue;
     shown++;
     const isNew = done && (FRESH.has(String(v.no)) || D.latest == v.no);
     const open = OPEN.has(String(v.no)) || (!OPEN.size && D.latest == v.no) || !!q || MINE;
     const winner = done ? v.rows.find(r => r.place == 1) : null;
-    const meta = done ? (winner ? `1st ${esc(winner.name)} ${esc(winner.result)}` : `${v.rows.length} results`) : "Not swum yet";
+    const nh = (v.heats || []).length;
+    const meta = done ? (winner ? `1st ${esc(winner.name)} ${esc(winner.result)}` : `${v.rows.length} results`)
+      : nh ? `Not swum yet &middot; ${nh} heat${nh == 1 ? "" : "s"}, ${lanes.length} ${lanes.length == 1 ? "entry" : "entries"}` : "Not swum yet";
     out.push(`<div class="card ${open ? "open" : ""}" data-ev="${esc(v.no)}">
       <button class="ev" data-tog="${esc(v.no)}"><span class="no">${esc(v.no)}</span>
         <span class="t"><div>${esc(v.label)}${isNew ? `<span class="pill new">${D.latest == v.no ? "LATEST" : "NEW"}</span>` : done ? "" : `<span class="pill wait">upcoming</span>`}</div><div class="meta">${meta}</div></span>
         <span class="chev">›</span></button>
-      <div class="rows">${done ? stateLines(v) + rows.map(r => rowHtml(r)).join("") : `<div class="empty" style="padding:14px">No results yet.</div>`}</div></div>`);
+      <div class="rows">${done ? stateLines(v) + rows.map(r => rowHtml(r)).join("")
+        : rows.length ? heatsHtml(rows) : `<div class="empty" style="padding:14px">No results yet.</div>`}</div></div>`);
   }
   // team scores at the bottom
   if (D.scores && D.scores.length && !q && !MINE) {
@@ -200,6 +207,19 @@ function stateRow(r) {
   if (s.best) out.push(`<span class="chip pb">New season best</span>`);
   if (s.now && (!s.rank || s.now < s.rank)) out.push(`<span class="chip ${s.now <= (s.spots || 32) ? "state" : ""}">Now #${s.now} in ${esc(s.cls)}</span>`);
   return out.length ? `<div class="st">${out.join("")}</div>` : "";
+}
+// start list of an event that hasn't swum: grouped by heat, lane in the left column, seed on the right
+function heatsHtml(lanes) {
+  let out = "", h = null;
+  for (const r of lanes) {
+    if (r.heat !== h) { h = r.heat; out += `<div class="hh">Heat ${esc(h)}${r.heats > 1 ? ` of ${r.heats}` : ""}</div>`; }
+    const k = starKey(r), on = STARS.has(k);
+    out += `<div class="r ${on ? "me" : ""}"><div class="pl ln"><small>Lane</small>${esc(r.lane)}</div>
+      <div><div class="nm">${esc(r.name)}${r.yr ? ` <small>${esc(r.yr)}</small>` : ""}${r.exh ? ` <small>(exh)</small>` : ""}<button class="star ${on ? "on" : ""}" data-star="${esc(k)}" aria-label="follow">${on ? "★" : "☆"}</button></div>
+        <div class="tm">${esc(r.team_name || r.team)}</div>${r.legs ? `<div class="legs">${esc(r.legs)}</div>` : ""}${stateRow(r)}</div>
+      <div><div class="sd">${r.seed ? "Seed " + esc(r.seed) : "Seed NT"}</div></div></div>`;
+  }
+  return out;
 }
 function rowHtml(r) {
   const k = starKey(r), on = STARS.has(k), dq = /^(DQ|NS)/.test(r.result || "");

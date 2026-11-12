@@ -71,7 +71,8 @@ def build(m: dict, scoring: dict | None = None, store=None) -> dict:
     events, latest = [], None
     with_rows = {v["ptr"]: rows for v, rows in results_mod._rows(m)}
     for v in m["events"]:
-        rows = [r for r in with_rows.get(v["ptr"], []) if r["place"] or r["result"]]
+        every = with_rows.get(v["ptr"], [])
+        rows = [r for r in every if r["place"] or r["result"]]
         k = _ev_key(v) if store else None
         out = []
         for r in rows:
@@ -92,7 +93,19 @@ def build(m: dict, scoring: dict | None = None, store=None) -> dict:
                 if c and c not in classes:
                     classes.append(c)
             lines = [x for x in (store.event_line(k, c) for c in classes) if x]
-        events.append({"no": v["no"], "label": v["label"], "rows": out, "sig": sig, "state": lines})
+        ev = {"no": v["no"], "label": v["label"], "rows": out, "sig": sig, "state": lines}
+        if not out:
+            # not swum yet: who's in each heat and lane (seeded entries only)
+            heats = {}
+            for r in sorted(every, key=lambda r: (r["heat"], r["lane"])):
+                if not r["heat"] or not r["lane"]:
+                    continue
+                heats.setdefault(r["heat"], []).append({
+                    "lane": r["lane"], "name": r["name"], "yr": r["yr"], "team": r["team"], "team_name": names.get(r["team"], ""),
+                    "seed": r["seed"] if r["seed"] != "NT" else "", "legs": r["legs"], "exh": bool(r["exh"]),
+                    "st": state_row(store, k, dict(r, time_v=0))})
+            ev["heats"] = [{"heat": h, "lanes": ls} for h, ls in sorted(heats.items())]
+        events.append(ev)
     scores = []
     sc = scoring or {}
     if sc.get("pairs"):

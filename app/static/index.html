@@ -251,6 +251,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
         <input id="tbFind" placeholder="Find a swimmer" size="24" autocomplete="off">
         <span class="muted" style="font-size:13px">Click a swimmer to change their events. Every change is saved and re-checked right away.</span>
       </div>
+      <div id="tbDone" class="row" style="gap:6px;align-items:center;margin-bottom:8px"></div>
       <div id="tbDbNote"></div>
       <div id="tbProblems"></div>
       <div id="tbSwimmers" class="scroll"></div>
@@ -1264,6 +1265,11 @@ function renderTable() {
   sel.value = TB.team;
   $("#tbDbNote").innerHTML = M.has_db ? `<div class="okbox" style="font-size:13px;margin-bottom:8px">Changes here go straight into the meet database${(M.files || []).length ? "" : " (opened from Meet Manager)"}. Every change is logged &mdash; <button class="ghost small" data-tbundo="1">Undo last change</button> (full list in <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> &rarr; Changes). A swimmer or relay added here has no heat yet &mdash; place them in Seeding below or in Run the meet.${(M.files || []).length ? ` Changes to the entries above (new files, removed entries, relay swimmers) are brought in automatically.` : ""}</div>` +
     (TB.note ? `<div class="okbox" style="font-size:13px;margin-bottom:8px;background:var(--ok-bg, #e6f5ec)"><b>${esc(TB.note)}.</b> New entries have no heat yet.</div>` : "") : "";
+  { const done = M.changes_done || {}, codes2 = codes;
+    $("#tbDone").innerHTML = `<span class="muted" style="font-size:13px">Done with changes:</span> ` + codes2.map(c => {
+      const t = done[c];
+      return `<button class="small ${t ? "" : "ghost"}" data-tbdone="${esc(c)}" data-on="${t ? 1 : 0}" title="${t ? "Done at " + esc(t) + " - click to reopen" : "Click when this coach is done with changes"}">${t ? "&#10003;" : "&#9744;"} ${esc(TD().teams[c]?.name || c)}${t ? ` <span class="muted">${esc(t)}</span>` : ""}</button>`;
+    }).join(" ") + (codes2.length && codes2.every(c => done[c]) ? ` <span class="muted" style="font-size:13px">All teams done &mdash; re-seed in Run the meet if it asks.</span>` : ""); }
   // problems for this team, each one a link to the swimmer or relay to fix
   const probs = tbIssues();
   $("#tbProblems").innerHTML = !probs.length ? `<div class="okbox" style="font-size:13px;margin-bottom:8px">No problems for ${esc(TD().teams[TB.team]?.name || TB.team)}.</div>` :
@@ -1301,7 +1307,7 @@ function renderTable() {
     return row + `<tr><td colspan="4"><div class="ed">
       <div class="muted" style="font-size:12px;margin-bottom:4px">INDIVIDUAL EVENTS &mdash; check to enter, uncheck to drop</div><div class="evgrid">${grid || `<span class="muted">No individual events in this meet yet.</span>`}</div>
       <div class="muted" style="font-size:12px;margin:10px 0 4px">RELAYS</div>${rels || `<span class="muted" style="font-size:13px">Not on a relay yet.</span>`}${tbRelayPick(s, es)}
-      <div class="row" style="margin-top:10px"><button class="ghost small danger" data-tbpull="${esc(s.key)}">Pull from the meet</button><span class="muted" style="font-size:12px">drops every event and takes them off their relays</span><span class="grow"></span><button class="ghost small" data-tbclose="1">Close</button></div>
+      <div class="row" style="margin-top:10px"><button class="ghost small danger" data-tbpull="${esc(s.key)}">Pull from the meet</button><span class="muted" style="font-size:12px">drops every event and takes them off their relays</span><span class="grow"></span>${M.has_db ? `<button class="ghost small" data-tbundo="1">Undo last change</button>` : ""}<button class="ghost small" data-tbclose="1">Close</button></div>
     </div></td></tr>`;
   }).join("") + `</table>` + (sws.length ? "" : `<div class="muted">No swimmers match.</div>`);
   tbRelayPickFill();
@@ -1411,10 +1417,19 @@ $("#tbAddRelay").onclick = () => {
   };
 };
 document.addEventListener("click", async ev => {
-  const t = ev.target.closest("[data-tbsw],[data-tbrel],[data-tbpull],[data-tbclose],[data-tboff],[data-tbup],[data-tbdn],[data-tbrscr],[data-tbundo],[data-tbrpgo]");
+  const t = ev.target.closest("[data-tbsw],[data-tbrel],[data-tbpull],[data-tbclose],[data-tboff],[data-tbup],[data-tbdn],[data-tbrscr],[data-tbundo],[data-tbrpgo],[data-tbdone]");
   if (!t || !t.closest("#tableSec")) return;
   const d = t.dataset;
   if (d.tbundo) { ev.preventDefault(); return tbUndo(); }
+  if (d.tbdone) {
+    ev.preventDefault();
+    try { await api(`/api/meets/${M.id}/db/changes_done`, J("POST", {team: d.tbdone, done: d.on !== "1"}));
+      M.changes_done = M.changes_done || {};
+      if (d.on !== "1") M.changes_done[d.tbdone] = new Date().toTimeString().slice(0, 5); else delete M.changes_done[d.tbdone];
+      renderTable(); }
+    catch (x) { alert(x.message); }
+    return;
+  }
   if (d.tbrpgo) {
     ev.preventDefault();
     const box = t.parentElement, rel = TD().entries.find(e => e.id === box.querySelector("select[data-tbrp]").value);

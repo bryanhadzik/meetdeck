@@ -2467,11 +2467,14 @@ def rules_search(q: str = ""):
 @app.post("/api/rules")
 async def rules_upload(file: UploadFile = File(...)):
     name = re.sub(r'[\\/:*?"<>|]', "-", Path(file.filename or "rules.pdf").name)
-    if not name.lower().endswith(".pdf"):
-        raise HTTPException(400, "Rules documents must be PDFs")
+    low = name.lower()
+    if not low.endswith((".pdf", ".htm", ".html")):
+        raise HTTPException(400, "Rules documents must be PDFs or saved web pages (.htm / .html)")
     data = await file.read()
-    if not data.startswith(b"%PDF"):
+    if low.endswith(".pdf") and not data.startswith(b"%PDF"):
         raise HTTPException(400, "That file isn't a PDF")
+    if not low.endswith(".pdf") and b"<" not in data[:4096]:
+        raise HTTPException(400, "That file isn't a web page")
     rules_mod.RULES.mkdir(parents=True, exist_ok=True)
     (rules_mod.RULES / name).write_bytes(data)
     return {"docs": rules_mod.listing()}
@@ -2482,9 +2485,9 @@ def rules_delete(name: str):
     f = rules_mod.RULES / Path(name).name
     if f.exists():
         f.unlink()
-    c = f.with_suffix(f.suffix + ".json")
-    if c.exists():
-        c.unlink()
+    for c in (f.with_suffix(f.suffix + ".json"), f.with_suffix(f.suffix + ".toc.json")):
+        if c.exists():
+            c.unlink()
     return {"docs": rules_mod.listing()}
 
 
@@ -2493,6 +2496,9 @@ def rules_file(name: str):
     f = rules_mod.RULES / Path(name).name
     if not f.exists():
         raise HTTPException(404)
+    if rules_mod.is_html(f):            # served without its scripts, and not allowed to run any
+        return Response(rules_mod.html_served(f), media_type="text/html; charset=utf-8",
+                        headers={"Content-Security-Policy": "script-src 'none'; object-src 'none'; base-uri 'none'"})
     return FileResponse(f, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{f.name}"'})
 
 
@@ -2508,7 +2514,7 @@ def rules_view(name: str, page: int = 1):
                 f"slide can't be shown here.</p><p>Add the PDF on MeetDeck's <a href='/#rules'>Rules</a> tab (Add document) and this link "
                 f"will open it at the right page. The short summary in the AO training box still applies.</p></div>")
         return Response(f"<!doctype html><meta charset='utf-8'><title>{title}</title>{body}", media_type="text/html", status_code=404)
-    src = f"/api/rules/file/{quote(f.name)}#page={max(1, int(page))}"
+    src = f"/api/rules/file/{quote(f.name)}#{'mdk-' if rules_mod.is_html(f) else 'page='}{max(1, int(page))}"
     return Response(f"""<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title} - page {int(page)}</title><style>html,body{{margin:0;height:100%;font:14px system-ui,sans-serif}}
 .bar{{display:flex;gap:12px;align-items:center;padding:8px 14px;background:#0b6fa4;color:#fff}}.bar a{{color:#fff}}

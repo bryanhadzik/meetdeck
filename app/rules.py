@@ -29,6 +29,70 @@ def ensure_seed() -> None:
         mark.write_text("\n".join(sorted(done)))
 
 
+HTML_EXT = (".htm", ".html")
+HEAD_RE = re.compile(r"<h[1-4]\b", re.I)
+
+
+def is_html(f) -> bool:
+    return str(f).lower().endswith(HTML_EXT)
+
+
+def docs() -> list[Path]:
+    """Every document in the library: PDFs, and web pages saved as .htm / .html."""
+    return sorted(f for f in RULES.glob("*") if f.suffix.lower() in (".pdf",) + HTML_EXT)
+
+
+def _html_text(fragment: str) -> str:
+    import html as _h
+    t = re.sub(r"(?is)<(script|style|noscript|svg)\b.*?</\1>", " ", fragment)
+    t = re.sub(r"(?i)<br\s*/?>|</(p|div|li|tr|h[1-6]|section|article)>", "\n", t)
+    t = _h.unescape(re.sub(r"<[^>]+>", " ", t))
+    return "\n".join(ln.strip() for ln in re.sub(r"[ \t\r\f\v]+", " ", t).splitlines() if ln.strip())
+
+
+def _html_raw(f: Path) -> str:
+    b = f.read_bytes()
+    for enc in ("utf-8", "cp1252"):
+        try:
+            return b.decode(enc)
+        except UnicodeDecodeError:
+            pass
+    return b.decode("utf-8", "replace")
+
+
+def html_parts(f: Path) -> list[str]:
+    """A saved web page split at its headings (h1-h4). Each part counts as one 'page' of the document;
+    the served copy gets an anchor mdk-N at the start of part N, so search results open right there."""
+    raw = _html_raw(f)
+    body = re.search(r"(?is)<body\b[^>]*>(.*)</body>", raw)
+    raw = body.group(1) if body else raw
+    cuts = [m.start() for m in HEAD_RE.finditer(raw)]
+    bounds = [0] + cuts + [len(raw)]
+    parts = [raw[a:b] for a, b in zip(bounds, bounds[1:])]
+    if parts and not _html_text(parts[0]).strip() and len(parts) > 1:
+        parts[1] = parts[0] + parts[1]
+        parts = parts[1:]
+    return parts
+
+
+def html_served(f: Path) -> str:
+    """The saved page as served: scripts and event handlers removed, an anchor at every part."""
+    raw = _html_raw(f)
+    raw = re.sub(r"(?is)<script\b.*?</script>", "", raw)
+    raw = re.sub(r"(?i)\son[a-z]+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", "", raw)
+    body = re.search(r"(?is)<body\b[^>]*>", raw)
+    start = body.end() if body else 0
+    n = [0]
+    first_text = bool(_html_text(raw[start:(HEAD_RE.search(raw, start).start() if HEAD_RE.search(raw, start) else len(raw))]).strip())
+    def anchor(m):
+        n[0] += 1
+        k = n[0] + (1 if first_text else 0)
+        return f'<a id="mdk-{k}"></a>' + m.group(0)
+    head, rest = raw[:start], raw[start:]
+    rest = '<a id="mdk-1"></a>' + HEAD_RE.sub(anchor, rest)
+    return head + rest
+
+
 def _cache(f: Path) -> Path:
     return f.with_suffix(f.suffix + ".json")
 
@@ -37,6 +101,10 @@ def pages(f: Path) -> list[str]:
     c = _cache(f)
     if c.exists() and c.stat().st_mtime >= f.stat().st_mtime:
         return json.loads(c.read_text())
+    if is_html(f):
+        out = [_html_text(p) for p in html_parts(f)]
+        c.write_text(json.dumps(out))
+        return out
     from pypdf import PdfReader
     out = []
     try:
@@ -62,6 +130,10 @@ def sections(f: Path) -> list[dict]:
     if c.exists() and c.stat().st_mtime >= f.stat().st_mtime:
         return json.loads(c.read_text())
     pg = pages(f)
+    if is_html(f):
+        out = [{"title": (t.splitlines() or [""])[0][:90], "page": i + 1} for i, t in enumerate(pg) if t.strip()]
+        c.write_text(json.dumps(out))
+        return out
     toc, toc_pages = [], set()
     for i, text in enumerate(pg[:8]):
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
@@ -151,12 +223,12 @@ def book_page(text: str, i: int, secs: list[dict]) -> tuple[str, bool]:
 
 def listing() -> list[dict]:
     ensure_seed()
-    docs = []
-    for f in sorted(RULES.glob("*.pdf")):
+    out_docs = []
+    for f in docs():
         pg = pages(f)
-        docs.append({"name": f.name, "pages": len(pg), "size": f.stat().st_size,
+        out_docs.append({"name": f.name, "html": is_html(f), "pages": len(pg), "size": f.stat().st_size,
                      "searchable": any(len(t.strip()) > 40 for t in pg), "sections": sections(f)})
-    return docs
+    return out_docs
 
 
 def search(q: str, limit: int = 60) -> list[dict]:
@@ -173,7 +245,7 @@ def search(q: str, limit: int = 60) -> list[dict]:
     pats = [pat(w) for w in words]
     ensure_seed()
     hits = []
-    for f in sorted(RULES.glob("*.pdf")):
+    for f in docs():
         secs = sections(f)
         for i, text in enumerate(pages(f)):
             if not all(p.search(text) for p in pats):
@@ -184,8 +256,8 @@ def search(q: str, limit: int = 60) -> list[dict]:
             score = sum(len(p.findall(text)) for p in pats)
             run = re.match(r"\s*\d{4}-\d{2}\s+[A-Z]+\s+HANDBOOK\s+\d+\s+([A-Z][A-Z0-9 &/,'-]{2,40}?)\s*\n", text)
             sec = run.group(1).strip().title() if run else section_of(secs, i + 1)   # running page header wins
-            bp, exact = book_page(text, i, secs)
-            hits.append({"file": f.name, "page": i + 1, "book_page": bp, "book_exact": exact,
+            bp, exact = ("", False) if is_html(f) else book_page(text, i, secs)
+            hits.append({"file": f.name, "page": i + 1, "html": is_html(f), "book_page": bp, "book_exact": exact,
                          "snippet": snip, "score": score, "section": sec})
     hits.sort(key=lambda h: -h["score"])
     return hits[:limit]

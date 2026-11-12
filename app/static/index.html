@@ -355,7 +355,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   <section>
     <h2>Documents on file</h2>
     <div id="rdocs"></div>
-    <div class="row" style="margin-top:8px"><label class="small">Add a PDF <input type="file" id="rIn" accept=".pdf,application/pdf" multiple></label><span class="muted" id="rMsg" style="font-size:13px"></span></div>
+    <div class="row" style="margin-top:8px"><label class="small">Add a PDF or saved web page <input type="file" id="rIn" accept=".pdf,application/pdf,.htm,.html,text/html" multiple></label><span class="muted" id="rMsg" style="font-size:13px"></span></div>
     <div class="muted" style="font-size:12px;margin-top:6px">The full <b>NFHS Swimming &amp; Diving Rules Book</b> is sold by NFHS (print, or the NFHS Digital app) and isn't posted free. If you have it as a PDF, add it here and it becomes searchable with the rest.</div>
   </section>
 </div>
@@ -821,7 +821,7 @@ async function rulesLoad() {
   try {
     const r = await api("/api/rules");
     $("#rdocs").innerHTML = r.docs.length ? `<table><tr><th>Document</th><th>Pages</th><th></th></tr>` + r.docs.map(d => `<tr><td><a href="/api/rules/file/${encodeURIComponent(d.name)}" target="_blank">${esc(d.name.replace(/\.pdf$/i, ""))}</a>${d.searchable ? "" : ' <span class="badge no" title="No text layer - it\'s a scan">not searchable</span>'}
-      ${d.sections && d.sections.length ? `<details style="margin-top:2px"><summary class="muted" style="font-weight:400;font-size:12.5px">Contents · ${d.sections.length} sections</summary><div style="columns:2;column-gap:24px;font-size:13px;padding:4px 0">${d.sections.map(x => `<div><a href="/api/rules/file/${encodeURIComponent(d.name)}#page=${x.page}" target="_blank">${esc(x.title)}</a> <span class="muted">${x.book ? `book p. ${x.book}` : `PDF p. ${x.page}`}</span></div>`).join("")}</div></details>` : ""}</td><td>${d.pages}</td><td><button class="ghost small" data-rdel="${esc(d.name)}">Remove</button></td></tr>`).join("") + `</table>` : `<div class="muted">No documents yet.</div>`;
+      ${d.sections && d.sections.length ? `<details style="margin-top:2px"><summary class="muted" style="font-weight:400;font-size:12.5px">Contents · ${d.sections.length} sections</summary><div style="columns:2;column-gap:24px;font-size:13px;padding:4px 0">${d.sections.map(x => `<div><a href="/api/rules/file/${encodeURIComponent(d.name)}#${d.html ? "mdk-" : "page="}${x.page}" target="_blank">${esc(x.title)}</a> <span class="muted">${x.book ? `book p. ${x.book}` : d.html ? "" : `PDF p. ${x.page}`}</span></div>`).join("")}</div></details>` : ""}</td><td>${d.pages}</td><td><button class="ghost small" data-rdel="${esc(d.name)}">Remove</button></td></tr>`).join("") + `</table>` : `<div class="muted">No documents yet.</div>`;
   } catch (e) { $("#rdocs").textContent = e.message; }
 }
 async function rulesSearch() {
@@ -832,7 +832,7 @@ async function rulesSearch() {
     .map(w => /^\d+([-.]\d+)+[a-z]?$/i.test(w) ? w.split(/[-.]/).join("[-.]") : w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const re = new RegExp("(" + words.join("|") + ")", "gi");
   $("#rhits").innerHTML = r.hits.length ? `<div class="muted" style="font-size:13px;margin-bottom:6px">${r.hits.length} page${r.hits.length > 1 ? "s" : ""}</div>` + r.hits.map(h =>
-    `<div style="padding:7px 0;border-top:1px solid var(--line)"><a href="/api/rules/file/${encodeURIComponent(h.file)}#page=${h.page}" target="_blank"><b>${esc(h.file.replace(/\.pdf$/i, ""))}</b>${h.section ? ` · ${esc(h.section)}` : ""} · ${h.book_page ? `<b>${/^slide/.test(h.book_page) ? "" : "book p. "}${h.book_exact ? "" : "~"}${esc(h.book_page)}</b> <span class="muted">(PDF p. ${h.page})</span>` : `PDF p. ${h.page}`}</a>
+    `<div style="padding:7px 0;border-top:1px solid var(--line)"><a href="/api/rules/file/${encodeURIComponent(h.file)}#${h.html ? "mdk-" : "page="}${h.page}" target="_blank"><b>${esc(h.file.replace(/\.pdf$/i, ""))}</b>${h.section ? ` · ${esc(h.section)}` : ""} · ${h.book_page ? `<b>${/^slide/.test(h.book_page) ? "" : "book p. "}${h.book_exact ? "" : "~"}${esc(h.book_page)}</b> <span class="muted">(PDF p. ${h.page})</span>` : h.html ? `section ${h.page}` : `PDF p. ${h.page}`}</a>
      <div style="font-size:13.5px;margin-top:2px">${esc(h.snippet).replace(re, "<mark>$1</mark>")}</div></div>`).join("") : `<div class="muted">Nothing found for “${esc(q)}”.</div>`;
 }
 $("#rgo").onclick = rulesSearch;

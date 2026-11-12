@@ -130,6 +130,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
       <div class="prow"><span>Lane assignments <span class="muted" style="font-size:11px">(NFHS 5-3, for the coaches)</span></span><button class="small" data-pr="lanes">Print</button><button class="ghost small" data-pdf="lanes">PDF</button></div>
       <div class="prow"><span>Timer sheets <select id="prLane" title="All lanes, or just one lane's sheets"><option value="">all lanes</option></select></span><button class="small" data-pr="timer">Print</button><button class="ghost small" data-pdf="timer">PDF</button></div>
     </div></div>
+  <button class="small hidden" id="watchBadge" type="button" title="Lanes still waiting for the timers' watch times (no pad touch, or pad and backup button apart). Click to go to Enter watch times, or print the Watches needed sheet."></button>
   <span class="muted" id="verTag" style="font-size:11.5px;white-space:nowrap" title="MeetDeck version"></span>
   <div class="menu hidden" id="exportMenu"><button class="small" id="exportBtn">Download / export ▾</button>
     <div class="pop hidden" id="exportPop">
@@ -389,7 +390,10 @@ function mbShow() {
   const on = !!(MB.url && S && S.exists);
   $("#mbBox").classList.toggle("hidden", !S || !S.exists);
   $("#pubBox").classList.toggle("hidden", !S || !S.exists);
-  { const n = watchesNeeded(), wc = document.getElementById("watchCount"); if (wc) { wc.textContent = n ? `(${n} lane${n > 1 ? "s" : ""} to get)` : "(none right now)"; wc.style.color = n ? "var(--warn)" : ""; } }
+  { const n = watchesNeeded(), wc = document.getElementById("watchCount"); if (wc) { wc.textContent = n ? `(${n} lane${n > 1 ? "s" : ""} to get)` : "(none right now)"; wc.style.color = n ? "var(--warn)" : ""; }
+    const wb = document.getElementById("watchBadge");
+    if (wb) { wb.classList.toggle("hidden", !M); wb.textContent = n ? `⏱ ${n} watch${n > 1 ? "es" : ""} needed` : "⏱ Watches: none needed";
+      wb.style.cssText = n ? "background:var(--warn);color:#fff;border-color:var(--warn);font-weight:700" : "background:transparent;color:var(--muted);border:1px solid var(--line)"; } }
   pubStatus();
   $("#mbUrl").innerHTML = MB.url ? esc(MB.url.replace(/^https?:\/\//, "")) : `not set &mdash; <a href="/#setup">add its address in Setup</a>`;
   $("#mbSend").disabled = !on || MB.busy;
@@ -1346,6 +1350,13 @@ $("#wtBox").addEventListener("click", ev => {
   const r = ev.target.closest("[data-wtrescore]"); if (!r) return;
   scoreReq({events: r.dataset.wtrescore.split(",").map(Number)});
 });
+$("#watchBadge").onclick = () => {
+  const box = $("#wtBox");
+  if (box && !box.classList.contains("hidden")) {
+    if (box.classList.contains("shr")) box.querySelector(".shrBtn")?.click();
+    box.scrollIntoView({behavior: "smooth", block: "start"});
+  } else setTimeout(() => $("#printPop").classList.remove("hidden"), 0);   // after the click that closes menus
+};
 $("#wtDone").onclick = async () => { if (!confirm("Take the Enter watch times list away? (Print Watches needed again for a new one.)")) return; WT = await api(`${API}/watch-sheet`, {method: "DELETE"}); wtShow(); };
 document.addEventListener("click", ev => {          // printing the Watches needed sheet makes it the list to type into
   const b = ev.target.closest('[data-pr="watches"],[data-pdf="watches"]'); if (b) setTimeout(wtLoad, 2500);

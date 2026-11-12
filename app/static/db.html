@@ -178,6 +178,12 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
               <div id="tmDbgBody"></div>
             </div>
           </div></section>
+  <section id="wtBox" class="hidden" style="margin-bottom:14px"><div class="row"><b>Enter watch times</b><span class="muted" id="wtSub" style="font-size:12.5px"></span>
+      <span class="grow"></span><span id="wtRescore"></span><button class="ghost small" id="wtDone" title="Take this list away (print Watches needed again for a new one)">Done with this sheet</button></div>
+    <div class="muted" style="font-size:12.5px;margin:4px 0 6px">Same order as the printed sheet. Type each watch as digits (2:17.53 = 21753) and Tab on. MeetDeck keeps both watches and picks the official
+      time the usual way: the pad, unless it's missing or the watches side with the backup button. Rows that changed from the pad are <span style="background:var(--warn-bg);padding:0 4px;border-radius:4px">amber</span>;
+      if that event was already scored it needs <b style="color:var(--err)">rescoring</b>.</div>
+    <div id="wtTable" class="scroll"></div></section>
   <section id="start" class="hidden">
     <h2>Open a database for this meet</h2>
     <div class="muted" style="margin-bottom:10px">Changes here are made in the Meet Manager database itself, so the file restores straight into Meet Manager. Every change is kept, so you can undo.</div>
@@ -301,6 +307,7 @@ function show() {
   $("#undoBtn").disabled = !S.versions.length;
   $("#undoBtn").title = S.versions.length ? "Undo: " + (S.versions[0].label || "").replace(/^before: /, "") : "Nothing to undo";
   mbShow(); mbWatch();
+  wtShow();
   lastMinShow();
   missingTeamsShow();
   $("#problems").innerHTML = scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "");
@@ -1285,6 +1292,66 @@ async function getTimes(h, saved) {
 }
 
 
+// ---------------- Enter watch times (the last printed Watches needed sheet) ----------------
+let WT = {printed: "", keys: []};
+async function wtLoad() { try { WT = await api(`${API}/watch-sheet`); } catch (e) { WT = {printed: "", keys: []}; } wtShow(); }
+function wtWho(e) {
+  if (e.kind === "R") { const t = M.teams[e.team] || {}; return `${t.short || t.name || t.abbr || "?"} "${e.ltr || "A"}" relay`; }
+  return athName(e.ath);
+}
+function wtShow() {
+  const box = $("#wtBox"); if (!box || !M) return;
+  const rows = WT.keys.map(k => M.entries.find(e => e.key === k)).filter(Boolean);
+  box.classList.toggle("hidden", !rows.length);
+  if (!rows.length) return;
+  $("#wtSub").textContent = `sheet printed ${WT.printed} · ${rows.length} lane${rows.length > 1 ? "s" : ""}`;
+  const focus = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.wk + "|" + document.activeElement.dataset.wn : "";
+  const rescore = new Set();
+  let last = null;
+  const body = rows.map(e => {
+    const v = evOf(e.event) || {}, pad = +e.pad || 0;
+    const btn = [e.backup, e.back2, e.back3].filter(x => +x > 0);
+    const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
+    const why = !pad ? "No pad" : back && Math.abs(pad - back) > TOL + 1e-6 ? `Btn ${back > pad ? "+" : "-"}${Math.abs(back - pad).toFixed(2)}` : "";
+    const t = +e.time || 0, src = usedSource(e) || "";
+    const changed = t && (!pad || Math.abs(t - pad) > 0.004);
+    const st = eventState(v), stale = st.status === "stale";
+    if (changed && stale) rescore.add(v.ptr);
+    const team = e.kind === "R" ? (M.teams[e.team] || {}).abbr : (M.teams[(M.athletes[e.ath] || {}).team] || {}).abbr;
+    const sep = last !== null && e.lane !== last ? ' style="border-top:2px solid var(--ink)"' : ""; last = e.lane;
+    const bg = changed ? (stale ? "var(--err-bg)" : "var(--warn-bg)") : "";
+    const L = (k, n, big) => `<span class="muted" style="font-size:11px">${k}</span>&thinsp;<b style="font-size:${big ? 17 : 14}px">${n}</b>`;
+    return `<tr${sep}><td style="background:${bg}">${L("L", e.lane, true)}</td><td style="background:${bg}">${L("E", v.no ?? "?")}</td><td style="background:${bg}">${L("H", e.heat)}</td>
+      <td style="background:${bg}"><b>${esc(wtWho(e))}</b><div class="muted" style="font-size:11.5px">${esc(team || "")} · ${esc(v.label || "")}</div></td>
+      <td class="mono" style="background:${bg}">${pad ? fmt(pad) : "none"}</td><td class="mono" style="background:${bg}">${back ? fmt(back) : "none"}</td><td style="background:${bg};font-size:12px">${why}</td>
+      <td style="background:${bg}"><input class="t" data-wk="${esc(e.key)}" data-wn="1" inputmode="numeric" placeholder="watch 1" style="width:92px;font-size:16px" value="${e.watch ? fmt(e.watch) : ""}"></td>
+      <td style="background:${bg}"><input class="t" data-wk="${esc(e.key)}" data-wn="2" inputmode="numeric" placeholder="watch 2" style="width:92px;font-size:16px" value="${e.watch2 ? fmt(e.watch2) : ""}"></td>
+      <td style="background:${bg};white-space:nowrap"><b class="mono">${t ? fmt(t) : "&ndash;"}</b> <span class="muted" style="font-size:12px">${src}</span>
+        ${changed && stale ? `<div><button class="small" data-score="${v.ptr}" style="background:var(--err);color:#fff">Rescore E${v.no}</button></div>` : changed ? `<div class="muted" style="font-size:11.5px">changed from the pad</div>` : ""}</td></tr>`;
+  }).join("");
+  $("#wtTable").innerHTML = `<table style="font-size:13.5px"><tr><th>Lane</th><th>Event</th><th>Heat</th><th>Swimmer / relay</th><th>Pad</th><th>Button</th><th>Why</th><th>Watch 1</th><th>Watch 2</th><th>Official</th></tr>${body}</table>`;
+  $("#wtRescore").innerHTML = rescore.size ? `<button class="small" style="background:var(--err);color:#fff" data-wtrescore="${[...rescore].join(",")}">Rescore ${rescore.size} event${rescore.size > 1 ? "s" : ""}</button>` : "";
+  if (focus) { const [k, n] = focus.split("|"); const el = document.querySelector(`#wtTable [data-wk="${CSS.escape(k)}"][data-wn="${n}"]`); if (el) el.focus(); }
+}
+$("#wtTable").addEventListener("change", ev => {
+  const t = ev.target; if (!t.dataset.wk) return;
+  const w = parseTime(t.value);
+  if (t.value.trim() && isNaN(w)) return toast("That watch time isn't a time");
+  if (t.value.trim()) t.value = fmt(w);
+  const k = t.dataset.wk, a = document.querySelector(`#wtTable [data-wk="${CSS.escape(k)}"][data-wn="1"]`).value,
+    b = document.querySelector(`#wtTable [data-wk="${CSS.escape(k)}"][data-wn="2"]`).value;
+  change("watches", {key: k, t1_s: a, t2_s: b, tol: TOL});
+});
+$("#wtBox").addEventListener("click", ev => {
+  const r = ev.target.closest("[data-wtrescore]"); if (!r) return;
+  scoreReq({events: r.dataset.wtrescore.split(",").map(Number)});
+});
+$("#wtDone").onclick = async () => { if (!confirm("Take the Enter watch times list away? (Print Watches needed again for a new one.)")) return; WT = await api(`${API}/watch-sheet`, {method: "DELETE"}); wtShow(); };
+document.addEventListener("click", ev => {          // printing the Watches needed sheet makes it the list to type into
+  const b = ev.target.closest('[data-pr="watches"],[data-pdf="watches"]'); if (b) setTimeout(wtLoad, 2500);
+});
+wtLoad();
+
 // ---------------- disqualifications ----------------
 let DQ = null;
 fetch("/api/dqcodes").then(r => r.json()).then(d => { DQ = d; DQ.by = Object.fromEntries(d.codes.map(c => [c.code, c])); }).catch(() => {});
@@ -1553,7 +1620,7 @@ fetch("/api/version").then(r => r.json()).then(v => { const t = document.getElem
 <script>
 /* shrink / expand the boxes at the top of Run the meet; remembered on this computer */
 (function () {
-  const BOXES = [["#mbBox", "mb"], ["#pubBox", "pub"], ["#timing", "tm"], ["#lastMin > div", "lm"]];
+  const BOXES = [["#mbBox", "mb"], ["#pubBox", "pub"], ["#timing", "tm"], ["#wtBox", "wt"], ["#lastMin > div", "lm"]];
   const get = k => { try { return localStorage.getItem("shr-" + k) === "1"; } catch (e) { return false; } };
   const set = (k, v) => { try { localStorage.setItem("shr-" + k, v ? "1" : "0"); } catch (e) {} };
   function apply() {

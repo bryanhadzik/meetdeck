@@ -934,7 +934,7 @@ def softtouch_pdf(m, licensee="", printed=None) -> bytes:
     return buf.getvalue()
 
 
-def watches_needed(m, tol=0.30):
+def watches_needed(m, tol=0.30, keys=None):
     """Lanes that still need the timers' watch times: no pad touch, or pad and backup button disagree by more
     than the tolerance - and no watch time entered yet (entering one takes the lane off the list)."""
     import meetdb as _mdb
@@ -944,24 +944,29 @@ def watches_needed(m, tol=0.30):
     for e in m["entries"]:
         if e["scr"] or not e["heat"] or not e["lane"] or (e["stat"] or "").strip() in ("R", "F", "D"):
             continue
-        if (e.get("watch") or 0) > 0 or (e.get("watch2") or 0) > 0:
+        if keys is not None:
+            if e["key"] not in keys:
+                continue
+        elif (e.get("watch") or 0) > 0 or (e.get("watch2") or 0) > 0:
             continue
         pad = float(e.get("pad") or 0)
         btn = [float(x) for x in (e.get("backup"), e.get("back2"), e.get("back3")) if x and float(x) > 0]
         back = (sum(round(b * 100) for b in btn) // len(btn)) / 100 if btn else 0
-        if not pad and not back:
+        if not pad and not back and keys is None:
             continue
         if not pad:
             why = "No pad"
         elif back and abs(pad - back) > tol + 1e-6:
             d = back - pad
             why = f"Btn {'+' if d > 0 else '-'}{abs(d):.2f}"
+        elif keys is not None:
+            why = ""
         else:
             continue
         v = evs.get(e["event"], {})
         team = m["teams"].get(e["team"] if e["kind"] == "R" else m["athletes"].get(e["ath"], {}).get("team"), {}).get("abbr", "")
         out.append({"order": (e["lane"], order.get(e["event"], 999), e["heat"]), "event": v.get("no", ""), "label": v.get("label", ""),   # by lane: each timer finds their rows together
-                    "heat": e["heat"], "lane": e["lane"], "who": _mdb.who(m, e), "team": team,
+                    "heat": e["heat"], "lane": e["lane"], "who": _mdb.who(m, e), "team": team, "key": e["key"], "ptr": e["event"],
                     "pad": _mdb.fmt_time(pad) if pad else "none", "back": _mdb.fmt_time(back) if back else "none", "why": why})
     out.sort(key=lambda r: r["order"])
     return out

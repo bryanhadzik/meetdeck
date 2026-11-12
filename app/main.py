@@ -2007,7 +2007,7 @@ def db_import_drive(mid: str, body: dict):
 OPS = {"dfs": meetdb.op_dfs, "scratch": meetdb.op_scratch, "scratch_athlete": meetdb.op_scratch_athlete, "move": meetdb.op_move,
        "seed": meetdb.op_seed, "result": meetdb.op_result, "delete": meetdb.op_delete, "add_entry": meetdb.op_add_entry,
        "athlete": meetdb.op_athlete, "add_athlete": meetdb.op_add_athlete, "team": meetdb.op_team, "legs": meetdb.op_legs,
-       "heat_results": meetdb.op_heat_results, "dq": meetdb.op_dq, "undq": meetdb.op_undq, "meet": meetdb.op_meet}
+       "heat_results": meetdb.op_heat_results, "watches": meetdb.op_watches, "dq": meetdb.op_dq, "undq": meetdb.op_undq, "meet": meetdb.op_meet}
 
 
 _DQR = {}
@@ -2220,6 +2220,23 @@ def db_changes_done(mid: str, body: dict):
     meta["changes_done"] = done
     _save(d, meta)
     return db_get(mid)
+
+
+@app.get("/api/meets/{mid}/db/watch-sheet")
+def db_watch_sheet(mid: str):
+    """The last printed Watches needed sheet (entry keys in its order), for typing the watch times back in."""
+    d = _dir(mid)
+    ws = _meta(d).get("watch_sheet") or {}
+    return {"printed": ws.get("printed", ""), "keys": ws.get("keys", [])}
+
+
+@app.delete("/api/meets/{mid}/db/watch-sheet")
+def db_watch_sheet_clear(mid: str):
+    d = _dir(mid)
+    mt = _meta(d)
+    mt.pop("watch_sheet", None)
+    _save(d, mt)
+    return {"printed": "", "keys": []}
 
 
 @app.post("/api/meets/{mid}/db/op")
@@ -2786,7 +2803,13 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
     elif kind == "softtouch":
         pdf, label = heatsheet.softtouch_pdf(m, licensee), "soft touch backup times"
     elif kind == "watches":
-        pdf, label = heatsheet.watches_pdf(m, float(_settings().get("time_tolerance") or 0.30), licensee), "watches needed"
+        tol = float(_settings().get("time_tolerance") or 0.30)
+        pdf, label = heatsheet.watches_pdf(m, tol, licensee), "watches needed"
+        rows = heatsheet.watches_needed(m, tol)
+        if rows:                       # the Enter watch times box lists the sheet as printed
+            mt = _meta(d)
+            mt["watch_sheet"] = {"printed": time.strftime("%I:%M %p").lstrip("0"), "keys": [r["key"] for r in rows]}
+            _save(d, mt)
     elif kind == "timer":
         pdf, label = heatsheet.timer_pdf(m, licensee, lane=lane or None), "timer sheets" + (f" lane {lane}" if lane else "")
     elif kind == "lanes":

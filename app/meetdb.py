@@ -342,6 +342,47 @@ def op_result(m, key, time_s=None, stat="", dq="", t1_s=None, t2_s=None):
     return ops, f"Result for {who(m, e)} in {ev_label(m, e['event'])}: {fmt_time(s['Fin_Time']) or '-'}{how} {desc}".strip()
 
 
+def pick_time(pad, back, watch, tol=0.30):
+    """Which time counts (pad / backup / watch), the same rule as the times panel: the pad unless it's missing,
+    or it disagrees with the backup button and the timers' watches side with the button."""
+    tol = float(tol or 0.30) + 1e-4
+    if not pad:
+        if back and watch and abs(back - watch) > tol:
+            return "watch"
+        return "backup" if back else "watch" if watch else "pad"
+    if back and abs(pad - back) > tol and watch and abs(watch - back) < abs(watch - pad):
+        return "backup"
+    return "pad"
+
+
+def op_watches(m, key, t1_s="", t2_s="", tol=0.30, use="auto"):
+    """The timers' watch times for one lane (from the Watches needed sheet). Keeps both watches and makes the
+    official time whichever of pad / backup button / watches the rule picks (use= to force one)."""
+    e = find(m, key)
+    t1, t2 = parse_time(t1_s or ""), parse_time(t2_s or "")
+    watch = timers_time(t1, t2)
+    pad = float(e.get("pad") or 0)
+    btn = [float(x) for x in (e.get("backup"), e.get("back2"), e.get("back3")) if x and float(x) > 0]
+    back = (sum(round(b * 100) for b in btn) // len(btn)) / 100 if btn else 0
+    if use not in ("pad", "backup", "watch"):
+        use = pick_time(pad, back, watch, tol)
+    final = {"pad": pad, "backup": back, "watch": watch}[use] or pad or back or watch
+    stat = (e.get("stat") or "").strip()
+    if stat == "R" and final:
+        stat = ""                       # had no time (no-show) - now it has one
+    s = {"Fin_watch1": t1 or (t2 if not t1 else 0), "Sem_watch1": t2 if t1 else 0, "Fin_Time": final if stat not in ("R", "F") else 0,
+         "Fin_stat": stat or " ", "Fin_course": "Y"}
+    e2 = {**e, "time": s["Fin_Time"], "stat": stat, "watch": s["Fin_watch1"], "watch2": s["Sem_watch1"]}
+    import results
+    s["fin_adjuststat"] = results.time_code({k: v for k, v in e2.items() if k != "adj"}) or " "
+    ops = [{"op": "update", "table": _table(e), "match": _match(e), "set": s}]
+    ops += places_ops(m, e["event"], override={key: e2})
+    src = {"pad": "pad", "backup": "backup button", "watch": "timers"}[use]
+    was = fmt_time(e.get("time")) or "-"
+    return ops, (f"Watches for {who(m, e)} in {ev_label(m, e['event'])}: {fmt_time(t1) or '-'} / {fmt_time(t2) or '-'}"
+                 f" - official {fmt_time(s['Fin_Time']) or '-'} ({src})" + (f", was {was}" if abs((e.get('time') or 0) - s['Fin_Time']) > 0.004 else ""))
+
+
 def places_ops(m, ptr, override=None):
     """Re-place an event from its finals times (ties share a place). Points are left to Meet Manager's scoring."""
     ents = [(override or {}).get(e["key"], e) for e in m["entries"] if e["event"] == ptr]

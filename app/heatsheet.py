@@ -952,15 +952,15 @@ def watches_needed(m, tol=0.30):
         if not pad and not back:
             continue
         if not pad:
-            why = "No pad touch"
+            why = "No pad"
         elif back and abs(pad - back) > tol + 1e-6:
             d = back - pad
-            why = f"Button {'+' if d > 0 else '-'}{abs(d):.2f} vs pad"
+            why = f"Btn {'+' if d > 0 else '-'}{abs(d):.2f}"
         else:
             continue
         v = evs.get(e["event"], {})
         team = m["teams"].get(e["team"] if e["kind"] == "R" else m["athletes"].get(e["ath"], {}).get("team"), {}).get("abbr", "")
-        out.append({"order": (order.get(e["event"], 999), e["heat"], e["lane"]), "event": v.get("no", ""), "label": v.get("label", ""),
+        out.append({"order": (e["lane"], order.get(e["event"], 999), e["heat"]), "event": v.get("no", ""), "label": v.get("label", ""),   # by lane: each timer finds their rows together
                     "heat": e["heat"], "lane": e["lane"], "who": _mdb.who(m, e), "team": team,
                     "pad": _mdb.fmt_time(pad) if pad else "none", "back": _mdb.fmt_time(back) if back else "none", "why": why})
     out.sort(key=lambda r: r["order"])
@@ -976,8 +976,9 @@ def watches_pdf(m, tol=0.30, licensee="", printed=None) -> bytes:
     W, H = letter
     c.setTitle(f"{m['meet']['name']} - Watches needed")
     margin = 27.0
-    cols = [("Event", 0.09), ("Ht", 0.045), ("Ln", 0.045), ("Swimmer / relay", 0.25), ("Pad", 0.085), ("Button", 0.085),
-            ("Why", 0.17), ("Watch 1", 0.115), ("Watch 2", 0.115)]
+    # lane first (the list is in lane order, one block per timer), then event and heat; the watch boxes get the room
+    cols = [("Lane", 0.065), ("Event", 0.065), ("Heat", 0.06), ("Swimmer / relay", 0.21), ("Pad", 0.075), ("Button", 0.075),
+            ("Why", 0.08), ("Watch 1", 0.185), ("Watch 2", 0.185)]
     tw = W - 2 * margin
     widths = [tw * f for _, f in cols]
     head_h, row_h = 16.0, 27.0
@@ -1004,7 +1005,7 @@ def watches_pdf(m, tol=0.30, licensee="", printed=None) -> bytes:
             x += w
         return y - head_h
 
-    page, y = 1, header(1)
+    page, y, last_lane = 1, header(1), None
     if not rows_data:
         c.setFont(reg, 12)
         c.drawString(margin + 6, y - 24, "Nothing to collect right now - every lane has a pad time that agrees with its backup button, or a watch time.")
@@ -1014,29 +1015,42 @@ def watches_pdf(m, tol=0.30, licensee="", printed=None) -> bytes:
             page += 1
             y = header(page)
         yb = y - row_h
+        if last_lane is not None and r["lane"] != last_lane:      # a heavier line where the next lane's rows start
+            c.setLineWidth(2)
+            c.line(margin, y, margin + tw, y)
+        last_lane = r["lane"]
         c.setLineWidth(0.5)
         c.setStrokeGray(0.55)
         c.line(margin, yb, margin + tw, yb)
         c.setStrokeGray(0)
         x = margin
-        cells = [str(r["event"]), str(r["heat"]), str(r["lane"]), None, r["pad"], r["back"], r["why"], "", ""]
+        cells = [str(r["lane"]), str(r["event"]), str(r["heat"]), None, r["pad"], r["back"], r["why"], "", ""]
         for i, (val, w) in enumerate(zip(cells, widths)):
+            if i < 3:                                   # L 4 / E 12 / H 2: a letter so the three numbers can't be mixed up
+                c.setFont(reg, 8)
+                c.setFillGray(0.45)
+                c.drawString(x + 4, yb + 10, "LEH"[i])
+                c.setFillGray(0)
+                c.setFont(bold, 14 if i == 0 else 11.5)
+                c.drawString(x + 13, yb + (9 if i == 0 else 9.5), val)
+                x += w
+                continue
             if i == 3:
                 c.setFont(bold, 9)
-                nm = r["who"] if len(r["who"]) <= 30 else r["who"][:29] + "…"
+                nm = r["who"] if len(r["who"]) <= 25 else r["who"][:24] + "…"
                 c.drawString(x + 4, yb + 15, nm)
                 c.setFont(reg, 7.5)
-                c.drawString(x + 4, yb + 5, f"{r['team']}  ·  {r['label']}"[:48])
+                c.drawString(x + 4, yb + 5, f"{r['team']}  ·  {r['label']}"[:40])
             elif i in (7, 8):
-                c.setFont(reg, 11)
+                c.setFont(reg, 13)
                 c.setFillGray(0.72)
-                c.drawString(x + w * 0.30, yb + 9, ":")
+                c.drawString(x + w * 0.33, yb + 9, ":")
                 c.drawString(x + w * 0.66, yb + 9, ".")
                 c.setFillGray(0)
             else:
-                c.setFont(bold if i < 3 else reg, 9.5 if i < 3 else 8.5)
+                c.setFont(reg, 8.5)
                 if i == 6:
-                    c.drawString(x + 3, yb + 10, val[:30])
+                    c.drawString(x + 3, yb + 10, val[:12])
                 else:
                     c.drawCentredString(x + w / 2, yb + 10, val)
             x += w

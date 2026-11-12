@@ -19,6 +19,13 @@ nav button{background:transparent;color:var(--muted);border:1px solid transparen
 nav button.on{color:var(--accent);border-color:var(--line);background:var(--bg)}
 main{max-width:1900px;margin:0 auto;padding:14px}
 section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+/* the boxes at the top (meet board, phone results, timing console, last-minute changes) shrink to their title line */
+.shr{padding:4px 10px!important;margin-bottom:6px!important}
+.shr > :not(:first-child){display:none!important}
+.shrO{padding:0!important;border:0!important;background:transparent!important;margin-bottom:0!important}
+.shr > :first-child{font-size:12.5px}
+.shr > :first-child button:not(.shrBtn), .shr > :first-child a, .shr > :first-child label, .shr > :first-child select{display:none!important}
+.shrBtn{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;font-size:12px;line-height:1;padding:3px 7px;cursor:pointer;margin-left:6px}
 h2{font-size:15px;margin:0 0 8px}
 button,select,input{font:inherit;color:inherit}
 button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:6px 11px;cursor:pointer}
@@ -1542,6 +1549,35 @@ if (!MID) document.body.innerHTML = "<main><section>Open this from a meet's page
 </script>
 <script>
 fetch("/api/version").then(r => r.json()).then(v => { const t = document.getElementById("verTag"); if (t && v.version) t.textContent = "v" + v.version; }).catch(() => {});
+</script>
+<script>
+/* shrink / expand the boxes at the top of Run the meet; remembered on this computer */
+(function () {
+  const BOXES = [["#mbBox", "mb"], ["#pubBox", "pub"], ["#timing", "tm"], ["#lastMin > div", "lm"]];
+  const get = k => { try { return localStorage.getItem("shr-" + k) === "1"; } catch (e) { return false; } };
+  const set = (k, v) => { try { localStorage.setItem("shr-" + k, v ? "1" : "0"); } catch (e) {} };
+  function apply() {
+    BOXES.forEach(([sel, k]) => {
+      const box = document.querySelector(sel); if (!box || !box.firstElementChild) return;
+      const head = box.firstElementChild;
+      let b = head.querySelector(".shrBtn");
+      if (!b) {
+        b = document.createElement("button"); b.type = "button"; b.className = "shrBtn";
+        b.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); set(k, !get(k)); apply(); };
+        head.appendChild(b);
+      }
+      const on = get(k);
+      box.classList.toggle("shr", on);
+      if (k === "lm") box.parentElement.classList.toggle("shrO", on);
+      b.textContent = on ? "\u25BE" : "\u25B4";
+      b.title = on ? "Show this box" : "Shrink this box to one line";
+    });
+  }
+  const tg = document.getElementById("tmToggle"); if (tg) tg.style.display = "none";
+  const tb = document.getElementById("tmBody"); if (tb) tb.style.display = "";
+  apply();
+  new MutationObserver(apply).observe(document.getElementById("lastMin"), {childList: true});
+})();
 </script>
 </body>
 </html>

@@ -165,7 +165,8 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   <div id="meet" class="hidden">
     <section>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-        <h2 style="margin:0">Meet setup <span class="muted" id="mSaved" style="font-size:13px;font-weight:normal"></span></h2>
+        <h2 style="margin:0">Meet setup <span class="muted" id="mSaved" style="font-size:13px;font-weight:normal"></span>
+          <button class="ghost small" id="setupUndo" disabled style="margin-left:8px;vertical-align:2px" title="Nothing to undo">Undo</button></h2>
         <a id="openDb" href="#" target="_blank" rel="noopener" style="background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:12px 26px;font-size:17px;font-weight:600;text-decoration:none;white-space:nowrap" title="Open the meet: timing console, times, DQs, scratches, scoring, printing and results">Run the meet ↗</a>
       </div>
       <div id="meetFields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 16px">
@@ -519,8 +520,22 @@ async function loadMeets(select) {
   else if (meets.length) { $("#meetSel").value = meets[0].id; await open(meets[0].id); }
   else { $("#newBox").classList.remove("hidden"); $("#meet").classList.add("hidden"); }
 }
-async function open(id) { store("meet", id); M = await api(`/api/meets/${id}`); render(); if (!$("#sendView").classList.contains("hidden")) sendRender(); }
-async function save(patch) { M = await api(`/api/meets/${M.id}/state`, J("PUT", patch)); render(); }
+async function open(id) { store("meet", id); M = await api(`/api/meets/${id}`); render(); undoRefresh(); if (!$("#sendView").classList.contains("hidden")) sendRender(); }
+async function save(patch) { M = await api(`/api/meets/${M.id}/state`, J("PUT", patch)); render(); undoRefresh(); }
+// undo the last change on this page (rules, removed entries, lane order, combined heats ...)
+async function undoRefresh() {
+  if (!M || !M.id) return;
+  try {
+    const u = await api(`/api/meets/${M.id}/undo`);
+    $("#setupUndo").disabled = !u.can;
+    $("#setupUndo").title = u.can ? "Undo: " + u.label : "Nothing to undo";
+  } catch (e) {}
+}
+document.addEventListener("click", async e => {
+  if (e.target.id !== "setupUndo") return;
+  try { M = await api(`/api/meets/${M.id}/undo`, {method: "POST"}); render(); $("#mSaved").textContent = "Undid: " + (M.undone || "last change"); undoRefresh(); }
+  catch (x) { $("#mSaved").textContent = x.message; }
+});
 const removedIds = () => M.entries.filter(e => e.removed).map(e => e.id);
 const toggle = (id, rm) => save({removed: rm ? [...removedIds(), id] : removedIds().filter(x => x !== id)});
 

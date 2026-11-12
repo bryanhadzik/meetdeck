@@ -705,6 +705,7 @@ def seed_move(mid: str, body: dict):
 def put_state(mid: str, body: dict):
     d = _dir(mid)
     meta = _meta(d)
+    before = json.loads(json.dumps(meta))
     for k in ("removed", "rules", "lanes", "name", "date", "location", "host", "combine", "combine_low", "expected_teams", "preseed", "min_heat",
               "run", "ended", "contacts", "session_break"):
         if k in body:
@@ -714,8 +715,46 @@ def put_state(mid: str, body: dict):
             meta.pop("record_team", None)   # back to automatic
         else:
             meta["record_team"] = body["record_team"]
+    changed = [k for k in set(before) | set(meta) if before.get(k) != meta.get(k) and k not in ("run",)]
+    if changed:
+        _setup_history_push(d, before, changed)
     _save(d, meta)
     return _state(d)
+
+
+SETUP_LABELS = {"removed": "removed entries", "rules": "rules", "lanes": "lane order", "name": "meet name", "date": "date",
+                "location": "location", "host": "host school", "combine": "combined heats", "combine_low": "combined heats",
+                "expected_teams": "teams expected", "preseed": "seeding", "min_heat": "seeding", "ended": "meet ended",
+                "contacts": "contacts", "session_break": "session break", "record_team": "record team"}
+
+
+def _setup_history_push(d: Path, before: dict, changed: list):
+    f = d / "setup_history.json"
+    h = json.loads(f.read_text()) if f.exists() else []
+    label = ", ".join(sorted({SETUP_LABELS.get(k, k) for k in changed}))
+    h.append({"when": time.strftime("%H:%M:%S"), "label": label, "meta": before})
+    f.write_text(json.dumps(h[-40:]))
+
+
+@app.get("/api/meets/{mid}/undo")
+def setup_undo_info(mid: str):
+    f = _dir(mid) / "setup_history.json"
+    h = json.loads(f.read_text()) if f.exists() else []
+    return {"can": bool(h), "label": h[-1]["label"] if h else ""}
+
+
+@app.post("/api/meets/{mid}/undo")
+def setup_undo(mid: str):
+    """Put the meet setup back the way it was before the last change on the setup page."""
+    d = _dir(mid)
+    f = d / "setup_history.json"
+    h = json.loads(f.read_text()) if f.exists() else []
+    if not h:
+        raise HTTPException(400, "Nothing to undo")
+    last = h.pop()
+    _save(d, last["meta"])
+    f.write_text(json.dumps(h))
+    return {**_state(d), "undone": last["label"]}
 
 
 def _clean_file(d: Path, f: Path, removed: set[str]) -> bytes:

@@ -222,17 +222,50 @@ def need():
     return STATE["console"]
 
 
-def get_race(q: dict) -> dict:
+def _reopen() -> None:
+    """The USB-serial cable dropped and came back (Windows: 'Access is denied' / 'device does not recognize the
+    command' on the old handle). Open the same port again with the settings that worked. Raises a plain message
+    when the port isn't back yet."""
+    port, s = STATE["port"], dict(STATE["settings"] or {})
+    try:
+        STATE["serial"].close()
+    except Exception:
+        pass
+    deadline = time.time() + 4
+    while not any(p["port"] == port for p in cts.list_ports()) and time.time() < deadline:
+        time.sleep(0.5)
+    if not any(p["port"] == port for p in cts.list_ports()):
+        others = ", ".join(p["port"] for p in cts.list_ports()) or "none"
+        raise ValueError(f"The timing console's cable disconnected: {port} isn't on this PC any more (ports now: {others}). "
+                         f"Unplug the USB-serial cable, plug it back in, then Get times again - MeetDeck reconnects by itself. "
+                         f"If it comes back as a different COM number, Connect to that port.")
+    ser = cts.open_serial(port, **s)
+    c = cts.Console(ser, log=log)
+    STATE.update(console=c, serial=ser, connected_at=time.strftime("%H:%M:%S"))
+    note(f"reconnected {port} {s} after the port dropped")
+
+
+def _ask(q: dict):
     c = need()
     if q.get("race"):
-        r = c.race(int(q["race"]))
-    elif q.get("event"):
-        r = c.race_by_heat(int(q["event"]), int(q.get("heat", 1)))
-    elif q.get("current"):
-        r = c.race_current()
-    else:
-        r = c.race_last()
-    return r.as_dict()
+        return c.race(int(q["race"]))
+    if q.get("event"):
+        return c.race_by_heat(int(q["event"]), int(q.get("heat", 1)))
+    if q.get("current"):
+        return c.race_current()
+    return c.race_last()
+
+
+def get_race(q: dict) -> dict:
+    try:
+        return _ask(q).as_dict()
+    except Exception as e:
+        # only a dead port handle is retried; console answers (bad race number etc.) go straight back
+        if STATE["sim"] or not STATE["serial"] or not (type(e).__name__ in ("SerialException", "SerialTimeoutException", "PermissionError", "OSError")):
+            raise
+        note(f"serial error on {STATE['port']}: {e} - reopening the port")
+        _reopen()
+        return _ask(q).as_dict()
 
 
 def sim_load(body: dict) -> dict:

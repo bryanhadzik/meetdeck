@@ -67,7 +67,17 @@ main{padding:12px;max-width:720px;margin:0 auto}
 .r .up{color:var(--mute)}
 .r .dq{color:var(--bad)}
 .r.me{background:color-mix(in srgb,var(--star) 14%,transparent)}
-.star{background:none;border:0;padding:0 0 0 4px;font-size:16px;color:var(--mute);cursor:pointer;vertical-align:-1px}
+.star{background:none;border:0;padding:2px 4px 2px 8px;font-size:22px;line-height:1;color:var(--star);opacity:.55;cursor:pointer;vertical-align:-3px}
+.star.on{opacity:1}
+.hint{display:flex;gap:10px;align-items:center;max-width:720px;margin:10px auto 0;width:calc(100% - 24px);padding:12px 14px;border-radius:12px;
+  background:color-mix(in srgb,var(--star) 18%,var(--card));border:1px solid color-mix(in srgb,var(--star) 45%,transparent);font-size:14.5px}
+.hint .big{font-size:30px;color:var(--star);line-height:1}
+.hint b{display:block;font-size:15.5px}
+.hint button{margin-left:auto;background:none;border:0;font-size:20px;color:var(--mute);cursor:pointer;padding:4px 6px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:30;background:#14232a;color:#fff;padding:11px 16px;border-radius:12px;
+  font-size:14.5px;box-shadow:0 6px 24px rgba(0,0,0,.25);max-width:calc(100% - 32px);text-align:center}
+.toast b{color:#ffd23f}
+.legs .on{color:var(--ink);font-weight:700}
 .star.on{color:var(--star)}
 .r .st{font-size:12px;color:var(--mute);margin-top:2px;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}
 .chip{display:inline-block;border-radius:6px;padding:0 6px;font-size:11.5px;font-weight:700;line-height:18px;background:var(--acc2);color:var(--acc)}
@@ -93,6 +103,7 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
   <a class="live hide" id="liveBtn" target="_blank" rel="noopener">LIVE &middot; Watch the stream</a>
   <div class="bar"><input id="q" type="search" placeholder="Find a swimmer or team" autocomplete="off" enterkeyhint="search"><button id="mine" title="Show only swimmers you starred">★ Mine</button></div>
 </header>
+<div class="hint" id="hint" hidden><span class="big">☆</span><span><b>Follow your swimmer</b>Tap the ☆ next to their name. Then ★ Mine shows just their events, relays included.</span><button id="hintX" aria-label="close">✕</button></div>
 <main id="main"><div class="empty">Loading results…</div></main>
 <section class="card" id="yt" style="max-width:720px;margin:0 auto 10px;width:calc(100% - 24px)"><h2>Watch &amp; follow on YouTube</h2>
   <div style="padding:2px 14px 12px;font-size:14px;color:var(--mute)">Every meet streams on the pool's channel. Each school has a playlist of its meets there.</div>
@@ -138,6 +149,18 @@ function match(row, q) {
   return (row.name + " " + row.team + " " + (row.legs || "") + " " + (row.team_name || "")).toLowerCase().includes(q);
 }
 const starKey = r => r.name + "|" + r.team;
+// a starred swimmer ("Last, First|TEAM") also shows on their team's relays, whose legs read "First Last, First Last"
+function legName(k) { const [nm, team] = k.split("|"), p = nm.split(", "); return p.length > 1 ? {name: (p[1] + " " + p[0]).toLowerCase(), team} : null; }
+function starredLegs(r) {
+  if (!r.legs) return [];
+  const legs = r.legs.split(", ").map(x => x.trim().toLowerCase());
+  return [...STARS].map(legName).filter(x => x && x.team === r.team && legs.includes(x.name)).map(x => x.name);
+}
+const starredIn = r => STARS.has(starKey(r)) || starredLegs(r).length > 0;
+function legsHtml(r) {
+  const on = new Set(starredLegs(r));
+  return r.legs.split(", ").map(x => on.has(x.trim().toLowerCase()) ? `<span class="on">★ ${esc(x)}</span>` : esc(x)).join(", ");
+}
 
 function render() {
   const m = D.meet || {};
@@ -156,7 +179,7 @@ function render() {
     const done = v.rows && v.rows.length;
     // not swum yet: the start list (heat, lane, seed) in place of results
     const lanes = done ? [] : (v.heats || []).flatMap(h => h.lanes.map(l => Object.assign({heat: h.heat, heats: v.heats.length}, l)));
-    const rows = (done ? v.rows : lanes).filter(r => match(r, q) && (!MINE || STARS.has(starKey(r))));
+    const rows = (done ? v.rows : lanes).filter(r => match(r, q) && (!MINE || starredIn(r)));
     if ((q || MINE) && !rows.length) continue;
     shown++;
     const isNew = done && (FRESH.has(String(v.no)) || D.latest == v.no);
@@ -214,24 +237,31 @@ function heatsHtml(lanes) {
   for (const r of lanes) {
     if (r.heat !== h) { h = r.heat; out += `<div class="hh">Heat ${esc(h)}${r.heats > 1 ? ` of ${r.heats}` : ""}</div>`; }
     const k = starKey(r), on = STARS.has(k);
-    out += `<div class="r ${on ? "me" : ""}"><div class="pl ln"><small>Lane</small>${esc(r.lane)}</div>
-      <div><div class="nm">${esc(r.name)}${r.yr ? ` <small>${esc(r.yr)}</small>` : ""}${r.exh ? ` <small>(exh)</small>` : ""}<button class="star ${on ? "on" : ""}" data-star="${esc(k)}" aria-label="follow">${on ? "★" : "☆"}</button></div>
-        <div class="tm">${esc(r.team_name || r.team)}</div>${r.legs ? `<div class="legs">${esc(r.legs)}</div>` : ""}${stateRow(r)}</div>
+    out += `<div class="r ${starredIn(r) ? "me" : ""}"><div class="pl ln"><small>Lane</small>${esc(r.lane)}</div>
+      <div><div class="nm">${esc(r.name)}${r.yr ? ` <small>${esc(r.yr)}</small>` : ""}${r.exh ? ` <small>(exh)</small>` : ""}${r.legs ? "" : `<button class="star ${on ? "on" : ""}" data-star="${esc(k)}" aria-label="follow">${on ? "★" : "☆"}</button>`}</div>
+        <div class="tm">${esc(r.team_name || r.team)}</div>${r.legs ? `<div class="legs">${legsHtml(r)}</div>` : ""}${stateRow(r)}</div>
       <div><div class="sd">${r.seed ? "Seed " + esc(r.seed) : "Seed NT"}</div></div></div>`;
   }
   return out;
 }
 function rowHtml(r) {
   const k = starKey(r), on = STARS.has(k), dq = /^(DQ|NS)/.test(r.result || "");
-  return `<div class="r ${on ? "me" : ""}"><div class="pl">${esc(r.place || "–")}</div>
-    <div><div class="nm">${esc(r.name)}${r.yr ? ` <small>${esc(r.yr)}</small>` : ""}${r.exh ? ` <small>(exh)</small>` : ""}<button class="star ${on ? "on" : ""}" data-star="${esc(k)}" aria-label="follow">${on ? "★" : "☆"}</button></div>
-      <div class="tm">${esc(r.team_name || r.team)}</div>${r.legs ? `<div class="legs">${esc(r.legs)}</div>` : ""}${r.dqtxt ? `<div class="legs dq">${esc(r.dqtxt)}</div>` : ""}${stateRow(r)}</div>
+  return `<div class="r ${starredIn(r) ? "me" : ""}"><div class="pl">${esc(r.place || "–")}</div>
+    <div><div class="nm">${esc(r.name)}${r.yr ? ` <small>${esc(r.yr)}</small>` : ""}${r.exh ? ` <small>(exh)</small>` : ""}${r.legs ? "" : `<button class="star ${on ? "on" : ""}" data-star="${esc(k)}" aria-label="follow">${on ? "★" : "☆"}</button>`}</div>
+      <div class="tm">${esc(r.team_name || r.team)}</div>${r.legs ? `<div class="legs">${legsHtml(r)}</div>` : ""}${r.dqtxt ? `<div class="legs dq">${esc(r.dqtxt)}</div>` : ""}${stateRow(r)}</div>
     <div><div class="res ${dq ? "dq" : ""}">${esc(r.result || "")}</div>${seedLine(r)}${r.points ? `<div class="pts">${esc(r.points)} pts</div>` : ""}</div></div>`;
 }
 
 document.addEventListener("click", e => {
   const s = e.target.closest("[data-star]");
-  if (s) { const k = s.dataset.star; STARS.has(k) ? STARS.delete(k) : STARS.add(k); store.set("stars", [...STARS]); render(); return; }
+  if (s) {
+    const k = s.dataset.star, adding = !STARS.has(k);
+    adding ? STARS.add(k) : STARS.delete(k); store.set("stars", [...STARS]); render();
+    const nm = k.split("|")[0].split(", ").reverse().join(" ");
+    toast(adding ? `<b>★</b> Following ${esc(nm)}. Tap <b>★ Mine</b> to see only your swimmers, relays included.` : `Stopped following ${esc(nm)}.`);
+    hint(); return;
+  }
+  if (e.target.id === "hintX") { store.set("hint_done", true); hint(); return; }
   const t = e.target.closest("[data-tog]");
   if (t) {
     const no = t.dataset.tog, v = (D.events || []).find(x => String(x.no) === no);
@@ -241,6 +271,16 @@ document.addEventListener("click", e => {
   }
 });
 $("#q").addEventListener("input", () => D && render());
+let toastT = null;
+function toast(html) {
+  let t = document.getElementById("toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; document.body.appendChild(t); }
+  t.innerHTML = html; t.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 4000);
+}
+// the follow hint stays until someone stars a swimmer or closes it
+function hint() { $("#hint").hidden = STARS.size > 0 || store.get("hint_done", false); }
+hint();
 $("#mine").addEventListener("click", () => { MINE = !MINE; $("#mine").classList.toggle("on", MINE); D && render(); });
 // Share: the phone's own share sheet (Messages, email, ...) when it has one; otherwise text / copy
 $("#share").addEventListener("click", () => {

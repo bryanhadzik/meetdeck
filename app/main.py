@@ -2569,6 +2569,25 @@ async def rules_upload(file: UploadFile = File(...)):
     return {"docs": rules_mod.listing()}
 
 
+@app.post("/api/rules/rename")
+def rules_rename(body: dict):
+    """Rename a document in the rules library (its search index files go with it)."""
+    src = rules_mod.RULES / Path(str(body.get("from") or "")).name
+    new = re.sub(r'[\\/:*?"<>|]', "-", Path(str(body.get("to") or "")).name).strip()
+    if not src.exists() or not new:
+        raise HTTPException(404, "No such document")
+    if Path(new).suffix.lower() != src.suffix.lower():
+        new += src.suffix
+    dst = rules_mod.RULES / new
+    if dst.exists():
+        raise HTTPException(400, "A document with that name already exists")
+    for c in list(src.parent.glob(src.name + ".*json")):
+        c.rename(src.parent / (new + c.name[len(src.name):]))
+    src.rename(dst)
+    _DQR.clear()
+    return {"docs": rules_mod.listing()}
+
+
 @app.delete("/api/rules/{name}")
 def rules_delete(name: str):
     f = rules_mod.RULES / Path(name).name

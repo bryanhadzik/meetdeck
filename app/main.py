@@ -326,6 +326,8 @@ def put_settings(body: dict):
         st["public_domain"] = dom
     if "public_auto" in body:
         st["public_auto"] = bool(body["public_auto"])
+    if "backup_drive" in body:
+        st["backup_drive"] = bool(body["backup_drive"])
     if "drive_url" in body:
         u = (body["drive_url"] or "").strip()
         if u and not re.match(r"https://script\.google\.com/(?:a/macros/[\w.-]+|macros)/s/[\w-]+/exec", u):
@@ -353,9 +355,13 @@ def get_meet(mid: str):
 
 @app.delete("/api/meets/{mid}")
 def delete_meet(mid: str):
+    """The meet is backed up first (kept under Setup → Backups, and copied to Google Drive when that's set up)."""
     import shutil as _sh
-    _sh.rmtree(_dir(mid))
-    return {"ok": True}
+    d = _dir(mid)
+    info = _bk_make(d, "delete")
+    _sh.rmtree(d)
+    threading.Thread(target=_bk_to_drive, args=(info,), daemon=True).start()
+    return {"ok": True, "backup": info["file"]}
 
 
 KIND_LABEL = {"hy3": "Team Manager export (.hy3)", "sdif": "Team Manager/SDIF (.cl2/.sd3)",
@@ -1692,7 +1698,7 @@ def meet_drive_files(mid: str):
         if it["kind"] == "folder" or not drive_mod.importable(it):
             continue
         low = it["name"].lower()
-        if low.startswith(("swmm8bkup", "meet results", "merge meet results", "hybackup")) or low.endswith(".mdb"):
+        if low.startswith(("swmm8bkup", "meet results", "merge meet results", "hybackup")) or low.endswith(".mdb") or "meetdeck backup" in low:
             continue
         flat = re.sub(r"[^a-z0-9]", "", it["path"].lower())
         it["mine"] = it["path"].lstrip("/").startswith(want) or (len(key) >= 6 and key in flat)
@@ -1875,6 +1881,12 @@ async def open_meet_file(file: UploadFile = File(...)):
     """Open an existing Meet Manager meet (Swmm8Bkup....zip or .mdb) as a new MeetDeck meet:
     name, date and location come from the file; the database is ready on Run the meet."""
     data = await file.read()
+    if data[:2] == b"PK":
+        try:
+            if bk_mod.MANIFEST in zipfile.ZipFile(io.BytesIO(data)).namelist():      # a MeetDeck backup, not Meet Manager
+                return _bk_restore(data, "copy", f"uploaded {file.filename}")
+        except zipfile.BadZipFile:
+            pass
     return _open_meet(Path(file.filename or "meet").name, data, f"opened {Path(file.filename or 'meet').name}")
 
 
@@ -3178,3 +3190,207 @@ def bridge_zip():
 @app.get("/db")
 def db_page():
     return FileResponse(STATIC / "db.html")
+
+
+# ---- whole-meet backups (local + Google Drive) ---------------------------------
+import backups as bk_mod
+
+BK_ROOT = DATA_ROOT / "meet-backups"
+BK_EVERY = 15 * 60          # automatic backup at most this often while a meet is being changed
+BK_DRIVE_EVERY = 30 * 60    # and an automatic one goes to Drive at most this often per meet
+BK_LOCK = threading.Lock()
+
+
+def _version() -> str:
+    try:
+        return (Path(__file__).parent / "VERSION").read_text().strip()
+    except OSError:
+        return ""
+
+
+def _bk_drive_state() -> str:
+    st = _settings()
+    if not st.get("backup_drive", True):
+        return "off"
+    return "ready" if st.get("drive_folder") and st.get("drive_url") else "no folder" if not st.get("drive_folder") else "read only"
+
+
+def _bk_to_drive(info: dict) -> dict:
+    """Copy one backup into the meet's Drive folder: <season>/<date meet>/MeetDeck backups/."""
+    st = _settings()
+    if _bk_drive_state() != "ready":
+        return info
+    m = {"name": info.get("name") or "Meet", "date": info.get("date", ""), "season": info.get("season", ""), "created": info.get("made")}
+    path = _meet_drive_path(m) + ["MeetDeck backups"]
+    when = time.strftime("%Y-%m-%d %H:%M")
+    try:
+        data = (BK_ROOT / info["file"]).read_bytes()
+        r = drive_mod.upload(st["drive_url"], st["drive_token"], path, info["file"], data)
+        drive = {"ok": True, "when": when, "folder": "/".join(path), "id": r.get("id", "")}
+    except Exception as e:
+        drive = {"ok": False, "when": when, "tried": time.time(), "folder": "/".join(path), "error": str(e)[:300]}
+    return bk_mod.update_info(BK_ROOT, info["file"], drive=drive)
+
+
+def _bk_make(d: Path, reason: str, drive: str = "later") -> dict:
+    """drive: 'now' uploads before returning, 'later' leaves it to the background loop, 'no' keeps it local."""
+    with BK_LOCK:
+        info = bk_mod.make(d, BK_ROOT, reason, _version())
+    if drive == "now":
+        info = _bk_to_drive(info)
+    elif drive == "no":
+        info = bk_mod.update_info(BK_ROOT, info["file"], drive={"skip": True})
+    return info
+
+
+def _bk_loop():
+    """Every 5 minutes: back up meets that changed (at most every 15 min each), and copy pending backups to Drive
+    (internet at the pool is off overnight, so failed copies are retried every 15 minutes)."""
+    time.sleep(60)
+    while True:
+        try:
+            have = bk_mod.listing(BK_ROOT)
+            newest = {}
+            for i in have:
+                newest.setdefault(i["id"], i)
+            for d in sorted(DATA.iterdir()) if DATA.exists() else []:
+                if not (d / "meta.json").exists() or d.name.startswith("."):
+                    continue
+                last = newest.get(d.name)
+                changed = bk_mod.last_change(d)
+                if (not last or changed > last["made"] + 1) and time.time() - (last or {}).get("made", 0) >= BK_EVERY:
+                    _bk_make(d, "auto")
+            if _bk_drive_state() == "ready":
+                have = bk_mod.listing(BK_ROOT)
+                on_drive = {}
+                for i in have:
+                    if (i.get("drive") or {}).get("ok"):
+                        on_drive[i["id"]] = max(on_drive.get(i["id"], 0), i["made"])
+                seen = set()
+                for i in have:                                   # newest first
+                    dv = i.get("drive") or {}
+                    first = i["id"] not in seen
+                    seen.add(i["id"])
+                    if dv.get("ok") or dv.get("skip") or time.time() - dv.get("tried", 0) < 15 * 60:
+                        continue
+                    if i["reason"] != "auto" or (first and i["made"] - on_drive.get(i["id"], 0) >= BK_DRIVE_EVERY):
+                        r = _bk_to_drive(i)
+                        if (r.get("drive") or {}).get("ok"):
+                            on_drive[i["id"]] = max(on_drive.get(i["id"], 0), i["made"])
+        except Exception as e:
+            print("meet backups:", e)
+        time.sleep(300)
+
+
+threading.Thread(target=_bk_loop, daemon=True).start()
+
+
+def _bk_row(i: dict) -> dict:
+    return {**i, "why": bk_mod.REASONS.get(i.get("reason"), i.get("reason", "")),
+            "when": time.strftime("%Y-%m-%d %H:%M", time.localtime(i.get("made", 0))),
+            "exists": (DATA / i.get("id", "x")).exists()}
+
+
+@app.get("/api/backups")
+def backups_list():
+    names = {d.name: _meta(d).get("name", "") for d in DATA.iterdir() if (d / "meta.json").exists()} if DATA.exists() else {}
+    return {"backups": [_bk_row(i) for i in bk_mod.listing(BK_ROOT)], "drive": _bk_drive_state(), "meets": names,
+            "every_min": BK_EVERY // 60, "keep_auto": bk_mod.KEEP_AUTO}
+
+
+@app.post("/api/meets/{mid}/backup")
+def backup_now(mid: str):
+    return _bk_row(_bk_make(_dir(mid), "manual", drive="now"))
+
+
+@app.get("/api/backups/file/{name}")
+def backup_download(name: str):
+    try:
+        p = bk_mod.check_name(BK_ROOT, name)
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(404, "backup not found")
+    return FileResponse(p, filename=name, media_type="application/zip")
+
+
+@app.post("/api/backups/file/{name}/drive")
+def backup_send_drive(name: str):
+    if _bk_drive_state() != "ready":
+        raise HTTPException(400, "Google Drive write access isn't set up yet (Setup → Google Drive folder and Drive write access)")
+    try:
+        bk_mod.check_name(BK_ROOT, name)
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(404, "backup not found")
+    r = _bk_to_drive(bk_mod.get_info(BK_ROOT, name))
+    if not r["drive"].get("ok"):
+        raise HTTPException(502, f"Couldn't copy it to Google Drive: {r['drive'].get('error')}")
+    return _bk_row(r)
+
+
+@app.delete("/api/backups/file/{name}")
+def backup_delete(name: str):
+    try:
+        bk_mod.check_name(BK_ROOT, name)
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(404, "backup not found")
+    bk_mod.delete(BK_ROOT, name)
+    return {"ok": True}
+
+
+def _bk_restore(data: bytes, mode: str, label: str) -> dict:
+    """mode 'replace': the meet with the backup's id is backed up, then replaced. 'copy': restored as a new meet.
+    A backup of a meet that no longer exists comes back under its own id either way."""
+    import shutil as _sh
+    try:
+        man, _ = bk_mod.read(data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    mid = man.get("id") or ""
+    cur = DATA / mid if re.fullmatch(r"[a-z0-9]{8}", mid or "") else None
+    with BK_LOCK:
+        if cur and cur.exists():
+            if mode == "replace":
+                with_bk = bk_mod.make(cur, BK_ROOT, "restore", _version())
+                _sh.rmtree(cur)
+                new = bk_mod.restore(data, DATA, mid)
+            else:
+                with_bk = None
+                new = bk_mod.restore(data, DATA, secrets.token_hex(4), rename=f"{man.get('name') or 'Meet'} (restored copy)")
+        else:
+            with_bk = None
+            new = bk_mod.restore(data, DATA, mid or None)
+    d = DATA / new
+    meta = _meta(d)
+    meta["restored"] = {"from": label, "made": man.get("made"), "when": time.time()}
+    _save(d, meta)
+    return {"id": new, "name": meta.get("name"), "replaced": bool(with_bk), "saved_first": with_bk and with_bk["file"]}
+
+
+@app.post("/api/backups/file/{name}/restore")
+def backup_restore(name: str, body: dict):
+    try:
+        p = bk_mod.check_name(BK_ROOT, name)
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(404, "backup not found")
+    return _bk_restore(p.read_bytes(), body.get("mode", "replace"), name)
+
+
+@app.post("/api/backups/restore-upload")
+async def backup_restore_upload(file: UploadFile = File(...), mode: str = "replace"):
+    return _bk_restore(await file.read(), mode, f"uploaded {file.filename}")
+
+
+@app.get("/api/backups/drive")
+def backups_on_drive():
+    st = _drive_cfg()
+    try:
+        items = [it for it in drive_mod.walk(st["drive_folder"]) if it["kind"] == "file" and bk_mod.is_backup_name(it["name"])]
+    except drive_mod.NotShared as e:
+        raise HTTPException(403, f"Couldn't open the Drive folder: {e}")
+    items.sort(key=lambda i: i["name"].rsplit("MeetDeck backup", 1)[-1], reverse=True)
+    return {"files": items}
+
+
+@app.post("/api/backups/drive/restore")
+def backup_restore_drive(body: dict):
+    fn, data = drive_mod.fetch("file", body["id"], body.get("name", ""))
+    return _bk_restore(data, body.get("mode", "replace"), f"Google Drive: {fn}")

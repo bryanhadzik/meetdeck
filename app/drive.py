@@ -311,6 +311,8 @@ def inventory(root: str, read_mdb, progress=None) -> list:
     for it in walk(root):
         if it["kind"] == "file":
             n = it["name"].lower()
+            if "meetdeck backup" in n:          # MeetDeck's own whole-meet backups stay where MeetDeck filed them
+                continue
             try:
                 if n.endswith((".zip", ".mdb", ".hy3")):
                     _, data = fetch("file", it["id"], it["name"])

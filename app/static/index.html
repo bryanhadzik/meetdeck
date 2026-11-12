@@ -152,7 +152,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <label class="muted">Host <select id="newHost"></select></label>
       <button id="createBtn">Create</button>
       <span class="muted">or</span>
-      <button class="ghost" id="openFileBtn" title="A Meet Manager backup (Swmm8Bkup....zip) or database (.mdb)">Open a Meet Manager file…</button>
+      <button class="ghost" id="openFileBtn" title="A Meet Manager backup (Swmm8Bkup....zip) or database (.mdb) &mdash; or a MeetDeck backup (restored as a copy)">Open a Meet Manager file…</button>
       <input type="file" id="openFileIn" accept=".zip,.mdb" class="hidden">
       <button class="ghost" id="openDriveBtn" title="Meet Manager backups and databases in your Google Drive meet folder">Open from Google Drive…</button>
       <span class="muted" id="openFileMsg" style="font-size:13px"></span>
@@ -301,7 +301,9 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
         <div class="muted" style="margin-top:6px">Meet Manager: <b>File &rarr; Import &rarr; Entries</b>, one zip per team.</div>
       </details>
       
-      <div class="row" style="margin-top:12px"><button class="ghost small" id="delMeet">Delete this meet</button></div>
+      <div class="row" style="margin-top:12px"><button class="ghost small" id="bkNow" title="Save everything for this meet (setup, entry files, meet database, results and change history) in one backup file, and copy it to Google Drive">Back up this meet now</button>
+        <span class="muted" id="bkMsg" style="font-size:13px;flex:1"></span>
+        <button class="ghost small" id="delMeet" title="A backup is saved first, so a deleted meet can be restored from Setup &rarr; Meet backups">Delete this meet</button></div>
     </section>
 
   </div>
@@ -367,6 +369,20 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   </section>
 </div>
 <main id="setupView" class="hidden">
+  <section id="bkSec">
+    <h2>Meet backups</h2>
+    <div class="muted" style="font-size:13px">Each backup holds everything MeetDeck has for a meet &mdash; setup, entry files, documents, the meet database with results, DQs and the change history.
+      MeetDeck backs up a meet automatically every <span id="bkEvery">15</span> minutes while it's being changed, and always before a meet is deleted or replaced by a restore.
+      Backups are copied to the meet's folder in Google Drive (<i>season / date meet / MeetDeck backups</i>) once Drive write access below is set up; if the internet is off they go up when it's back.</div>
+    <div class="row" style="margin-top:8px;font-size:13.5px"><label><input type="checkbox" id="bkDrvOn"> Copy backups to Google Drive</label> <span id="bkDrive"></span></div>
+    <div class="row" style="margin-top:8px">
+      <button class="ghost small" id="bkUpBtn">Restore from a backup file…</button><input type="file" id="bkUpIn" accept=".zip" class="hidden">
+      <button class="ghost small" id="bkDrvBtn">Restore from Google Drive…</button>
+      <span class="muted" id="bkRMsg" style="font-size:13px"></span>
+    </div>
+    <div id="bkDrvList" class="hidden scroll" style="max-height:320px;margin-top:8px"></div>
+    <div id="bkList" style="margin-top:10px"></div>
+  </section>
   <section>
     <h2>Google Drive folder</h2>
     <div class="muted" style="font-size:13px">Your swim meets folder. Coaches' entry files are picked up from here, and Meet Manager backups are filed back into it.</div>
@@ -644,6 +660,7 @@ async function loadSetup() {
   $("#sPubUrl").textContent = $("#sPubUrl").href = SET.public_url || "";
   $("#sWriteState").innerHTML = !SET.drive_folder ? `<span class="muted">Save the folder first.</span>` : SET.drive_write ? `<span class="badge ok">Set up</span> <span class="muted" style="font-size:13px">Backups you download are also filed into Drive.</span>` : `<span class="badge no">Not set up</span>`;
   loadPlan();
+  bkLoad();
   const g = await api("/api/gmail/status");
   $("#sGmail").innerHTML = g.configured ? `<span class="badge ok">Connected</span> ${esc(g.user)} &middot; read-only` : `Not connected. One-time setup:<ol style="margin:6px 0 0;padding-left:20px">
       <li>Google Account &rarr; Security &rarr; 2-Step Verification on &rarr; <b>App passwords</b> &rarr; create one named "MeetDeck".</li>
@@ -1678,7 +1695,100 @@ $("#openFileIn").onchange = async e => {
     await goOpened(r.id);                          // straight to Run the meet
   } catch (x) { $("#openFileMsg").textContent = x.message; }
 };
-$("#delMeet").onclick = async () => { if (confirm(`Delete "${M.name}" and its uploaded files?`)) { await api(`/api/meets/${M.id}`, {method: "DELETE"}); store("meet"); loadMeets(); } };
+$("#delMeet").onclick = async () => {
+  if (!confirm(`Delete "${M.name}"?\n\nA backup is saved first - you can bring it back from Setup → Meet backups.`)) return;
+  const r = await api(`/api/meets/${M.id}`, {method: "DELETE"}); store("meet"); loadMeets();
+  $("#openFileMsg").textContent = r.backup ? `Deleted. Backup saved: ${r.backup}` : "";
+};
+$("#bkNow").onclick = async () => {
+  $("#bkMsg").textContent = "Backing up…";
+  try {
+    const r = await api(`/api/meets/${M.id}/backup`, {method: "POST"});
+    const dv = r.drive || {};
+    $("#bkMsg").innerHTML = `Saved ${esc(r.when)}` + (dv.ok ? ` &middot; copied to Google Drive (${esc(dv.folder)})` : dv.error ? ` &middot; <span style="color:var(--err)">not copied to Google Drive: ${esc(dv.error)}</span> (it'll retry)` : ` &middot; kept on this PC (Google Drive copy is off or not set up &mdash; Setup → Meet backups)`);
+  } catch (x) { $("#bkMsg").textContent = x.message; }
+};
+const bkSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+let BK = null;
+async function bkLoad() {
+  BK = await api("/api/backups");
+  $("#bkEvery").textContent = BK.every_min;
+  $("#bkDrvOn").checked = BK.drive !== "off";
+  $("#bkDrive").innerHTML = BK.drive === "off" ? `<span class="muted">off &mdash; backups stay on this PC</span>` : BK.drive === "ready" ? `<span class="badge ok">Google Drive copy on</span>`
+    : BK.drive === "read only" ? `<span class="badge no">Google Drive copy off</span> <span class="muted">set up <b>Drive write access</b> below to turn it on. Backups are kept on this PC meanwhile.</span>`
+    : `<span class="badge no">Google Drive copy off</span> <span class="muted">save your swim meets <b>Google Drive folder</b> and set up <b>Drive write access</b> below. Backups are kept on this PC meanwhile.</span>`;
+  const groups = {};
+  for (const b of BK.backups) (groups[b.id] = groups[b.id] || []).push(b);
+  const ids = Object.keys(groups);
+  if (!ids.length) { $("#bkList").innerHTML = `<div class="muted">No backups yet.</div>`; return; }
+  $("#bkList").innerHTML = ids.map(id => {
+    const bs = groups[id], b0 = bs[0], live = BK.meets[id];
+    const row = b => { const dv = b.drive || {};
+      const dtxt = dv.ok ? `<span class="badge ok" title="${esc(dv.folder)}">on Drive</span>` : dv.skip ? "" : dv.error ? `<span class="badge no" title="${esc(dv.error)}">Drive: will retry</span>` : BK.drive === "ready" ? `<span class="muted" style="font-size:12px">${b.reason === "auto" ? "this PC" : "Drive: waiting"}</span>` : "";
+      return `<tr><td style="white-space:nowrap">${esc(b.when)}</td><td>${esc(b.why)}</td><td class="muted" style="white-space:nowrap">${bkSize(b.size)}</td><td>${dtxt}</td>
+        <td style="white-space:nowrap;text-align:right"><a class="ghost small" href="/api/backups/file/${encodeURIComponent(b.file)}" download>Download</a>
+        ${BK.drive === "ready" && !dv.ok ? `<button class="ghost small" data-bkdrv="${esc(b.file)}">Copy to Drive</button>` : ""}
+        <button class="small" data-bkres="${esc(b.file)}" data-bklive="${live ? 1 : 0}" data-bkname="${esc(b0.name)}">Restore</button>
+        <button class="ghost small" data-bkdel="${esc(b.file)}" title="Delete this backup file">✕</button></td></tr>`; };
+    return `<details style="margin-top:6px"${ids.length < 4 ? " open" : ""}><summary><b>${esc(b0.name)}</b> <span class="muted">${esc(b0.date)} &middot; ${bs.length} backup(s), newest ${esc(b0.when)}</span>
+        ${live ? "" : ` <span class="badge no">meet deleted</span>`}</summary>
+      <table class="tbl" style="margin-top:4px;width:100%;font-size:13px">${bs.map(row).join("")}</table></details>`;
+  }).join("");
+}
+async function bkRestoreDone(r) {
+  $("#bkRMsg").innerHTML = `Restored <b>${esc(r.name)}</b>` + (r.saved_first ? ` &mdash; the meet as it was just before is saved as a backup too` : "");
+  await loadMeets(r.id); bkLoad();
+}
+function bkMode(live, name) {
+  if (!live) return "replace";             // the meet is gone: it comes back as itself
+  const a = prompt(`"${name}" is still in MeetDeck.\n\nType R to REPLACE it with this backup (the current meet is backed up first)\nor C to restore a separate COPY next to it.`, "C");
+  if (!a) return null;
+  return a.trim().toUpperCase().startsWith("R") ? "replace" : "copy";
+}
+$("#bkList").onclick = async ev => {
+  const t = ev.target.closest("[data-bkres],[data-bkdel],[data-bkdrv]"); if (!t) return;
+  try {
+    if (t.dataset.bkres) {
+      const mode = bkMode(t.dataset.bklive === "1", t.dataset.bkname); if (!mode) return;
+      $("#bkRMsg").textContent = "Restoring…";
+      await bkRestoreDone(await api(`/api/backups/file/${encodeURIComponent(t.dataset.bkres)}/restore`, J("POST", {mode})));
+    } else if (t.dataset.bkdel) {
+      if (!confirm(`Permanently delete this backup file from this PC?\n${t.dataset.bkdel}\n(A copy already on Google Drive is not touched.)`)) return;
+      await api(`/api/backups/file/${encodeURIComponent(t.dataset.bkdel)}`, {method: "DELETE"}); bkLoad();
+    } else if (t.dataset.bkdrv) {
+      t.disabled = true; t.textContent = "Copying…";
+      await api(`/api/backups/file/${encodeURIComponent(t.dataset.bkdrv)}/drive`, {method: "POST"}); bkLoad();
+    }
+  } catch (x) { $("#bkRMsg").textContent = x.message; t.disabled = false; }
+};
+$("#bkDrvOn").onchange = async e => { await api("/api/settings", J("PUT", {backup_drive: e.target.checked})); bkLoad(); };
+$("#bkUpBtn").onclick = () => $("#bkUpIn").click();
+$("#bkUpIn").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  const mode = confirm(`Restore ${f.name}?\n\nOK = if that meet is still in MeetDeck, replace it (it's backed up first).\nCancel = restore it as a separate copy.`) ? "replace" : "copy";
+  const fd = new FormData(); fd.append("file", f);
+  $("#bkRMsg").textContent = "Restoring…";
+  try { await bkRestoreDone(await api(`/api/backups/restore-upload?mode=${mode}`, {method: "POST", body: fd})); }
+  catch (x) { $("#bkRMsg").textContent = x.message; }
+};
+$("#bkDrvBtn").onclick = async () => {
+  const box = $("#bkDrvList"); box.classList.remove("hidden"); box.innerHTML = `<div class="muted">Looking through the Google Drive folder…</div>`;
+  try {
+    const r = await api("/api/backups/drive");
+    box.innerHTML = !r.files.length ? `<div class="muted">No MeetDeck backups in the Drive folder yet.</div>` :
+      `<table class="tbl" style="width:100%;font-size:13px">${r.files.map(f => `<tr><td>${esc(f.name)}<div class="muted" style="font-size:12px">${esc(f.path)}</div></td>
+        <td style="text-align:right"><button class="small" data-bkdid="${esc(f.id)}" data-bkdname="${esc(f.name)}">Restore</button></td></tr>`).join("")}</table>`;
+  } catch (x) { box.innerHTML = `<div style="color:var(--err)">${esc(x.message)}</div>`; }
+};
+$("#bkDrvList").onclick = async ev => {
+  const t = ev.target.closest("[data-bkdid]"); if (!t) return;
+  const nm = t.dataset.bkdname.replace(/ - MeetDeck backup.*$/, "").replace(/^\d{4}-\d{2}-\d{2} /, "");
+  const live = Object.values((BK || {}).meets || {}).includes(nm);
+  const mode = bkMode(live, nm); if (!mode) return;
+  $("#bkRMsg").textContent = "Downloading from Google Drive and restoring…";
+  try { await bkRestoreDone(await api("/api/backups/drive/restore", J("POST", {id: t.dataset.bkdid, name: t.dataset.bkdname, mode}))); }
+  catch (x) { $("#bkRMsg").textContent = x.message; }
+};
 document.addEventListener("click", async ev => {
   const id = ev.target.dataset && ev.target.dataset.copy; if (!id) return;
   const ta = document.getElementById(id); let ok = false;

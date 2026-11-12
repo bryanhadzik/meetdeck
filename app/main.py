@@ -2671,6 +2671,51 @@ def _any_licensee() -> str:
         return ""
 
 
+def _lanes_info(d: Path) -> dict:
+    """What the lane-assignment sheet needs, from the meet setup (NFHS 5-3)."""
+    st = _state(d)
+    order = st["lanes"]["order"]
+    n = len(order)
+    why = st.get("seed_why") or ""
+    if why == "championship":
+        text = "Championship rules: every event is seeded by time, fastest swimmers in the middle lanes (Rule 5-3-3, Table 5-2). Teams don't get their own lanes."
+    elif why == "chosen":
+        text = (f"Seeded by time. With {n} teams in 8 lanes, Table 5-1 would leave lanes open, so Rule 5-3-2 lets meet management "
+                "seed instead: all 8 lanes are used, but teams no longer have their own lanes.")
+    elif why:
+        text = f"With {n} teams the meet is seeded by time (Rule 5-3-2: meets with more than five teams are seeded, and Table 5-1 has no team lanes for this many teams in 8 lanes)."
+    elif n == 2:
+        text = "Dual meet: one team swims the odd lanes and the other the even lanes. The visiting team chooses which (Rule 5-3-1)."
+    elif n == 3:
+        text = ("Why lanes 7 and 8 are empty: 8 lanes don't divide evenly among 3 teams, so Table 5-1 gives each team two lanes "
+                "(1-4, 2-5, 3-6) and leaves 7 and 8 open. That keeps every team's lanes equal. Rule 5-3-2 lets meet management seed "
+                "by time instead, which fills all 8 lanes but means teams no longer swim in their own lanes.")
+    elif n == 4:
+        text = "With 4 teams, Table 5-1 gives each team two lanes (1-5, 2-6, 3-7, 4-8)."
+    else:
+        text = ""
+    rules = [r for r in (rules_mod.rule_text("5-3-1", "In dual meets"), rules_mod.rule_text("5-3-2", "non-championship multi-team")) if r]
+    draw = st.get("lane_draw") or {}
+    draw_txt = ""
+    if draw.get("order") == order and draw.get("when"):
+        plan = st.get("lane_plan") or []
+        draw_txt = draw["when"] + " - " + "; ".join(
+            f"{t}: {' & '.join(str(p['lane']) for p in plan if p['team'] == t)}" for t in order)
+    meta = _meta(d)
+    return {"meet": meta.get("name", ""), "date": meta.get("date", ""), "teams": [(t, (st["teams"].get(t) or {}).get("name", t)) for t in order],
+            "plan": st.get("lane_plan") or [], "lanes": st["lanes"].get("count", 8), "seeded": bool(st.get("time_seeded")),
+            "champ": why == "championship", "why": text, "draw": draw_txt, "rules": rules}
+
+
+@app.get("/api/meets/{mid}/lanes.pdf")
+def lanes_sheet(mid: str):
+    import heatsheet
+    d = _dir(mid)
+    info = _lanes_info(d)
+    name = f"{_stem(info['meet'] or 'meet')} lane assignments.pdf"
+    return Response(heatsheet.lanes_pdf(info), media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+
 @app.get("/api/meets/{mid}/db/report/{kind}.pdf")
 def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
     """Printable reports laid out like Meet Manager's: heatsheet (Meet Program), referee program, timer sheets."""
@@ -2696,6 +2741,8 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
         pdf, label = heatsheet.watches_pdf(m, float(_settings().get("time_tolerance") or 0.30), licensee), "watches needed"
     elif kind == "timer":
         pdf, label = heatsheet.timer_pdf(m, licensee, lane=lane or None), "timer sheets" + (f" lane {lane}" if lane else "")
+    elif kind == "lanes":
+        pdf, label = heatsheet.lanes_pdf(_lanes_info(d)), "lane assignments"
     else:
         raise HTTPException(404)
     name = f"{_stem(m['meet']['name'])} {label}.pdf"

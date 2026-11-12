@@ -5,6 +5,8 @@ Positions are measured from a Meet Manager 8.0 heat sheet (points from the top o
 text positions are the top of the line, converted to a baseline below)."""
 import datetime as dt
 import io
+import re
+import time
 import os
 
 from reportlab.lib.pagesizes import letter
@@ -1045,6 +1047,124 @@ def watches_pdf(m, tol=0.30, licensee="", printed=None) -> bytes:
         c.rect(margin, yb, tw, 0)
         y = yb
     c.setLineWidth(0.9)
+    c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def lanes_pdf(info: dict, printed=None) -> bytes:
+    """One page explaining the meet's lane assignments under NFHS Rule 5-3 (for the coaches' meeting):
+    this meet's lanes (open lanes shaded), why, the rule text when the Rules Book is on file, and Table 5-1
+    for an 8-lane pool.
+    info: meet, date, teams [(code, name)], plan [{lane, team}], lanes, seeded, why, draw, rules [{ref, text, book_page}]."""
+    from reportlab.lib.utils import simpleSplit
+    reg, bold = _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    W, H = letter
+    M = 46.0
+    c.setTitle(f"{info.get('meet', '')} - Lane assignments")
+    y = H - M
+
+    def para(text, size=10.5, font=None, width=W - 2 * M, lead=1.32, x=M):
+        nonlocal y
+        c.setFont(font or reg, size)
+        for ln in simpleSplit(text, font or reg, size, width):
+            c.drawString(x, y, ln)
+            y -= size * lead
+    c.setFont(bold, 18)
+    c.drawString(M, y - 4, "Lane assignments")
+    c.setFont(reg, 10.5)
+    c.drawRightString(W - M, y - 4, f"{info.get('meet', '')}  {info.get('date', '')}".strip())
+    y -= 22
+    para("NFHS Swimming & Diving Rules Book 2026-27, Rule 5-3 (book p. 45-46)", 10, reg)
+    y -= 10
+
+    # this meet: lane boxes
+    n_lanes = int(info.get("lanes") or 8)
+    teams = dict(info.get("teams") or [])
+    plan = {p["lane"]: p["team"] for p in info.get("plan") or []}
+    c.setFont(bold, 13)
+    c.drawString(M, y, f"This meet: {len(teams)} team{'s' if len(teams) != 1 else ''}")
+    y -= 12
+    box_w, box_h = (W - 2 * M - (n_lanes - 1) * 6) / n_lanes, 62
+    for i in range(n_lanes):
+        ln = i + 1
+        x = M + i * (box_w + 6)
+        team = plan.get(ln)
+        if info.get("seeded"):
+            c.setFillGray(0.97)
+        elif team:
+            c.setFillGray(1)
+        else:
+            c.setFillGray(0.82)
+        c.rect(x, y - box_h, box_w, box_h, stroke=1, fill=1)
+        c.setFillGray(0)
+        c.setFont(reg, 9)
+        c.drawCentredString(x + box_w / 2, y - 14, f"Lane {ln}")
+        c.setFont(bold, 15)
+        label = "seeded" if info.get("seeded") else (team or "OPEN")
+        c.drawCentredString(x + box_w / 2, y - 38, label if len(label) <= 7 else label[:7])
+        if team and not info.get("seeded"):
+            c.setFont(reg, 7)
+            nm = teams.get(team, "")
+            c.drawCentredString(x + box_w / 2, y - 52, nm[:22])
+    y -= box_h + 18
+    if not info.get("seeded") and len(teams) > 1:
+        for code, name in info.get("teams") or []:
+            ls = [str(k) for k, v in sorted(plan.items()) if v == code]
+            para(f"{name} ({code}): lanes {' & '.join(ls)}", 11, bold)
+        opn = [str(k) for k in range(1, n_lanes + 1) if k not in plan]
+        if opn:
+            para(f"Lanes {' & '.join(opn)}: open", 11, bold)
+        y -= 4
+    para(info.get("why") or "", 11)
+    if info.get("draw"):
+        para(f"Lane sets drawn by lot: {info['draw']}", 10)
+    y -= 12
+
+    # the rule
+    c.setFont(bold, 13)
+    c.drawString(M, y, "The rule")
+    y -= 16
+    rules = info.get("rules") or []
+    if rules:
+        for r in rules:
+            para(f"{r['ref']}{'  (book p. ' + str(r['book_page']) + ')' if r.get('book_page') else ''}", 10, bold)
+            para(re.sub(r"\s+", " ", r["text"]).replace("ART. ", "Art. "), 10, reg, lead=1.3)
+            y -= 4
+    else:
+        para("5-3-1: In dual meets the visiting team chooses the odd or even lanes. 5-3-2: In non-championship "
+             "multi-team meets and double dual / triple dual meets, Table 5-1 is used; when the teams can't be divided "
+             "equally into the lanes, meet management may seed or use the table and leave lanes open. More than five teams are seeded.", 10)
+    y -= 10
+
+    # Table 5-1 for this pool
+    c.setFont(bold, 13)
+    c.drawString(M, y, "Table 5-1 for an 8-lane pool")
+    y -= 8
+    rows = [("Teams", "Lane assignment"),
+            ("2 (dual meet)", "Odd / even lanes - the visiting team chooses (Rule 5-3-1)"),
+            ("3", "1-4 ; 2-5 ; 3-6 (by lot) with 2 lanes open, or seed"),
+            ("4", "1-5 ; 2-6 ; 3-7 ; 4-8 (by lot)"),
+            ("5 or more", "By seeding"),
+            ("Championship meet", "By seeding (Rule 5-3-3, Table 5-2: fastest in lanes 4, 5, 3, 6, 2, 7, 1, 8)")]
+    col1 = 120
+    rh = 20
+    for i, (a, b) in enumerate(rows):
+        hl = i > 0 and ((a.startswith(str(len(teams))) and not info.get("champ")) or (a.startswith("Champ") and info.get("champ")))
+        c.setFillGray(0.88 if i == 0 else (0.93 if hl else 1))
+        c.rect(M, y - rh, W - 2 * M, rh, stroke=1, fill=1)
+        c.setFillGray(0)
+        c.line(M + col1, y, M + col1, y - rh)
+        c.setFont(bold if i == 0 or hl else reg, 10.5)
+        c.drawString(M + 6, y - 14, a)
+        c.drawString(M + col1 + 6, y - 14, b)
+        y -= rh
+    y -= 14
+    para("\"By lot\" means a random draw: each team draws which set of lanes it swims in.", 9.5)
+    c.setFont(reg, 8)
+    c.drawRightString(W - M, M - 18, f"Printed {printed or time.strftime('%m/%d/%Y %I:%M %p')} - MeetDeck")
     c.showPage()
     c.save()
     return buf.getvalue()

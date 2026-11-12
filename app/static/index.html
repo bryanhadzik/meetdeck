@@ -237,7 +237,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <h2><span class="n">5</span> Lanes &amp; records</h2>
       <div class="muted" id="laneIntro">Which team swims in which lanes. The home team gets the odd lanes unless you change it.</div>
       <div id="order" class="row" style="margin-top:6px"></div>
-      <div class="lanes" id="lanePlan"></div>
+      <div class="lanes" id="lanePlan"></div><div style="margin-top:6px"><a href="#" id="lanesPdf" target="_blank" style="font-size:13px">Print lane assignments (with NFHS Table 5-1) for the coaches</a></div>
       <h3>Combined heats</h3>
       <div class="muted" style="font-size:13px">Girls and boys swim the same heat with one empty lane between them. Both events stay separate for results and scoring.</div>
       <div class="row" style="margin:6px 0"><label class="muted">Girls in <select id="comboLow"><option value="F">lower lanes</option><option value="M">higher lanes</option></select></label></div>
@@ -1169,6 +1169,7 @@ function render() {
   renderHeatSheet();
   const timeSeeded = M.time_seeded;
   $("#laneIntro").style.display = timeSeeded ? "none" : "";
+  $("#lanesPdf").href = `/api/meets/${M.id}/lanes.pdf`;
   $("#laneIntro").textContent = M.lanes.order.length === 2 ? "Which team swims in which lanes. The home team gets the odd lanes unless you change it."
     : "Which team swims in which lanes (NFHS Table 5-1).";
   if ($("#seedHow") && !$("#seedHow").dataset.dual) $("#seedHow").dataset.dual = $("#seedHow").textContent;

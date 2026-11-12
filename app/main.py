@@ -2203,6 +2203,9 @@ def _public_doc(mid: str) -> dict:
     doc = public_results.build(meetdb.load(db), _dbinfo(d).get("scoring"), _usc if _settings().get("usc_on", True) else None)
     doc["stream"] = _stream_link()
     doc["meet"]["id"] = mid
+    name = (_meta(d).get("name") or "").strip()
+    if name:                         # MeetDeck's name for the meet wins over the one typed in Meet Manager
+        doc["meet"]["name"] = name
     return doc
 
 
@@ -2508,6 +2511,9 @@ def _meetboard_doc(mid: str) -> dict:
     import updater as _up
     doc = meetboard.startlist(meetdb.load(_dbfile(d)), f"MeetDeck {_up.version()}", _usc if _settings().get("usc_on", True) else None)
     doc["meet"]["id"] = mid          # meet-board echoes it back, so MeetDeck can tell the board has another meet
+    name = (_meta(d).get("name") or "").strip()
+    if name:                         # MeetDeck's name for the meet wins over the one typed in Meet Manager
+        doc["meet"]["name"] = name
     return doc
 
 

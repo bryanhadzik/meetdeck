@@ -1164,6 +1164,8 @@ function render() {
   renderHeatSheet();
   const timeSeeded = M.time_seeded;
   $("#laneIntro").style.display = timeSeeded ? "none" : "";
+  $("#laneIntro").textContent = M.lanes.order.length === 2 ? "Which team swims in which lanes. The home team gets the odd lanes unless you change it."
+    : "Which team swims in which lanes (NFHS Table 5-1).";
   if ($("#seedHow") && !$("#seedHow").dataset.dual) $("#seedHow").dataset.dual = $("#seedHow").textContent;
   if ($("#seedHow")) $("#seedHow").textContent = timeSeeded
     ? (M.championship ? "Championship seeding:" : "Seeded meet:") + " by seed time only, fastest heat last and fastest swimmers in the middle lanes, with at least 3 swimmers in every heat."
@@ -1184,7 +1186,7 @@ function render() {
       `<span class="muted" style="font-size:12.5px;flex-basis:100%" data-tip="NFHS 5-3-1 (p. 45): in dual meets the visiting team chooses the odd or the even lanes for all swimming events.">Dual meet: the visiting team picks odd or even (NFHS 5-3-1, p. 45).</span>` +
       [0, 1].map(k => `<label class="muted" style="display:flex;flex-direction:column;gap:4px">${k ? "Even" : "Odd"} lanes (${lanesOf(k)})
         <select data-oddeven="${k}">${o.map(t => `<option value="${esc(t)}" ${t === o[k] ? "selected" : ""}>${tn(t)}</option>`).join("")}</select></label>`).join("") :
-      laneChoice + `<span class="muted" style="font-size:13px;flex-basis:100%">NFHS Table 5-1 (p. 46) lanes for ${o.length} teams${M.lane_plan.length < (M.lanes.count || 8) ? `, lanes ${Array.from({length: M.lanes.count || 8}, (_, i) => i + 1).filter(l => !M.lane_plan.some(p => p.lane === l)).join(" & ")} open` : ""}. The rule assigns them by lot &mdash; reorder with the arrows:</span> ` +
+      laneChoice + `<span class="muted" style="font-size:13px;flex-basis:100%">NFHS Table 5-1 (p. 46) lanes for ${o.length} teams${M.lane_plan.length < (M.lanes.count || 8) ? `, lanes ${Array.from({length: M.lanes.count || 8}, (_, i) => i + 1).filter(l => !M.lane_plan.some(p => p.lane === l)).join(" & ")} open &mdash; that's the rule for 3 teams; choose <b>Seed by time</b> to use all 8` : ""}. The rule assigns them by lot &mdash; reorder with the arrows:</span> ` +
       o.map((t, i) => `<span class="chip">${i + 1}. ${tn(t)} <span class="muted" style="font-size:12px">lanes ${lanesOf(i)}</span>
         ${i ? `<a href="#" data-up="${i}" title="Move earlier">▲</a>` : ""}</span>`).join("");
   $("#lanePlan").innerHTML = Array.from({length: M.lanes.count || 8}, (_, i) => i + 1).map(n => { const l = M.lane_plan.find(p => p.lane === n);

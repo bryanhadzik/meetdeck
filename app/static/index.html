@@ -169,7 +169,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
         <h2 style="margin:0">Meet setup <span class="muted" id="mSaved" style="font-size:13px;font-weight:normal"></span>
           <button class="ghost small" id="setupUndo" disabled style="margin-left:8px;vertical-align:2px" title="Nothing to undo">Undo</button></h2>
-        <a id="openDb" href="#" target="_blank" rel="noopener" style="background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:12px 26px;font-size:17px;font-weight:600;text-decoration:none;white-space:nowrap" title="Open the meet: timing console, times, DQs, scratches, scoring, printing and results">Run the meet ↗</a>
+        <a id="openDb" href="#" style="background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:12px 26px;font-size:17px;font-weight:600;text-decoration:none;white-space:nowrap" title="Open the meet: timing console, times, DQs, scratches, scoring, printing and results">Run the meet</a>
       </div>
       <div id="meetFields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 16px">
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Meet name <input id="mName"></label>
@@ -767,7 +767,7 @@ function runRender(fromLoad) {
       <label>AO email <input id="runAO" type="email" value="${esc(c.ao || "")}" size="22"></label>
       <label>Host coach email <input id="runHost" type="email" value="${esc(c.host || "")}" size="22"></label></div>`;
   const link = i => [
-    i.db ? `<a href="/db?meet=${M.id}" target="_blank">Meet database ↗</a>` : "",
+    i.db ? `<a href="/db?meet=${M.id}" >Meet database</a>` : "",
     i.print ? ["heatsheet:Heat sheet", "referee:Referee program", "timer:Timer sheets", "timeline:Timeline"].map(x => { const [k, l] = x.split(":"); return `<a href="/api/meets/${M.id}/db/report/${k}.pdf" target="_blank" data-printed="1">${l}</a>`; }).join(" · ") : "",
     i.go ? `<a href="#" data-gotab="${i.go}">Meets tab</a>` : "",
     i.send ? `<a href="#" data-gotab="send">Send results tab</a>` : "",
@@ -1221,7 +1221,7 @@ function render() {
   $("#recTeamSel").value = M.record_team === null || M.record_team === undefined ? "__auto" : M.record_team;
   $("#seedStep").innerHTML = M.preseed ? `<b>Don't run Seeding</b> &mdash; every heat and lane is already set. Print the heat sheet and go. (Re-seeding in Meet Manager can put a swimmer alone in heat 1 again.)`
     : `<b>Seeding &rarr; Select All &rarr; Start Seeding</b>${M.combos.some(c => c.selected && c.fits) ? " (leave the combined events unselected)" : ""}.`;
-  $("#dlWarn").innerHTML = (M.has_db ? `<div class="issue warn"><b>This meet has an edited database.</b> The button below rebuilds from the team entries and leaves out changes made there &mdash; to keep them, use <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> &rarr; Download / export.</div>` : "") + (errs ? `<div class="issue error"><b>${errs} rule problem(s) still open.</b> You can download anyway, but those entries go in as-is.</div>` : "");
+  $("#dlWarn").innerHTML = (M.has_db ? `<div class="issue warn"><b>This meet has an edited database.</b> The button below rebuilds from the team entries and leaves out changes made there &mdash; to keep them, use <a href="/db?meet=${M.id}">Run the meet</a> &rarr; Download / export.</div>` : "") + (errs ? `<div class="issue error"><b>${errs} rule problem(s) still open.</b> You can download anyway, but those entries go in as-is.</div>` : "");
   if (M.has_db && TV && TV.id === M.id && !TV_LOADING) tvLoad();   // pick up changes made in the meet database
   renderTable();
   $("#dl").innerHTML = M.files.length ? `<button onclick="location='/api/meets/${M.id}/download-all'">Download all teams</button>` +
@@ -1346,10 +1346,10 @@ function renderTable() {
   $("#tableSec").classList.toggle("tbLocked", !!locked);
   if (locked) TB.open = null;
   if (locked) { $("#tbDbNote").innerHTML = `<div class="issue warn" style="font-size:13.5px;margin-bottom:8px"><b>The meet has started &mdash; changes at the table are closed.</b>
-      From here on NFHS rules apply. Open <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> and use
+      From here on NFHS rules apply. Open <a href="/db?meet=${M.id}">Run the meet</a> and use
       <b data-tip="${TBTIP.dfs}" style="text-decoration:underline dotted">DFS</b> to take a swimmer out of one event, or
       <b data-tip="${TBTIP.pull}" style="text-decoration:underline dotted">Pull from meet</b> to scratch them from the rest of the meet. Relay swimmers are changed there too.</div>`; }
-  else $("#tbDbNote").innerHTML = M.has_db ? `<div class="okbox" style="font-size:13px;margin-bottom:8px">Changes here go straight into the meet database${(M.files || []).length ? "" : " (opened from Meet Manager)"}. Every change is logged &mdash; <button class="ghost small" data-tbundo="1">Undo last change</button> (full list in <a href="/db?meet=${M.id}" target="_blank">Run the meet</a> &rarr; Changes). A swimmer or relay added here has no heat yet &mdash; place them in Seeding below or in Run the meet.${(M.files || []).length ? ` Changes to the entries above (new files, removed entries, relay swimmers) are brought in automatically.` : ""}</div>` +
+  else $("#tbDbNote").innerHTML = M.has_db ? `<div class="okbox" style="font-size:13px;margin-bottom:8px">Changes here go straight into the meet database${(M.files || []).length ? "" : " (opened from Meet Manager)"}. Every change is logged &mdash; <button class="ghost small" data-tbundo="1">Undo last change</button> (full list in <a href="/db?meet=${M.id}">Run the meet</a> &rarr; Changes). A swimmer or relay added here has no heat yet &mdash; place them in Seeding below or in Run the meet.${(M.files || []).length ? ` Changes to the entries above (new files, removed entries, relay swimmers) are brought in automatically.` : ""}</div>` +
     (TB.note ? `<div class="okbox" style="font-size:13px;margin-bottom:8px;background:var(--ok-bg, #e6f5ec)"><b>${esc(TB.note)}.</b> New entries have no heat yet.</div>` : "") : "";
   if (locked) $("#tbDone").innerHTML = ""; else { const done = M.changes_done || {}, codes2 = codes;
     $("#tbDone").innerHTML = `<span class="muted" style="font-size:13px">Done with changes:</span> ` + codes2.map(c => {
@@ -1949,7 +1949,7 @@ async function sendRender() {
   const due = M.ended ? new Date(new Date(M.ended).getTime() + 48 * 3600 * 1000) : null;
   const fmt = dt => dt.toLocaleString([], {weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit"});
   $("#sendHead").innerHTML = `<h2 style="margin:0">Send results &mdash; ${esc(M.name)} <span class="muted" style="font-weight:400;font-size:14px">${esc(M.date || "")}</span></h2>
-    <div style="margin-top:6px;font-size:13.5px">${!S.has_db ? `<span class="badge no">No meet database yet</span> Results come from <a href="/db?meet=${M.id}" target="_blank">Run the meet</a>.`
+    <div style="margin-top:6px;font-size:13.5px">${!S.has_db ? `<span class="badge no">No meet database yet</span> Results come from <a href="/db?meet=${M.id}">Run the meet</a>.`
       : `${ev.done === ev.total && ev.total ? `<span class="badge ok">All ${ev.total} events have results</span>` : `<span class="badge no">${ev.done || 0} of ${ev.total || 0} events finished</span>`}
          &middot; ${S.dqs || 0} DQ${S.dqs === 1 ? "" : "s"} &middot; ${M.ended ? `meet ended ${esc(M.ended.replace("T", " "))}` : `<span class="muted">meet end time not set (Meet checklist)</span>`}`}</div>`;
   const file = (label, href, note = "") => `<div class="row" style="gap:8px;padding:5px 0;border-top:1px solid var(--line)"><span style="flex:1;min-width:220px">${label}${note ? `<div class="muted" style="font-size:12px">${note}</div>` : ""}</span>${href}</div>`;

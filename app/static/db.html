@@ -1134,7 +1134,7 @@ async function getTimes(h, saved) {
   const parseT = parseTime;
   box.innerHTML = `<div style="border:1px solid var(--accent);border-radius:8px;padding:8px;margin:4px 0 8px">
     ${(r.event && r.event !== v.no) || (r.heat && r.heat !== h) ? `<div class="issue" style="margin-bottom:6px">Console race ${r.race_number} is <b>event ${r.event} heat ${r.heat}</b>, not event ${v.no} heat ${h}. Check the race number before applying.</div>` : ""}
-    <div class="muted" style="font-size:12.5px;margin-bottom:4px">${r.saved ? `<b>Saved times</b> for heat ${h} (from the console earlier) &mdash; add watch times or change which time counts, then Apply` : `Console race ${r.race_number}`} · ${esc(r.when)} · ${r.lanes_in_pool} lanes &middot; rows turn amber when the times differ by more than ${TOL.toFixed(2)} (<a href="/#setup" target="_blank">change</a>)</div>
+    <div class="muted" style="font-size:12.5px;margin-bottom:4px">${r.saved ? `<b>Saved times</b> for heat ${h} (from the console earlier) &mdash; add watch times or change which time counts, then Apply` : `Console race ${r.race_number}`} · ${esc(r.when)} · ${r.lanes_in_pool} lanes &middot; rows turn amber when the times differ by more than ${TOL.toFixed(2)} (<a href="/#setup">change</a>)</div>
     <table class="tpt"><tr><th>Lane</th><th>Swimmer</th><th>Now</th><th>Pad</th><th>Buttons</th><th>Backup button</th><th>Timers</th><th>Use</th><th>Place</th><th>Check</th></tr>${rows.map(({l, e}) => `<tr id="tl-${h}-${l.lane}">
       <td class="ln">${l.lane}</td><td>${e ? nameCell(e) : `<span style="color:var(--err)">no entry in this lane</span>`}</td><td>${e ? esc(fmt(e.time)) : ""}</td>
       <td data-cpad="${h}-${l.lane}"><b>${esc(fmt(l.final)) || '<span class="badge dq">NO PAD</span>'}</b></td>

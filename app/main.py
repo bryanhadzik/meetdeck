@@ -239,7 +239,7 @@ def _state(d: Path) -> dict:
             "run": meta.get("run", {}), "ended": meta.get("ended", ""), "contacts": meta.get("contacts", {}),
             "coach_emails": sorted({e.lower() for x in [t.get("email", "") for t in teams.values()] + [f.get("source", "") for f in files]
                                     + [c.get("email", "") for c in _contacts() if c.get("role", "").endswith("coach")
-                                       and c.get("school", "").lower() in {(t.get("name") or "").lower() for t in teams.values()}]
+                                       and c.get("school", "").lower() in {x.lower() for t in teams.values() for x in ((t.get("name") or ""), _school_of(t)) if x}]
                                     for e in re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", x or "")}),
             "drive_uploads": meta.get("drive_uploads", []),
             "has_db": (d / "db" / "meet.mdb").exists(),
@@ -3035,14 +3035,32 @@ def _save_contacts(cs: list):
     os.replace(tmp, CONTACTS)
 
 
+_SCHOOL_SUFFIX = re.compile(r"\s+(swim(ming)?(\s*(&|and)\s*div(e|ing))?(\s+team)?|swim\s+team)$", re.I)
+_SCHOOL_WORD = re.compile(r"\b(high|school|academy|prep|hs|college|district)\b", re.I)
+
+
+def _school_of(team: dict, hosts: list | None = None) -> str:
+    """A meet team's school name: the Schools-tab name when its team code matches, else the name minus "Swim Team"/"Swimming"."""
+    code = (team.get("code") or "").upper()
+    for h in hosts if hosts is not None else _hosts():
+        if code and code in [c.upper() for c in h.get("team_codes", [])]:
+            return h.get("name", "")
+    return _SCHOOL_SUFFIX.sub("", (team.get("name") or "").strip())
+
+
 def _schools() -> list:
-    """Team names seen anywhere (host schools + every meet's entries), for the school picker."""
-    names = {h.get("name", "") for h in _hosts()}
+    """Schools for the contacts picker: the Schools tab, every school seen in a meet, and any school already on a contact.
+    Intrasquad teams (Purple, White, Stansbury Blue...) are left out."""
+    hosts = _hosts()
+    names = {h.get("name", "") for h in hosts} | {c.get("school", "") for c in _contacts()}
     for d in DATA.iterdir():
         if (d / "meta.json").exists() and (d / "files").exists():
-            for p in _parsed(d):
-                names |= {t.get("name", "") for t in p["teams"].values()}
-    return sorted(n for n in names if n)
+            try:
+                for p in _parsed(d):
+                    names |= {n for n in (_school_of(t, hosts) for t in p["teams"].values()) if _SCHOOL_WORD.search(n)}
+            except Exception:
+                pass
+    return sorted({n.strip() for n in names if n and n.strip()}, key=str.lower)
 
 
 @app.get("/api/contacts")

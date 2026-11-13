@@ -336,7 +336,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 12px">
         <label class="muted" style="display:flex;flex-direction:column;gap:3px">Name <input id="ctName"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:3px">Role <select id="ctRole"></select></label>
-        <label class="muted" style="display:flex;flex-direction:column;gap:3px">School / team <input id="ctSchool" list="ctSchools"></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:3px">School / team <select id="ctSchoolSel"></select><input id="ctSchool" class="hidden" placeholder="Type the school name"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:3px">Email <input id="ctEmail" type="email"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:3px">Phone <input id="ctPhone"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:3px;grid-column:1/-1">Notes <input id="ctNotes" placeholder="e.g. prefers text, AO certification year, assistant handles entries"></label>
@@ -2183,6 +2183,23 @@ $("#fmrIn").onchange = async e => {
 
 // ---- contacts ----
 let CT = {contacts: [], roles: [], schools: []}, CT_EDIT = null, CT_SUG = [];
+// school picker: a list of the schools MeetDeck knows, with "Other…" to type a new one
+function ctSchoolOpts(cur) {
+  const sel = $("#ctSchoolSel"); if (!sel) return;
+  if (cur === undefined) cur = $("#ctSchool").value;
+  const list = CT.schools || [], known = !cur || list.some(n => n.toLowerCase() === cur.toLowerCase());
+  sel.innerHTML = `<option value="">(none)</option>` + list.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("") + `<option value="__other">Other…</option>`;
+  sel.value = known ? (list.find(n => n.toLowerCase() === (cur || "").toLowerCase()) || "") : "__other";
+  $("#ctSchool").classList.toggle("hidden", known);
+  if (known) $("#ctSchool").value = sel.value;
+}
+document.addEventListener("change", ev => {
+  if (ev.target.id !== "ctSchoolSel") return;
+  const other = ev.target.value === "__other";
+  $("#ctSchool").classList.toggle("hidden", !other);
+  $("#ctSchool").value = other ? "" : ev.target.value;
+  if (other) $("#ctSchool").focus();
+});
 async function ctLoad() { CT = await api("/api/contacts"); ctRender(); }
 function ctShown() {
   const q = $("#ctQ").value.trim().toLowerCase(), r = $("#ctRoleF").value;
@@ -2192,7 +2209,7 @@ function ctRender() {
   const keep = $("#ctRoleF").value;
   $("#ctRoleF").innerHTML = `<option value="">All roles</option>` + CT.roles.map(r => `<option>${esc(r)}</option>`).join(""); $("#ctRoleF").value = keep;
   $("#ctRole").innerHTML = CT.roles.map(r => `<option>${esc(r)}</option>`).join("");
-  $("#ctSchools").innerHTML = CT.schools.map(n => `<option value="${esc(n)}">`).join("");
+  ctSchoolOpts();
   const list = ctShown();
   $("#ctCount").textContent = `${list.length} of ${CT.contacts.length}`;
   const emails = [...new Set(list.map(c => c.email).filter(Boolean))];
@@ -2210,7 +2227,7 @@ function ctRender() {
 function ctOpen(c) {
   CT_EDIT = c ? c.id : null;
   $("#ctForm").classList.remove("hidden");
-  $("#ctName").value = c?.name || ""; $("#ctRole").value = c?.role || "Head coach"; $("#ctSchool").value = c?.school || "";
+  $("#ctName").value = c?.name || ""; $("#ctRole").value = c?.role || "Head coach"; $("#ctSchool").value = c?.school || ""; ctSchoolOpts(c?.school || "");
   $("#ctEmail").value = c?.email || ""; $("#ctPhone").value = c?.phone || ""; $("#ctNotes").value = c?.notes || ""; $("#ctMsg").textContent = "";
   $("#ctName").focus();
 }

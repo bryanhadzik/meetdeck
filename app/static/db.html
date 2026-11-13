@@ -1424,7 +1424,7 @@ function dqEditor(key) {
     <div class="row"><b>Disqualify ${esc(e.kind === "I" ? athName(e.ath) : (M.teams[e.team]?.abbr || "") + ' "' + e.ltr + '" relay')}</b>
       <input id="dqFind" placeholder="Search codes (e.g. kick, 15 m, false start)" size="30"></div>
     <div class="row" style="margin-top:6px"><select id="dqCode" size="11" style="min-width:470px;font-size:15px">${opts(e.dq)}</select>
-      <div>${e.kind === "R" ? `<label class="muted" style="font-size:12.5px;display:block;margin-bottom:6px"><span id="dqCode2Lbl">Second infraction (optional)</span><br><select id="dqCode2">${opts(e.dq2, "— none —")}</select></label>` : ""}
+      <div>${e.kind === "R" || evOf(e.event).stroke === "E" ? `<label class="muted" style="font-size:12.5px;display:block;margin-bottom:6px"><span id="dqCode2Lbl">Second infraction (optional)</span><br><select id="dqCode2">${opts(e.dq2, "— none —")}</select></label>` : ""}
         <label style="font-size:13px;display:block"><input type="checkbox" id="dqKeep" ${e.time ? "checked" : "disabled"}> Keep the time on record${e.time ? ` (${fmt(e.time)})` : " (no time entered)"}</label>
         <div class="muted" style="font-size:12px;max-width:280px;margin-top:4px">Normal DQs keep the swimmer's time; it just doesn't place or score. A declared false start or did-not-finish has no time.</div>
         <div class="row" style="margin-top:8px"><button class="small" id="dqSave">Disqualify</button><button class="ghost small" id="dqCancel">Cancel</button></div></div>

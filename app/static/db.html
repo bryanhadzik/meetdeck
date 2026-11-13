@@ -961,10 +961,49 @@ function renderMeet() {
         ${[5, 10, 15, 20, 30].map(n => `<option value="${n}" ${S.session_break === n ? "selected" : ""}>${n} minutes</option>`).join("")}</select></label>
       <span class="muted" style="font-size:12.5px">With a break picked, each later session starts that long after the one before is projected to finish (Timeline report and below).</span></div>
     <div id="sessList" style="font-size:13.5px;margin:6px 0 4px">${(S.timeline || []).map(s => `<div>Session ${esc(s.no)}${s.name && s.name != s.no ? " &middot; " + esc(s.name) : ""}: <b>${clockOf(s.start)}</b> &ndash; about ${clockOf(s.finish)} (${s.heats} heats)</div>`).join("")}</div>
+    <h3>Officials</h3>
+    <div id="offBox" style="font-size:13.5px">${officialsHtml()}</div>
     <h3>Address</h3>
     <div class="mgrid">${inp("addr1", "Address", mt.addr1, 'maxlength="30" style="width:100%"')}${inp("addr2", "Address line 2", mt.addr2, 'maxlength="30" style="width:100%"')}</div>
     <div class="mgrid4">${inp("city", "City", mt.city, 'maxlength="30"')}${inp("state", "State", mt.state, 'maxlength="3" size="4"')}${inp("zip", "Zip", mt.zip, 'maxlength="10" size="10"')}${inp("country", "Country", mt.country, 'maxlength="3" size="4"')}</div>`;
 }
+// ---- Meet referee, picked from Contacts (saved with the meet; the results emails cc this address)
+let CONTACTS = null;
+async function loadContacts() {
+  try { CONTACTS = (await api("/api/contacts")).contacts || []; } catch (e) { CONTACTS = []; }
+  if (TAB === "meet" && $("#offBox")) $("#offBox").innerHTML = officialsHtml();
+}
+function officialsHtml() {
+  if (CONTACTS === null) { loadContacts(); return `<span class="muted">Loading contacts…</span>`; }
+  const c = S.contacts || {}, low = x => (x || "").trim().toLowerCase();
+  const refs = CONTACTS.filter(x => /referee/i.test(x.role || ""));
+  const others = CONTACTS.filter(x => !/referee/i.test(x.role || "") && (x.name || x.email));
+  const cur = CONTACTS.find(x => (c.referee_id && x.id === c.referee_id) || (c.referee && low(x.email) === low(c.referee)));
+  const lbl = x => esc([x.name || x.email, x.school, x.role].filter(Boolean).join(" · "));
+  const opt = x => `<option value="${esc(x.id)}" ${cur && cur.id === x.id ? "selected" : ""}>${lbl(x)}</option>`;
+  const orphan = !cur && (c.referee_name || c.referee) ? `<option value="" selected>${esc(c.referee_name || c.referee)} (not in Contacts)</option>` : "";
+  return `<div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">
+      <label class="mf"><span>Meet referee</span><select id="refSel" style="min-width:300px">
+        ${orphan || `<option value="" ${cur ? "" : "selected"}>&mdash; pick the referee &mdash;</option>`}
+        ${refs.length ? `<optgroup label="Referees">${refs.map(opt).join("")}</optgroup>` : ""}
+        ${others.length ? `<optgroup label="Everyone else in Contacts">${others.map(opt).join("")}</optgroup>` : ""}
+        ${cur || orphan ? `<option value="-">(no referee)</option>` : ""}</select></label>
+      <span class="muted" style="font-size:12.5px">${cur ? (cur.email ? `${esc(cur.email)}${cur.phone ? " &middot; " + esc(cur.phone) : ""} &middot; cc'd on the results emails` : `no email in Contacts &mdash; add one to cc them on the results emails`)
+        : refs.length ? "" : `No one in Contacts has the role <b>Meet referee</b> yet.`} <a href="/#contacts" target="_blank">Contacts</a></span></div>`;
+}
+document.addEventListener("change", async e => {
+  if (e.target.id !== "refSel") return;
+  const v = e.target.value, x = (CONTACTS || []).find(y => y.id === v);
+  if (!v) return;
+  const contacts = {...(S.contacts || {})};
+  if (x) Object.assign(contacts, {referee: x.email || "", referee_name: x.name || "", referee_id: x.id});
+  else { delete contacts.referee; delete contacts.referee_name; delete contacts.referee_id; }
+  try {
+    await api(`/api/meets/${MID}/state`, {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({contacts})});
+    S.contacts = contacts; toast(x ? `Referee: ${x.name || x.email}` : "Referee cleared");
+  } catch (err) { toast(err.message); }
+  $("#offBox").innerHTML = officialsHtml();
+});
 function renderChanges() {
   { const other = l => l.kind === "export" || /^(Published|Sent|Downloaded|Exported)\b/.test(l.msg || "");
     const tbl = (rows, none) => rows.length ? `<table>${rows.map(l => `<tr><td style="white-space:nowrap" class="muted">${esc(l.when)}</td><td>${esc(l.msg)}</td></tr>`).join("")}</table>` : `<div class="muted">${none}</div>`;

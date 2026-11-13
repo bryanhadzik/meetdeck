@@ -57,6 +57,15 @@ def standard_seed(ents: list[dict], lanes: list[int], min_heat: int = MIN_HEAT) 
     return out
 
 
+def _racing(m) -> set:
+    """Teams with at least one entry (a parent team block with no swimmers gets no lanes)."""
+    teams = m["teams"]
+    got = {(teams.get(e["team"]) or {}).get("abbr") for e in m["entries"]}
+    got.discard(None)
+    got.discard("")
+    return got or {(t or {}).get("abbr") for t in teams.values()}
+
+
 def _ents(m, ptr):
     teams = m["teams"]
     return [{"id": e["key"], "team": (teams.get(e["team"]) or {}).get("abbr", ""), "seed": e["conv"] or e["seed"] or 0}
@@ -73,7 +82,7 @@ class Strict(list):
 
 def fresh(m, ptr, team_order: list[str], lanes: list[int], min_heat: int = MIN_HEAT) -> tuple[dict, str]:
     ents = _ents(m, ptr)
-    in_meet = {(t or {}).get("abbr") for t in m["teams"].values()}
+    in_meet = _racing(m)
     order = [t for t in team_order if t in in_meet] + sorted(t for t in in_meet if t and t not in team_order)
     plan = None if isinstance(team_order, Std) else hy3.table_plan(order, len(lanes), min(lanes))
     if plan and len(order) > 1:
@@ -142,3 +151,44 @@ def ops(m, ptr, team_order, lanes, min_heat=MIN_HEAT) -> tuple[list, int]:
             n += 1
         out.append({"op": "update", "table": meetdb._table(e), "match": meetdb._match(e), "set": {"Fin_heat": h, "Fin_lane": ln}})
     return out, n
+
+
+def report(m, team_order, lanes, skip_ptrs=(), min_heat=MIN_HEAT) -> dict:
+    """How the meet database is seeded right now, event by event, against the meet's seeding rules.
+
+    mode: "teams" (NFHS 5-3 team lanes) or "time" (seeded by time). For team lanes, every swimmer
+    sitting in another team's lane is counted: zero means the heats follow NFHS 5-3 to the letter
+    (strict); otherwise a team's unused lanes were filled with other teams' swimmers (Meet Manager's
+    non-strict dual seeding). Each event also says what a re-seed would change."""
+    teams = m["teams"]
+    abbr = lambda e: (teams.get(e["team"]) or {}).get("abbr", "")
+    in_meet = _racing(m)
+    order = [t for t in team_order if t in in_meet] + sorted(t for t in in_meet if t and t not in team_order)
+    plan = None if isinstance(team_order, Std) else hy3.table_plan(order, len(lanes), min(lanes))
+    team_mode = bool(plan) and len(order) > 1
+    lane_team = {p["lane"]: p["team"] for p in plan} if team_mode else {}
+    events = []
+    for v in m["events"]:
+        p = v["ptr"]
+        act = _active(m, p)
+        if not act:
+            continue
+        placed = [e for e in act if e["heat"] and e["lane"]]
+        off = [{"key": e["key"], "heat": e["heat"], "lane": e["lane"], "team": abbr(e), "lane_team": lane_team.get(e["lane"], "")}
+               for e in placed if e["lane"] in lane_team and lane_team[e["lane"]] != abbr(e)]
+        open_l = [{"key": e["key"], "heat": e["heat"], "lane": e["lane"], "team": abbr(e)}
+                  for e in placed if lane_team and e["lane"] not in lane_team]
+        row = {"ptr": p, "no": v["no"], "label": v["label"], "entries": len(act), "swum": swum(m, p),
+               "skip": p in skip_ptrs, "heats_now": len({e["heat"] for e in placed}), "off_lane": off, "open_lane": open_l,
+               "moves": 0, "heat_moves": 0, "heats_new": None, "reasons": []}
+        if not row["swum"] and not row["skip"]:
+            c = check(m, p, team_order, lanes, min_heat)
+            new, _ = fresh(m, p, team_order, lanes, min_heat)
+            row.update(moves=len(c["moves"]), heats_new=c["heats_new"], reasons=c["reasons"],
+                       heat_moves=sum(1 for e in act if e["key"] in new and e["heat"] != new[e["key"]][0]))
+        events.append(row)
+    return {"mode": "teams" if team_mode else "time", "strict_seeding": isinstance(team_order, Strict),
+            "order": order, "plan": plan if team_mode else [],
+            "off_lane": sum(len(r["off_lane"]) for r in events),
+            "open_lane": sum(len(r["open_lane"]) for r in events),
+            "differs": sum(1 for r in events if r["moves"]), "events": events}

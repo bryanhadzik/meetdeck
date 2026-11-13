@@ -277,6 +277,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       </div>
       <div class="row" id="strictRow" style="margin-top:6px;font-size:13.5px"><label id="strictWrap" data-tipw="480"><input type="checkbox" id="strictLanes"> Keep every team in its own lanes in every heat (NFHS 5-3, to the letter)</label>
         <span class="muted" id="strictTip" data-tipw="480" style="cursor:help;border-bottom:1px dotted currentColor;font-size:12.5px">the rule</span><span class="muted" id="strictMsg" style="font-size:13px"></span></div>
+      <div id="seedReport" style="margin-top:8px"></div>
       <div class="muted" id="seedHow" style="font-size:13px;margin-top:4px">Same team lanes and fastest-in-the-middle as Meet Manager's dual seeding, but every heat has at least 3 swimmers &mdash; when heat 1 would be short, the slowest swimmers of the next heat move down. Once seeded, the heats update by themselves when entries change, and go into the Meet Manager backup.</div>
       <div id="seedInfo" class="scroll" style="margin-top:6px"></div>
       <h3 style="margin-top:12px">Heats after seeding</h3>
@@ -1053,9 +1054,90 @@ const MM_SEEDED = () => !!M && !(M.files || []).length && M.has_db;
 let DBH = null, DBH_PICK = null;
 async function dbhLoad() {
   const id = M.id;
-  try { const r = await api(`/api/meets/${id}/db`); DBH = {id, m: r.model}; } catch (e) { DBH = {id, err: e.message}; }
-  if (M && M.id === id) renderHeatSheet();
+  try { const r = await api(`/api/meets/${id}/db`); DBH = {id, m: r.model, rs: r.reseed || {}}; } catch (e) { DBH = {id, err: e.message}; }
+  if (M && M.id === id) { renderHeatSheet(); renderSeedReport(); }
 }
+// ---- Seeding report for a meet run from the meet database (imported from Meet Manager or built here):
+//      which seeding rule the heats follow, whether every swimmer is in their own team's lanes
+//      (NFHS 5-3 to the letter), and a re-seed for any event that hasn't been swum.
+let SEED_SEL = new Set();
+function renderSeedReport() {
+  const box = $("#seedReport");
+  if (!box) return;
+  if (!M || !MM_SEEDED()) { box.innerHTML = ""; $("#seedHow").style.display = ""; return; }
+  $("#seedHow").style.display = "none";      // that text is about seeding here, not the meet database
+  const s = DBH && DBH.id === M.id && DBH.rs && DBH.rs.seeding;
+  if (!s) { box.innerHTML = DBH && DBH.err ? "" : `<div class="muted" style="font-size:13px">Checking the heats against the seeding rules…</div>`; return; }
+  const m = DBH.m, byAbbr = {};
+  Object.values(m.teams || {}).forEach(t => { if (t && t.abbr) byAbbr[t.abbr] = t.name || t.abbr; });
+  const tn = c => esc(byAbbr[c] || c);
+  const ath = k => m.athletes[String(k)] || {};
+  const entName = key => { const e = m.entries.find(x => x.key === key); if (!e) return key;
+    return e.kind === "I" ? `${ath(e.ath).first || ""} ${ath(e.ath).last || ""}`.trim() : `${(m.teams[String(e.team)] || {}).abbr || "?"} "${e.ltr || ""}" relay`; };
+  const live = s.events.filter(e => !e.swum && !e.skip);
+  let head;
+  if (s.mode === "teams") {
+    const lanesOf = c => s.plan.filter(p => p.team === c).map(p => p.lane).join(" & ");
+    const rule = s.order.length === 2 ? "NFHS 5-3-1 (dual meet: odd / even lanes)" : `NFHS 5-3-2, Table 5-1 (${s.order.length} teams in ${M.lanes.count || 8} lanes)`;
+    head = `<div style="font-size:13.5px"><b>Team lanes</b> &middot; ${rule}: ${s.order.map(c => `${tn(c)} <span class="muted">lanes ${lanesOf(c)}</span>`).join(" &middot; ")}</div>`;
+    const evOff = s.events.filter(e => e.off_lane.length);
+    head += !s.off_lane
+      ? `<div class="okbox" style="font-size:13px;margin-top:6px">&#10003; <b>Strict NFHS 5-3</b> &mdash; every swimmer is in their own team's lanes in every heat.</div>`
+      : `<div class="issue" style="font-size:13px;margin-top:6px;background:var(--warn-bg,#3a2f12);border-color:#b08800">&#9888; <b>Not strict NFHS 5-3</b> &mdash; ${s.off_lane} swimmer${s.off_lane === 1 ? " is" : "s are"} in another team's lane, in ${evOff.length} event${evOff.length === 1 ? "" : "s"}. This is Meet Manager's usual dual seeding: a team's unused lanes go to the next-fastest swimmers of other teams, and each team's fastest swim the last heat even when they're slower than another team's swimmers in an earlier heat. To the letter of the rule, every swimmer stays in their own team's lanes.</div>`;
+    const openL = [...Array(M.lanes.count || 8).keys()].map(i => i + 1).filter(l => !s.plan.some(p => p.lane === l));
+    if (s.open_lane) head += `<div class="muted" style="font-size:12.5px;margin-top:4px">${s.open_lane} swimmer${s.open_lane === 1 ? " is" : "s are"} in lane${openL.length === 1 ? "" : "s"} ${openL.join(" & ")}, which Table 5-1 leaves open for ${s.order.length} teams &mdash; NFHS 5-3-2 lets meet management seed those or leave them empty.</div>`;
+    head += `<div class="muted" style="font-size:12.5px;margin-top:4px">Re-seeding here uses ${s.strict_seeding ? "<b>strict</b> team lanes (the box below is on)" : "the usual (non-strict) team lanes &mdash; tick the box below for strict"}.</div>`;
+  } else {
+    const why = s.why === "championship" ? "championship rules" : s.why === "chosen" ? "your choice (NFHS 5-3-2 allows it when Table 5-1 leaves lanes open)" : "more teams than Table 5-1 covers (NFHS 5-3-2)";
+    head = `<div style="font-size:13.5px"><b>Seeded by time</b> &middot; ${why}: fastest heat last, fastest swimmers in the middle lanes (Table 5-2: 4, 5, 3, 6, 2, 7, 1, 8).</div>`;
+  }
+  const differs = live.filter(e => e.moves);
+  head += `<div style="font-size:13px;margin-top:6px">${differs.length ? `<b>${differs.length}</b> event${differs.length === 1 ? "" : "s"} not swum yet would change if re-seeded now` : "&#10003; Every event not swum yet already matches a fresh seeding"}${s.events.length - live.length ? ` &middot; <span class="muted">${s.events.length - live.length} swum or combined (never re-seeded)</span>` : ""}.</div>`;
+  [...SEED_SEL].forEach(p => { if (!live.some(e => e.ptr === p && e.moves)) SEED_SEL.delete(p); });
+  const rows = s.events.map(e => {
+    const off = e.off_lane.length ? `<span title="${esc(e.off_lane.map(o => `${entName(o.key)} (${o.team}) in ${o.lane_team}'s lane ${o.lane}, heat ${o.heat}`).join("\n"))}" style="cursor:help;border-bottom:1px dotted currentColor">${e.off_lane.length}</span>` : (s.mode === "teams" ? "&#10003;" : "");
+    const would = e.swum ? `<span class="muted">swum</span>` : e.skip ? `<span class="muted">combined heat</span>` : !e.moves ? `<span class="muted">no change</span>`
+      : `move ${e.moves}${e.heat_moves ? ` (${e.heat_moves} change heats)` : ""}${e.heats_new !== e.heats_now ? ` &middot; ${e.heats_now}&rarr;${e.heats_new} heats` : ""}`;
+    const can = !e.swum && !e.skip && e.moves;
+    return `<tr><td>#${e.no} ${esc(e.label)}</td><td>${e.entries}</td><td>${e.heats_now}</td>${s.mode === "teams" ? `<td style="text-align:center">${off}</td>` : ""}<td>${would}${e.reasons.length ? `<div class="muted" style="font-size:12px">${esc(e.reasons.join("; "))}</div>` : ""}</td>
+      <td>${can ? `<input type="checkbox" data-seedsel="${e.ptr}" ${SEED_SEL.has(e.ptr) ? "checked" : ""}>` : ""}</td></tr>`;
+  }).join("");
+  box.innerHTML = head + `<details ${SEED_SEL.size || differs.length ? "open" : ""} style="margin-top:6px"><summary class="muted" style="font-weight:400">Events &middot; re-seed</summary>
+    <table style="font-size:13px"><tr><th>Event</th><th>Swimmers</th><th>Heats</th>${s.mode === "teams" ? "<th>In another team's lane</th>" : ""}<th>Re-seed would</th><th></th></tr>${rows}</table>
+    <div class="row" style="margin-top:6px;gap:8px">${differs.length ? `<button class="ghost small" data-seedall="1">Select all that would change</button>` : ""}
+      <button class="small" data-seedgo="1" ${SEED_SEL.size ? "" : "disabled"}>Re-seed selected${SEED_SEL.size ? ` (${SEED_SEL.size})` : ""}</button>
+      <span class="muted" id="seedGoMsg" style="font-size:12.5px">Changes the meet database; Undo in Run the meet takes it back. Send the start list to meet-board again afterwards.</span></div></details>`;
+  // lane step: for a database meet the teams come from the database, not from entry files
+  if (s.mode === "teams") {
+    $("#laneIntro").style.display = "";
+    $("#laneIntro").textContent = "Which team swims in which lanes (from the meet database).";
+    $("#order").innerHTML = `<span class="muted" style="font-size:13px">${s.order.length === 2 ? "Dual meet, NFHS 5-3-1" : `NFHS Table 5-1 lanes for ${s.order.length} teams`} &mdash; see Seeding below for how the heats follow it.</span>`;
+    $("#lanePlan").innerHTML = Array.from({length: M.lanes.count || 8}, (_, i) => i + 1).map(n => { const l = s.plan.find(p => p.lane === n);
+      return `<div class="lane" style="${l ? "" : "opacity:.45"}"><b>Lane ${n}</b>${l ? esc(l.team) : "open"}</div>`; }).join("");
+    $("#strictRow").style.display = "";
+  }
+}
+document.addEventListener("change", e => {
+  const p = e.target.dataset && e.target.dataset.seedsel;
+  if (!p) return;
+  if (e.target.checked) SEED_SEL.add(+p); else SEED_SEL.delete(+p);
+  renderSeedReport();
+});
+document.addEventListener("click", async e => {
+  const t = e.target.closest && e.target.closest("[data-seedall],[data-seedgo]");
+  if (!t) return;
+  const s = DBH && DBH.rs && DBH.rs.seeding;
+  if (!s) return;
+  if (t.dataset.seedall) { s.events.filter(x => !x.swum && !x.skip && x.moves).forEach(x => SEED_SEL.add(x.ptr)); renderSeedReport(); return; }
+  const evs = s.events.filter(x => SEED_SEL.has(x.ptr));
+  if (!evs.length) return;
+  if (!confirm(`Re-seed ${evs.map(x => "#" + x.no).join(", ")} in the meet database?\n\nSwimmers move to new heats and lanes (${evs.reduce((a, x) => a + x.moves, 0)} moves). Undo in Run the meet takes it back. Send the start list to meet-board again afterwards.`)) return;
+  t.disabled = true;
+  try {
+    await api(`/api/meets/${M.id}/db/reseed`, J("POST", {ptrs: evs.map(x => x.ptr)}));
+    SEED_SEL = new Set(); DBH = null; renderHeatSheet();
+  } catch (x) { const m = $("#seedGoMsg"); if (m) m.textContent = x.message; t.disabled = false; }
+});
 function renderDbHeats(box) {
   if (!DBH || DBH.id !== M.id) { box.innerHTML = `<div class="muted" style="font-size:13px">Loading the heats from the meet database…</div>`; if (!DBH || DBH.id !== M.id) { DBH = {id: M.id, loading: true}; dbhLoad(); } return; }
   if (DBH.loading) return;
@@ -1284,6 +1366,7 @@ function render() {
     si.map(x => `<tr><td>#${esc(x.event_no)} ${esc(x.event)}</td><td>${x.entries}</td><td>${x.heats.join(" · ")}${x.moved ? ` <span class="muted">(moved ${x.moved} down)</span>` : ""}</td></tr>`).join("") + `</table></details>`;
   if (mmSeeded && DBH && !DBH.loading) DBH = null;   // pick up changes made in the meet database
   renderHeatSheet();
+  setTimeout(renderSeedReport);      // after the lane and seeding text below is drawn
   const timeSeeded = M.time_seeded;
   $("#laneIntro").style.display = timeSeeded ? "none" : "";
   $("#lanesPdf").href = `/api/meets/${M.id}/lanes.pdf`;
@@ -1714,6 +1797,7 @@ $("#strictLanes").onchange = async e => {
   try { await save({strict_lanes: on}); }
   catch (x) { e.target.checked = !on; $("#strictMsg").textContent = " " + x.message; return; }
   $("#strictMsg").textContent = "";
+  if (MM_SEEDED()) { DBH = null; renderHeatSheet(); return; }
   if (M.has_db && (M.files || []).length && confirm(`The meet database was built with the ${on ? "usual" : "strict"} heats.\n\nRebuild it now with the new heats? (The current database is kept as a version you can go back to. Re-send the start list to meet-board afterwards.)`)) {
     try { await api(`/api/meets/${M.id}/db/create`, {method: "POST"}); $("#strictMsg").textContent = " Meet database rebuilt with the new heats - send the start list to meet-board again."; }
     catch (x) { $("#strictMsg").textContent = " " + x.message; }

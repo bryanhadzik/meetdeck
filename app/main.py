@@ -1937,7 +1937,7 @@ def db_get(mid: str):
         missing = [t for t in _state(d)["lanes"]["order"] if t.upper() not in have]
     except Exception:
         missing = []
-    return {"exists": True, "started": _meet_started(m), "missing_teams": missing, "championship": bool(_meta(d).get("championship")), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
+    return {"exists": True, "started": _meet_started(m), "missing_teams": missing, "contacts": _meta(d).get("contacts") or {}, "championship": bool(_meta(d).get("championship")), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
             "model": meetdb.json_safe(m), "problems": meetdb.check(m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
@@ -2246,7 +2246,13 @@ def _reseed_view(d: Path, m: dict) -> dict:
     teams = [{"code": t.get("abbr", ""), "name": t.get("name", ""), "done": done.get(t.get("abbr", ""), "")}
              for _, t in sorted(m["teams"].items()) if any(e["team"] == _ for e in m["entries"])
              or any((m["athletes"].get(e.get("ath")) or {}).get("team") == _ for e in m["entries"])]
-    return {"events": evs, "teams": teams}
+    try:
+        seeding = reseed.report(m, order, lanes, skip)
+        _plan, seeding["why"] = _team_lanes(_meta(d), [t for t in order])
+    except Exception as x:
+        print("seeding report:", x)
+        seeding = None
+    return {"events": evs, "teams": teams, "seeding": seeding}
 
 
 @app.post("/api/meets/{mid}/db/reseed")

@@ -99,9 +99,30 @@ def _blocks(m):
     return out
 
 
-def _height(v, heats):
+REC_ROW = 9.4         # one record line under the event title
+
+
+def event_records(m, v):
+    """Records for this event to print under its title (host school's and the pool's, as m["records"]
+    lists them): ["PAC Record: 1:58.57  2020  Hadlee Begay", ...] in the tags' order."""
+    out = []
+    sex = (v.get("gender") or "").upper()[:1]
+    sex = {"G": "F", "W": "F", "B": "M"}.get(sex, sex)
+    for r in m.get("records") or []:
+        if ((r.get("gender") or "").upper()[:1] != sex or int(r.get("dist") or 0) != int(v.get("dist") or 0)
+                or (r.get("stroke") or "") != (v.get("stroke") or "") or (r.get("indrel") or "I") != (v.get("ind_rel") or "I")
+                or not r.get("time")):
+            continue
+        who = r.get("holder") or r.get("relay_names") or r.get("team") or ""
+        if r.get("indrel") == "R" and r.get("relay_names") and r.get("team"):
+            who = f"{r['team']}  {r['relay_names']}"
+        out.append((r.get("order") or 99, f"{r.get('name') or 'Record'}: {meetdb.fmt_time(r['time'])}  {r.get('year') or ''}  {who}".replace("    ", "  ").strip()))
+    return [t for _, t in sorted(out, key=lambda x: x[0])]
+
+
+def _height(v, heats, recs=0):
     """Top of title to top of the next event's title."""
-    y = 21.6                                # first heat line
+    y = 21.6 + recs * REC_ROW               # first heat line
     relay = v["ind_rel"] == "R"
     for i, lanes in enumerate(heats):
         if i:
@@ -204,7 +225,7 @@ class _Sheet:
             self.y = TOP
 
     def event(self, v, heats):
-        h = _height(v, heats)
+        h = _height(v, heats, len(event_records(self.m, v)))
         if self.y + h - GAP_AFTER > LAST_LANE and self.y > TOP:
             self.next_col()
             if self.y + h - GAP_AFTER > LAST_LANE:
@@ -216,7 +237,7 @@ class _Sheet:
         i = 0
         while i < len(heats):
             j = i + 1
-            while j < len(heats) and self.y + _height(v, heats[i:j + 1]) - GAP_AFTER <= LAST_LANE:
+            while j < len(heats) and self.y + _height(v, heats[i:j + 1], 0 if i else len(event_records(self.m, v))) - GAP_AFTER <= LAST_LANE:
                 j += 1
             self.draw_event(v, heats, i, j)
             i = j
@@ -228,6 +249,10 @@ class _Sheet:
         relay = v["ind_rel"] == "R"
         aths, teams = self.m["athletes"], self.m["teams"]
         self.text(c, T, event_title(v, self.m["meet"].get("course") or 3) + (" (continued)" if a else ""), bold=True, w=COL_W)
+        recs = [] if a else event_records(self.m, v)
+        for k, line in enumerate(recs):       # the host school's and the pool's record, under the title like Meet Manager
+            self.text(c, T + 9.6 + k * REC_ROW, line, size=SZ - 0.6, w=COL_W)
+        T += len(recs) * REC_ROW
         self.rule(c, c + COL_W, T + 8.4)
         self.text(c, T + 10.8, "Lane", bold=True)
         if relay:

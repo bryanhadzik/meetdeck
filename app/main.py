@@ -1459,6 +1459,40 @@ def download_master(hid: str):
                     headers={"Content-Disposition": f'attachment; filename="Swmm8Bkup{Path(name).stem}-01.zip"'})
 
 
+def _program_records(d: Path) -> list:
+    """Records for the meet program: the meet database's own records if it has any, else the host
+    school's master (its school record and the pool record, e.g. "GHS Record" and "PAC Record").
+    -> [{name, order, gender, dist, stroke, indrel, time, holder, year, team, relay_names}]"""
+    out = []
+    try:
+        t = meetdb.read(_dbfile(d), ["Records", "RecordTags"])
+        tags = {r["tag_ptr"]: r for r in t.get("RecordTags", {}).get("rows", [])}
+        for r in t.get("Records", {}).get("rows", []):
+            tg = tags.get(r.get("tag_ptr")) or {}
+            tm = r.get("Record_Time") or r.get("Record_time") or 0
+            if not tm:
+                continue
+            if (r.get("Record_course") or "Y").strip() not in ("Y", ""):
+                continue                      # short course yards only (our pool)
+            relay = (r.get("tag_indrel") or "I").strip() == "R"
+            out.append({"name": (tg.get("tag_name") or "").strip(), "order": tg.get("tag_order") or 99,
+                        "gender": (r.get("tag_gender") or "").strip(), "dist": r.get("tag_dist"),
+                        "stroke": (r.get("tag_stroke") or "").strip(), "indrel": "R" if relay else "I",
+                        "time": tm, "holder": "" if relay else (r.get("Record_Holder") or "").strip(),
+                        "year": r.get("Record_year") or "", "team": (r.get("Record_Holder") or "").strip() if relay else "",
+                        "relay_names": (r.get("Relay_Names") or "").strip()})
+    except Exception as x:
+        print("meet program records (database):", x)
+    if out:
+        return out
+    info = _read_master(_meta(d).get("host", "THS"))
+    tags = {t["tag_ptr"]: t for t in info.get("tags") or []}
+    for r in info.get("records") or []:
+        tg = tags.get(r.get("tag_ptr")) or {}
+        out.append({**r, "name": tg.get("name", ""), "order": tg.get("order") or 99})
+    return out
+
+
 def _record_team(st: dict, host: dict, meta: dict) -> str:
     if "record_team" in meta:
         return meta["record_team"]
@@ -2884,6 +2918,10 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
     m = meetdb.load(db)
     licensee = (_dbinfo(d).get("hyb") or "")[28:78].strip() or _any_licensee()
     if kind == "heatsheet":
+        try:
+            m["records"] = _program_records(d)
+        except Exception as x:
+            print("heat sheet records:", x)
         pdf, label = heatsheet.heat_sheet_pdf(m, licensee), "heat sheet"
     elif kind == "referee":
         pdf, label = heatsheet.referee_pdf(m, licensee), "referee program"

@@ -1453,7 +1453,11 @@ function dqEditor(key) {
     [...sel.options].forEach(o => o.hidden = q && !o.textContent.toLowerCase().includes(q));
     const first = [...sel.options].find(o => !o.hidden); if (first && (!sel.value || sel.selectedOptions[0]?.hidden)) { sel.value = first.value; sync(); }
   };
-  $("#dqFind").focus();
+  $("#dqFind").focus({preventScroll: true});
+  // bring the whole DQ box (the full code list and the Disqualify button) into view
+  requestAnimationFrame(() => { const ed = $("#dqEditor"); if (!ed) return;
+    const r = ed.getBoundingClientRect();
+    if (r.bottom > innerHeight || r.top < 0) ed.scrollIntoView({behavior: "smooth", block: r.height > innerHeight ? "start" : "end"}); });
   $("#dqCancel").onclick = () => $("#dqEditor").remove();
   $("#dqSave").onclick = () => {
     if (!sel.value) return toast("Pick a DQ code");

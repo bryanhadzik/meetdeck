@@ -1585,6 +1585,8 @@ def send_draft(mid: str, body: dict):
         if f:
             import mimetypes
             files.append((f.name, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream"))
+        r = db_backup(mid)       # Utah Top 50 also wants the Meet Manager backup
+        files.append((r.headers["content-disposition"].split('filename="')[1].rstrip('"'), r.body, "application/zip"))
     clean = lambda xs: [x.strip() for x in (xs or []) if isinstance(x, str) and "@" in x]  # noqa: E731
     try:
         r = gmail_mod.make_draft(clean(body.get("to")), clean(body.get("cc")), clean(body.get("bcc")),
@@ -3057,9 +3059,10 @@ def send_zip(mid: str, group: str):
             f = _fmr(d)
             if f:
                 z.write(f, f.name)
-        if group == "keep":
+        if group in ("final", "keep"):     # Utah Top 50 also wants the Meet Manager backup
             r = db_backup(mid)
             z.writestr(r.headers["content-disposition"].split('filename="')[1].rstrip('"'), r.body)
+        if group == "keep":
             if (_dbdir(d) / "log.jsonl").exists():
                 lines = [json.loads(x) for x in (_dbdir(d) / "log.jsonl").read_text().splitlines() if x.strip()]
                 z.writestr(f"{stem} change log.txt", "\r\n".join(f"{l['when']}  {l['msg']}" for l in lines))

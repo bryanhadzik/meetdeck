@@ -766,7 +766,7 @@ const RUN = [
     {id: "review", ao: "closing", t: "Coaches review the results for errors. Verify every change request with the AO / meet referee before changing anything in the database (every change is logged and can be undone).", db: true},
   ]},
   {phase: "Within 48 hours", deadline: 48, items: [
-    {id: "final", t: `48-hour rule: email the Final Meet Report and the meet results to ${RESULTS_TO}, with the referee, AO and host coach cc'd. Results must be signed by both officials and the head coaches.`, mail: "final", auto: o => (o.sent || {}).final},
+    {id: "final", t: `48-hour rule: email the Final Meet Report, the meet results and the Meet Manager backup to ${RESULTS_TO}, with the referee, AO and host coach cc'd. Results must be signed by both officials and the head coaches.`, mail: "final", auto: o => (o.sent || {}).final},
   ]},
   {phase: "All season", items: [
     {id: "keep", t: "Keep all paperwork for the entire season: the signed Final Meet Report, timer sheets, DQ slips and information. Scan them into this meet's files.", go: "meets", auto: o => (o.sent || {}).keep},
@@ -842,7 +842,7 @@ function runMail(kind, pick) {
   const ended = M.ended ? `Meet ended: ${M.ended.replace("T", " ")}\n` : "";
   if (kind === "final") {
     const cc = (pick ? pick.cc : [c.referee, c.ao, c.host].filter(Boolean)).join(",");
-    const body = encodeURIComponent(`Attached are the Final Meet Report and the meet results for ${M.name} (${date}${M.location ? ", " + M.location : ""}).\n${ended}`);
+    const body = encodeURIComponent(`Attached are the Final Meet Report, the meet results and the Meet Manager backup for ${M.name} (${date}${M.location ? ", " + M.location : ""}).\n${ended}`);
     return `mailto:${RESULTS_TO}?${cc ? "cc=" + encodeURIComponent(cc) + "&" : ""}subject=${subj}&body=${body}`;
   }
   const body = encodeURIComponent(`Initial results for ${M.name} (${date}) are attached. Please review them and send any corrections within 24 hours. Change requests will be verified with the meet referee.\n${ended}`);
@@ -2188,7 +2188,8 @@ async function sendRender() {
        <span class="grow"></span>${mark("coaches", "Sent")}`) +
     card(2, `Final Meet Report and results to ${esc(RESULTS_TO)}`, due ? `due ${fmt(due)}${due < new Date() && !sent.final ? ' <b style="color:var(--err)">overdue</b>' : ""}` : "within 48 hours",
       file("<b>Final Meet Report</b>, signed by both officials and the head coaches", S.fmr ? `<a class="small" href="${base}/store/docs/${encodeURIComponent(S.fmr)}" target="_blank">${esc(S.fmr)}</a> <button class="ghost small" data-fmrup="1">Replace</button>`
-        : `<button class="small" data-fmrup="1">Add the signed report…</button>`, S.fmr ? "" : "Scan or photograph the signed form (PDF or picture)") + pdf + tm,
+        : `<button class="small" data-fmrup="1">Add the signed report…</button>`, S.fmr ? "" : "Scan or photograph the signed form (PDF or picture)") + pdf + tm +
+      file("<b>Meet Manager backup</b> (Utah Top 50 restores it in Meet Manager)", `<button class="ghost small" ${dis} onclick="location='${base}/db/backup'">Download</button>`),
       `<button ${dis} onclick="location='${base}/send/final.zip'">Download all (zip)</button>
        <a href="#" data-mailpick="final">Email ${esc(RESULTS_TO)}</a><span class="muted" style="font-size:12.5px">Cc ${cc.map(x => x[1] ? esc(x[0]) : `<s>${esc(x[0])}</s>`).join(", ")}${missCc.length ? ` &mdash; add ${missCc.join(", ")} on the <a href="#" data-gorun="1">Meet checklist</a>` : ""}</span>
        <span class="grow"></span>${mark("final", "Sent")}`) +

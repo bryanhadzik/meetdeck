@@ -664,10 +664,23 @@ async function loadSetup() {
   loadPlan();
   bkLoad();
   const g = await api("/api/gmail/status");
-  $("#sGmail").innerHTML = g.configured ? `<span class="badge ok">Connected</span> ${esc(g.user)} &middot; read-only` : `Not connected. One-time setup:<ol style="margin:6px 0 0;padding-left:20px">
-      <li>Google Account &rarr; Security &rarr; 2-Step Verification on &rarr; <b>App passwords</b> &rarr; create one named "MeetDeck".</li>
-      <li>On the server, create <code>/home/bryan/claude/swimmeet/.env</code> with<br><code>GMAIL_USER=you@gmail.com</code><br><code>GMAIL_APP_PASSWORD=the 16 letters</code></li>
-      <li>Run <code>docker compose up -d</code> in that folder.</li></ol><div style="margin-top:6px">Access is read-only: nothing in your mailbox is marked, moved or deleted.</div>`;
+  gmailSetup(g);
+}
+function gmailSetup(g) {
+  const use = `<div style="margin-top:6px">MeetDeck uses it to find coach entry files (it never marks, moves or deletes mail) and to put results emails in your <b>Drafts</b> with the files attached. It never sends anything.</div>`;
+  $("#sGmail").innerHTML = g.configured
+    ? `<span class="badge ok">Connected</span> ${esc(g.user)}${g.from_env ? "" : ` <button class="ghost small" id="gmOff">Disconnect</button>`}${use}`
+    : `Not connected. One-time setup:<ol style="margin:6px 0 0;padding-left:20px">
+      <li>Google Account &rarr; Security &rarr; 2-Step Verification on &rarr; <a href="https://myaccount.google.com/apppasswords" target="_blank"><b>App passwords</b></a> &rarr; create one named "MeetDeck".</li>
+      <li>Enter it here:</li></ol>
+      <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><input id="gmUser" type="email" placeholder="you@gmail.com" size="24">
+        <input id="gmPw" type="password" placeholder="16-letter app password" size="22" autocomplete="new-password"><button class="small" id="gmGo">Connect</button></div>
+      <div id="gmErr" style="font-size:12.5px;color:var(--err);margin-top:4px"></div>${use}`;
+  const go = $("#gmGo"), off = $("#gmOff");
+  if (go) go.onclick = async () => { $("#gmErr").textContent = ""; go.disabled = true;
+    try { gmailSetup(await api("/api/gmail/login", J("POST", {user: $("#gmUser").value, password: $("#gmPw").value}))); }
+    catch (e) { $("#gmErr").textContent = e.message; go.disabled = false; } };
+  if (off) off.onclick = async () => { if (confirm("Disconnect Gmail from MeetDeck?")) gmailSetup(await api("/api/gmail/login", J("POST", {user: "", password: ""}))); };
 }
 async function loadPlan() {
   if (!SET.drive_folder) { $("#sPlan").innerHTML = ""; return; }
@@ -819,6 +832,10 @@ function runRender(fromLoad) {
   }).join("");
 }
 document.addEventListener("click", ev => { if (ev.target.dataset && ev.target.dataset.printed) setTimeout(runLoadOps, 1500); });
+function runMailParts(kind, pick) {
+  const u = new URL(runMail(kind, pick)), q = u.searchParams, sp = x => (x || "").split(",").map(y => y.trim()).filter(Boolean);
+  return {to: sp(decodeURIComponent(u.pathname)), cc: sp(q.get("cc")), bcc: sp(q.get("bcc")), subject: q.get("subject") || "", body: q.get("body") || ""};
+}
 function runMail(kind, pick) {
   const c = M.contacts || {}, date = M.date || "";
   const subj = encodeURIComponent(kind === "final" ? `Final Meet Report and results - ${M.name} ${date}` : `Initial results - ${M.name} ${date}`);
@@ -861,17 +878,21 @@ async function mailPick(kind) {
       : `<div class="muted" style="font-size:13px">No coach emails on file. Add them in Contacts, or type them below.</div>`}
     <label style="display:block;margin-top:10px;font-size:13px">Other emails (Cc) <input id="mpOther" placeholder="name@school.org, …" style="width:100%"></label>
     <div class="row" style="margin-top:14px;gap:8px;justify-content:flex-end"><span class="muted" id="mpN" style="font-size:12.5px;margin-right:auto"></span>
-      <button class="ghost" data-mpgo="0">Cancel</button><button data-mpgo="1">Open email</button></div></div>`;
+      <button class="ghost" data-mpgo="0">Cancel</button>
+      <button class="ghost" data-mpgo="draft" title="Puts a draft in your Gmail Drafts folder with the results files already attached. Nothing is sent.">Gmail draft with files</button>
+      <button data-mpgo="1">Open email</button></div>
+    <div id="mpMsg" style="font-size:12.5px;margin-top:6px"></div></div>`;
   document.body.appendChild(box);
   const count = () => { const n = box.querySelectorAll("input[type=checkbox]:checked").length; box.querySelector("#mpN").textContent = `${n} recipient${n === 1 ? "" : "s"} checked`; };
   box.addEventListener("change", count); box.addEventListener("input", ev => { const k = ev.target.dataset.mpoffv; if (k) box.querySelector(`[data-mpoff="${k}"]`).checked = !!ev.target.value.trim(); count(); });
   count();
   box.addEventListener("click", async ev => {
     const t = ev.target;
-    if (t === box) return box.remove();
+    if (t === box || t.dataset.gosetup) { if (t.dataset.gosetup) setTimeout(() => box.remove()); return t === box ? box.remove() : null; }
     if (t.dataset.mpall) { ev.preventDefault(); box.querySelectorAll("[data-mpcoach]").forEach(x => x.checked = t.dataset.mpall === "1"); return count(); }
     if (!t.dataset.mpgo) return;
     if (t.dataset.mpgo === "0") return box.remove();
+    const draft = t.dataset.mpgo === "draft";
     const pick = {cc: [], bcc: []}, on = [];
     const add = (where, e) => { e = (e || "").trim(); if (!e || on.includes(low(e))) return; on.push(low(e)); pick[where].push(e); };
     const vals = {}; offs.forEach(([k]) => vals[k] = box.querySelector(`[data-mpoffv="${k}"]`).value.trim());
@@ -882,6 +903,18 @@ async function mailPick(kind) {
       try { M = await api(`/api/meets/${M.id}/state`, J("PUT", {contacts: {...c, ...vals}})); } catch (e) {}
     }
     try { localStorage.setItem(key, JSON.stringify(on)); } catch (e) {}
+    if (draft) {
+      const msg = box.querySelector("#mpMsg");
+      const g = await api("/api/gmail/status").catch(() => ({}));
+      if (!g.configured) { msg.innerHTML = `<span style="color:var(--err)">Gmail isn't connected. Add the address and app password in <a href="#" data-gosetup="1">Setup &rarr; Gmail</a>.</span>`; return; }
+      t.disabled = true; msg.textContent = `Making the draft in ${g.user}…`;
+      try {
+        const r = await api(`/api/meets/${M.id}/send/draft`, J("POST", {kind, ...runMailParts(kind, pick)}));
+        msg.innerHTML = `<span style="color:var(--ok)">&#10003; Draft saved in ${esc(r.user)} &rarr; Drafts with ${r.files.map(esc).join(", ")}.</span>
+          <a href="https://mail.google.com/mail/?authuser=${encodeURIComponent(r.user)}#drafts" target="_blank">Open Gmail Drafts</a>`;
+      } catch (e) { msg.innerHTML = `<span style="color:var(--err)">${esc(e.message)}</span>`; }
+      t.disabled = false; return;
+    }
     box.remove();
     const a = document.createElement("a"); a.href = runMail(kind, pick); a.style.display = "none";
     document.body.appendChild(a); a.click(); a.remove();

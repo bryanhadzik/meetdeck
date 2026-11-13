@@ -279,7 +279,7 @@ def get_settings():
     cur = season_of()
     y = int(cur[:4])
     seasons = {f"{y + i}-{(y + i + 1) % 100:02d}" for i in (-1, 0, 1)} | {m["season"] for m in list_meets()} | {st["season"]}
-    pub = {k: v for k, v in st.items() if k not in ("drive_token", "public_token")}
+    pub = {k: v for k, v in st.items() if k not in ("drive_token", "public_token", "gmail_app_password")}
     pub.setdefault("public_repo", public_results.DEFAULT_REPO)
     pub["public_token_set"] = bool(st.get("public_token"))
     pub.setdefault("public_domain", public_results.DEFAULT_DOMAIN)
@@ -1529,9 +1529,69 @@ def mm_backup(mid: str):
 import gmail as gmail_mod
 
 
+gmail_mod.creds_fn = lambda: (_settings().get("gmail_user", ""), _settings().get("gmail_app_password", ""))
+
+
 @app.get("/api/gmail/status")
 def gmail_status():
-    return {"configured": gmail_mod.configured(), "user": os.environ.get("GMAIL_USER", "")}
+    return {"configured": gmail_mod.configured(), "user": gmail_mod.creds()[0],
+            "from_env": bool(os.environ.get("GMAIL_USER") and os.environ.get("GMAIL_APP_PASSWORD"))}
+
+
+@app.post("/api/gmail/login")
+def gmail_login(body: dict):
+    """Save the Gmail address + app password (Setup > Gmail) after checking they work. Blank both to disconnect."""
+    st = _settings()
+    u, pw = (body.get("user") or "").strip(), re.sub(r"\s", "", body.get("password") or "")
+    if not u and not pw:
+        st.pop("gmail_user", None); st.pop("gmail_app_password", None); _write_settings(st)
+        return gmail_status()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[a-z]{2,}", u, re.I) or len(pw) != 16:
+        raise HTTPException(400, "Enter the Gmail address and the 16-letter app password")
+    old = (st.get("gmail_user"), st.get("gmail_app_password"))
+    st["gmail_user"], st["gmail_app_password"] = u, pw
+    _write_settings(st)
+    try:
+        gmail_mod._connect().logout()
+    except Exception as e:
+        st["gmail_user"], st["gmail_app_password"] = old
+        if not old[0]:
+            st.pop("gmail_user", None); st.pop("gmail_app_password", None)
+        _write_settings(st)
+        raise HTTPException(400, f"Gmail didn't accept that ({str(e)[:120]}). Check the address and app password.")
+    return gmail_status()
+
+
+@app.post("/api/meets/{mid}/send/draft")
+def send_draft(mid: str, body: dict):
+    """Make a Gmail draft with the results files attached (coaches or final). Nothing is sent."""
+    if not gmail_mod.configured():
+        raise HTTPException(400, "Connect Gmail in Setup first")
+    group = body.get("kind")
+    if group not in ("coaches", "final"):
+        raise HTTPException(400, "Unknown email")
+    d = _dir(mid)
+    if not _dbfile(d).exists():
+        raise HTTPException(400, "No meet database yet - open Run the meet first")
+    import heatsheet
+    m = meetdb.load(_dbfile(d))
+    lic = (_dbinfo(d).get("hyb") or "")[28:78].strip() or _any_licensee()
+    stem = _stem(m["meet"]["name"])
+    files = [(f"{stem} results.pdf", heatsheet.results_pdf(m, _dbfile(d), lic), "application/pdf")]
+    data, name = results_mod.hy3_zip(m, _dbfile(d), lic, int(_dbinfo(d).get("result_exports", 0)) or 1)
+    files.append((name, data, "application/zip"))
+    if group == "final":
+        f = _fmr(d)
+        if f:
+            import mimetypes
+            files.append((f.name, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream"))
+    clean = lambda xs: [x.strip() for x in (xs or []) if isinstance(x, str) and "@" in x]  # noqa: E731
+    try:
+        r = gmail_mod.make_draft(clean(body.get("to")), clean(body.get("cc")), clean(body.get("bcc")),
+                                 str(body.get("subject") or ""), str(body.get("body") or ""), files)
+    except Exception as e:
+        raise HTTPException(502, f"Couldn't make the Gmail draft: {str(e)[:200]}")
+    return {**r, "files": [f[0] for f in files]}
 
 
 @app.get("/api/meets/{mid}/gmail")

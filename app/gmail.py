@@ -29,8 +29,19 @@ HOST = os.environ.get("GMAIL_IMAP_HOST", "imap.gmail.com")
 PORT = int(os.environ.get("GMAIL_IMAP_PORT", "993"))
 
 
+# Setup > Gmail can store the address + app password in settings; .env still wins when it's set.
+creds_fn = lambda: ("", "")   # noqa: E731  (main.py replaces this)
+
+
+def creds() -> tuple[str, str]:
+    if os.environ.get("GMAIL_USER") and os.environ.get("GMAIL_APP_PASSWORD"):
+        return os.environ["GMAIL_USER"], os.environ["GMAIL_APP_PASSWORD"]
+    u, pw = creds_fn()
+    return (u or "").strip(), (pw or "").strip()
+
+
 def configured() -> bool:
-    return bool(os.environ.get("GMAIL_USER") and os.environ.get("GMAIL_APP_PASSWORD"))
+    return all(creds())
 
 
 def _connect():
@@ -38,8 +49,52 @@ def _connect():
         M = imaplib.IMAP4(HOST, PORT)
     else:
         M = imaplib.IMAP4_SSL(HOST, PORT)
-    M.login(os.environ["GMAIL_USER"], os.environ["GMAIL_APP_PASSWORD"].replace(" ", ""))
+    u, pw = creds()
+    M.login(u, pw.replace(" ", ""))
     return M
+
+
+def make_draft(to: list, cc: list, bcc: list, subject: str, body: str, files: list) -> dict:
+    """Put a ready-to-send draft (with attachments) in the Gmail Drafts folder. Nothing is sent.
+    files: [(filename, bytes, mime)]"""
+    from email.message import EmailMessage
+    from email.utils import formatdate
+    u, _ = creds()
+    msg = EmailMessage()
+    msg["From"] = u
+    if to:
+        msg["To"] = ", ".join(to)
+    if cc:
+        msg["Cc"] = ", ".join(cc)
+    if bcc:
+        msg["Bcc"] = ", ".join(bcc)
+    msg["Subject"] = subject
+    msg["Date"] = formatdate(localtime=True)
+    msg.set_content(body)
+    for name, data, mime in files:
+        mt, st = (mime or "application/octet-stream").split("/", 1)
+        msg.add_attachment(data, maintype=mt, subtype=st, filename=name)
+    M = _connect()
+    try:
+        box = None
+        typ, rows = M.list()
+        for r in rows or []:
+            line = r.decode(errors="replace")
+            if "\\Drafts" in line:
+                box = line.rsplit(' "/" ', 1)[-1].strip()
+                break
+        box = box or '"[Gmail]/Drafts"'
+        if not box.startswith('"'):
+            box = '"%s"' % box
+        typ, res = M.append(box, "(\\Draft)", imaplib.Time2Internaldate(time.time()), msg.as_bytes())
+        if typ != "OK":
+            raise RuntimeError("Gmail didn't accept the draft: %s" % res)
+    finally:
+        try:
+            M.logout()
+        except Exception:
+            pass
+    return {"ok": True, "box": box.strip('"'), "user": u, "size": len(msg.as_bytes())}
 
 
 def _select_all(M) -> None:

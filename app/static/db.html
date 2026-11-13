@@ -1188,7 +1188,7 @@ async function getTimes(h, saved) {
     <table class="tpt"><tr><th>Lane</th><th>Swimmer</th><th>Now</th><th>Pad</th><th>Backup button</th><th>Timers</th><th>Use</th><th>Place</th><th>Check</th></tr>${rows.map(({l, e}) => `<tr id="tl-${h}-${l.lane}">
       <td class="ln">${l.lane}</td><td>${e ? nameCell(e) : `<span style="color:var(--err)">no entry in this lane</span>`}</td><td>${e ? esc(fmt(e.time)) : ""}</td>
       <td data-cpad="${h}-${l.lane}"><b>${esc(fmt(l.final)) || '<span class="badge dq">NO PAD</span>'}</b></td>
-      <td data-cback="${h}-${l.lane}" title="${esc((l.buttons || []).filter(b => b).length > 1 ? "Each button: " + (l.buttons || []).filter(b => b).map(fmt).join(", ") : "")}">${esc(fmt(l.backup)) || '<span class="muted">none</span>'}</td>
+      <td data-cback="${h}-${l.lane}">${esc(fmt(l.backup)) || '<span class="muted">none</span>'}</td>
       <td style="white-space:nowrap"><input class="t" data-watch="${h}-${l.lane}" placeholder="watch 1" inputmode="numeric" style="width:68px" value="${e && e.watch ? esc(fmt(e.watch)) : ""}" title="Timers' watch time - only needed when the pad or buttons had a problem. Digits are fine: 21753 = 2:17.53">
         <input class="t" data-watch2="${h}-${l.lane}" placeholder="watch 2" inputmode="numeric" style="width:68px" value="${e && e.watch2 ? esc(fmt(e.watch2)) : ""}" title="Second timer's watch, if there is one - the two are averaged (thousandths dropped)"></td>
       <td><select data-use="${h}-${l.lane}" tabindex="-1" style="font-family:ui-monospace,Consolas,monospace;font-size:13px;min-width:215px"><option value="pad">Pad</option><option value="backup">Backup button</option><option value="watch">Timers</option></select></td>
@@ -1240,7 +1240,7 @@ async function getTimes(h, saved) {
         } else if (d < 0) {
           const med = btns.length ? btns.slice().sort((a, b) => a - b)[Math.floor(btns.length / 2)] : 0;
           const early = btns.length > 1 && btns.some(b => med - b > BIG);
-          note = early ? `Backup button ${sgn(d)} fast because a button was pressed early (hover the backup time to see each button). <b>Stick with the pad.</b>`
+          note = early ? `Backup button ${sgn(d)} fast because a button was pressed early. <b>Stick with the pad.</b>`
                        : `Pad ${sgn(-d)} slower than the backup button &mdash; a late pad (soft touch)? <b>Enter the timers' watch times</b>: if they agree with the backup button, use the backup button.`;
         } else note = `Buttons ${sgn(d)} slower than the pad. <b>Stick with the pad</b> (buttons are usually late).`;
       }

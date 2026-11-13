@@ -89,7 +89,8 @@ def startlist(m: dict, source: str = "MeetDeck", store=None) -> dict:
     meet = m.get("meet") or {}
     return {
         "format": FORMAT, "version": 1, "source": source,
-        "meet": {"name": meet.get("name", ""), "facility": meet.get("location", ""), "date": meet.get("start", "")},
+        "meet": {"name": meet.get("name", ""), "facility": meet.get("location", ""), "date": meet.get("start", ""),
+                 "start": meet.get("start_time", "")},
         "teams": {(teams.get(t) or {}).get("abbr", ""): (teams.get(t) or {}).get("name", "")
                   for t in used_teams if (teams.get(t) or {}).get("abbr")},
         "events": events,

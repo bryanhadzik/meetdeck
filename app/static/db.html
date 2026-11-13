@@ -947,7 +947,7 @@ function renderMeet() {
     <div class="mgrid">${inp("name", "Meet name", mt.name, 'maxlength="45" style="width:100%"')}${inp("location", "Location (pool)", mt.location, 'maxlength="45" style="width:100%"')}</div>
     <div class="mgrid">${inp("header1", "Header line 1", mt.header1, 'maxlength="75" style="width:100%"')}${inp("header2", "Header line 2", mt.header2, 'maxlength="75" style="width:100%"')}</div>
     <h3>Dates &amp; pool</h3>
-    <div class="mgrid4">${inp("start", "Start date", mt.start, 'type="date"')}${inp("end", "End date", mt.end || mt.start, 'type="date"')}
+    <div class="mgrid4">${inp("start", "Start date", mt.start, 'type="date"')}${inp("start_time", "Start time", mt.start_time, 'type="time" title="When the first session starts (Meet Manager session 1). Later sessions that day move with it."')}${inp("end", "End date", mt.end || mt.start, 'type="date"')}
       ${inp("calc_date", "Age-up date", mt.calc_date, 'type="date" title="Date ages are calculated on"')}
       <label class="mf"><span>Course</span><select data-meet="course">${[[3, "Short course yards (SCY)"], [2, "Short course meters (SCM)"], [1, "Long course meters (LCM)"]].map(([v, l]) => `<option value="${v}" ${+mt.course === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       ${inp("lanes", "Lanes", mt.lanes, 'type="number" min="1" max="10" style="width:70px"')}${inp("altitude", "Altitude (ft)", mt.altitude || "", 'type="number" min="0" max="15000" style="width:90px"')}</div>

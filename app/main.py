@@ -234,7 +234,7 @@ def _state(d: Path) -> dict:
     return {"id": d.name, "name": meta["name"], "kind": "invitational" if meta.get("kind") == "championship" else meta.get("kind", "dual"),
             "championship": bool(meta.get("championship")) or meta.get("kind") == "championship", "time_seeded": not plan,
             "strict_lanes": bool(meta.get("strict_lanes")), "seed_why": seed_why, "lane_mode": meta.get("lane_mode", "teams"), "lane_draw": meta.get("lane_draw"),
-            "lane_choice": table_has_open(order, POOL_LANES), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
+            "lane_choice": table_has_open(order, POOL_LANES), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "start_time": meta.get("start_time", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),
             "run": meta.get("run", {}), "ended": meta.get("ended", ""), "contacts": meta.get("contacts", {}),
             "coach_emails": sorted({e.lower() for x in [t.get("email", "") for t in teams.values()] + [f.get("source", "") for f in files]
@@ -732,6 +732,17 @@ def put_state(mid: str, body: dict):
               "run", "ended", "contacts", "session_break", "kind", "championship", "lane_mode", "lane_draw"):
         if k in body:
             meta[k] = body[k]
+    if "start_time" in body:                   # meet start time: kept here and in the database's first session
+        v = str(body["start_time"] or "").strip()
+        if v:
+            try:
+                secs = meetdb.parse_hhmm(v)
+            except ValueError as e:
+                raise HTTPException(400, str(e))
+            v = "%02d:%02d" % (secs // 3600, secs % 3600 // 60)
+            if _dbfile(d).exists():
+                _db_start_time(d, v)
+        meta["start_time"] = v
     if "record_team" in body:
         if body["record_team"] is None:
             meta.pop("record_team", None)   # back to automatic
@@ -744,7 +755,21 @@ def put_state(mid: str, body: dict):
     return _state(d)
 
 
-SETUP_LABELS = {"removed": "removed entries", "rules": "rules", "lanes": "lane order", "name": "meet name", "date": "date",
+def _db_start_time(d: Path, hhmm: str):
+    """Give the meet database's first session this start time (Session report, heat sheet times, meet-board)."""
+    db = _dbfile(d)
+    try:
+        m = meetdb.load(db)
+        ops, msg = meetdb.start_time_ops(m, hhmm)
+        if ops:
+            _snapshot(d, "before: Meet header: " + msg)
+            meetdb.apply(db, ops)
+            _dblog(d, "Meet header: " + msg)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+SETUP_LABELS = {"start_time": "start time", "removed": "removed entries", "rules": "rules", "lanes": "lane order", "name": "meet name", "date": "date",
                 "location": "location", "host": "host school", "combine": "combined heats", "combine_low": "combined heats",
                 "expected_teams": "teams expected", "preseed": "seeding", "min_heat": "seeding", "strict_lanes": "strict team lanes", "ended": "meet ended",
                 "contacts": "contacts", "session_break": "session break", "record_team": "record team", "kind": "meet type", "championship": "championship rules", "lane_mode": "lane assignments", "lane_draw": "lane draw"}
@@ -1931,6 +1956,11 @@ def db_create(mid: str):
         (Path(tmp) / "b.zip").write_bytes(data)
         mdb_name, mdb, hyb = _unpack(Path(tmp) / "b.zip")
     _install_db(d, mdb_name, mdb, hyb, "built from the team entries")
+    if _meta(d).get("start_time"):
+        try:
+            _db_start_time(d, _meta(d)["start_time"])
+        except HTTPException:
+            pass
     import dbsync                      # what the entries looked like when built; later changes get synced in
     info = _dbinfo(d)
     info["entries_base"] = dbsync.baseline(dbsync.entry_sigs(_state(d)))
@@ -2339,7 +2369,7 @@ def db_op(mid: str, body: dict):
     if body.get("op") == "meet":            # keep the meet list (name / date / location) in step with the database
         f = body.get("args", {}).get("fields", {})
         meta = _meta(d)
-        for k, mk in (("name", "name"), ("start", "date"), ("location", "location")):
+        for k, mk in (("name", "name"), ("start", "date"), ("location", "location"), ("start_time", "start_time")):
             if k in f and str(f[k]).strip():
                 meta[mk] = str(f[k]).strip()
         _save(d, meta)

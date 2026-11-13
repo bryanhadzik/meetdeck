@@ -177,6 +177,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
           <span id="mChampWrap" style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="mChamp" style="margin:0"> Championship rules
           <span id="mChampTip" style="cursor:help;border:1px solid var(--line);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">?</span></span></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Date <input id="mDate" type="date"></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:4px">Start time <input id="mTime" type="time" title="When the first event starts. Goes into the meet database (heat sheet, timeline) and the meet board's warm-up slide."></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Location <input id="mLoc" placeholder="from host's master file"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Host school <select id="hostSel"></select></label>
       </div>
@@ -1226,7 +1227,7 @@ function render() {
     if (k.dataset.k !== o) { k.innerHTML = o; k.dataset.k = o; } k.value = M.kind || "dual";
     $("#mChamp").checked = !!M.championship;
     $("#mChampWrap").dataset.tip = CHAMP_TIP; $("#mChampTip").dataset.tip = CHAMP_TIP; $("#mKindTip").dataset.tip = KIND_TIP; }
-  [["#mName", M.name], ["#mDate", M.date || ""], ["#mLoc", M.location || ""]].forEach(([k, v]) => { if (document.activeElement !== $(k)) $(k).value = v; });
+  [["#mName", M.name], ["#mDate", M.date || ""], ["#mTime", M.start_time || ""], ["#mLoc", M.location || ""]].forEach(([k, v]) => { if (document.activeElement !== $(k)) $(k).value = v; });
   $("#hostSel").value = M.host;
   const h = HOSTS.find(x => x.id === M.host);
   $("#hostNote").innerHTML = h && !h.has_master ? `<span style="color:var(--err)">${esc(h.short)} has no master file yet.</span> <a href="#" data-goschool="${h.id}">Set it up</a>` : "";
@@ -1735,10 +1736,10 @@ document.addEventListener("change", e => { if (e.target.name === "laneMode") sav
 document.addEventListener("change", e => { const k = e.target.dataset && e.target.dataset.oddeven; if (k === undefined) return;
   const o = [...M.lanes.order], i = +k, j = o.indexOf(e.target.value); if (j < 0 || j === i) return;
   [o[i], o[j]] = [o[j], o[i]]; save({lanes: {...M.lanes, order: o}}); });
-[["#mName", "name"], ["#mDate", "date"], ["#mLoc", "location"]].forEach(([k, f]) => $(k).addEventListener("change", async e => {
+[["#mName", "name"], ["#mDate", "date"], ["#mTime", "start_time"], ["#mLoc", "location"]].forEach(([k, f]) => $(k).addEventListener("change", async e => {
   const v = e.target.value.trim();
   if (f === "name" && !v) { e.target.value = M.name; return; }
-  await save({[f]: v});
+  try { await save({[f]: v}); } catch (x) { e.target.value = M[f] || ""; return alert(x.message); }
   const o = [...$("#meetSel").options].find(o => o.value === M.id); if (o) o.textContent = M.name + (M.date ? " — " + M.date : "");
   if (f === "date" && M.season !== SET.season) { await loadSeasons(); loadMeets(M.id); }
   $("#mSaved").textContent = "Saved"; setTimeout(() => $("#mSaved").textContent = "", 1500);

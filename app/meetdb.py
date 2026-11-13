@@ -3,6 +3,7 @@
 Everything here works on Meet Manager's own tables, so the same file restores straight into
 Meet Manager. Built to grow into running the whole meet (times, places, scoring)."""
 import json
+import re
 import os
 import subprocess
 import time
@@ -178,7 +179,10 @@ def load(db) -> dict:
                                    "delay": it.get("Delay_seconds") or 0, "delay_desc": _s(it.get("Delay_desc"))}
                                   for it in t.get("Sessitem", []) if it["Sess_ptr"] == s["Sess_ptr"]), key=lambda x: x["order"])}
                 for s in sorted(t.get("Session", []), key=lambda s: (s.get("Sess_day") or 1, s.get("Sess_no") or 0))]
+    first = next((x for x in sessions if x["day"] == 1), sessions[0] if sessions else None)
+    st = int(first["start"] or 0) if first else 0
     return {"sessions": sessions, "meet": {"name": _s(meet.get("Meet_name1")), "start": (meet.get("Meet_start") or "")[:10],
+                                          "start_time": ("%02d:%02d" % (st // 3600, st % 3600 // 60)) if st else "",
                      "end": (meet.get("Meet_end") or "")[:10], "location": _s(meet.get("Meet_location")),
                      "calc_date": (meet.get("Calc_date") or "")[:10], "city": _s(meet.get("Meet_city")), "state": _s(meet.get("Meet_state")),
                      "zip": _s(meet.get("Meet_zip")), "country": _s(meet.get("Meet_country")), "addr1": _s(meet.get("Meet_addr1")), "addr2": _s(meet.get("Meet_addr2")),
@@ -559,9 +563,44 @@ MEET_LABELS = {"name": "name", "location": "location", "header1": "header line 1
                "course": "course", "lanes": "lanes"}
 
 
+def parse_hhmm(v) -> int:
+    """'15:00', '3:00 PM', '3pm' -> seconds after midnight."""
+    t = str(v or "").strip().lower().replace(".", "")
+    mt = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm|a|p)?", t)
+    if not mt:
+        raise ValueError("Start time looks like 3:00 PM or 15:00")
+    h, mi, ap = int(mt.group(1)), int(mt.group(2) or 0), (mt.group(3) or "")[:1]
+    if ap == "p" and h < 12:
+        h += 12
+    if ap == "a" and h == 12:
+        h = 0
+    if not (0 <= h <= 23 and 0 <= mi <= 59):
+        raise ValueError("Start time looks like 3:00 PM or 15:00")
+    return h * 3600 + mi * 60
+
+
+def start_time_ops(m, v):
+    """Move day 1's first session to this start time; later sessions that day keep their spacing."""
+    secs = parse_hhmm(v)
+    day1 = sorted((x for x in m.get("sessions", []) if x["day"] == 1), key=lambda x: (x["start"] or 0, x["no"]))
+    if not day1:
+        raise ValueError("This meet has no sessions in Meet Manager to give a start time")
+    delta = secs - int(day1[0]["start"] or 0)
+    if not delta:
+        return [], ""
+    ops = [{"op": "update", "table": "Session", "match": {"Sess_ptr": x["ptr"]},
+            "set": {"Sess_starttime": max(0, min(86399, int(x["start"] or 0) + delta))}} for x in day1]
+    shown = "%d:%02d %s" % ((secs // 3600 - 1) % 12 + 1, secs % 3600 // 60, "PM" if secs >= 43200 else "AM")
+    return ops, f"start time → {shown}"
+
+
 def op_meet(m, fields):
     import datetime as _dt
-    s, said = {}, []
+    s, said, extra = {}, [], []
+    fields = dict(fields)
+    if "start_time" in fields:
+        ops_t, msg_t = start_time_ops(m, fields.pop("start_time"))
+        extra, said = ops_t, ([msg_t] if msg_t else [])
     for k, v in fields.items():
         if k not in MEET_FIELDS:
             raise ValueError(f"unknown meet field {k}")
@@ -594,9 +633,9 @@ def op_meet(m, fields):
         if "Meet_end" in s:
             raise ValueError("The end date is before the start date")
         s["Meet_end"] = st                    # moving the start past the end drags the end along
-    if not s:
+    if not s and not extra:
         return [], ""
-    return [{"op": "update", "table": "Meet", "set": s}], "Meet header: " + ", ".join(said)
+    return ([{"op": "update", "table": "Meet", "set": s}] if s else []) + extra, "Meet header: " + ", ".join(said)
 
 
 def op_legs(m, key, legs):

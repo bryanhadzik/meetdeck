@@ -790,8 +790,8 @@ function runRender(fromLoad) {
     i.print ? ["heatsheet:Heat sheet", "referee:Referee program", "timer:Timer sheets", "timeline:Timeline"].map(x => { const [k, l] = x.split(":"); return `<a href="/api/meets/${M.id}/db/report/${k}.pdf" target="_blank" data-printed="1">${l}</a>`; }).join(" · ") : "",
     i.go ? `<a href="#" data-gotab="${i.go}">Meets tab</a>` : "",
     i.send ? `<a href="#" data-gotab="send">Send results tab</a>` : "",
-    i.mail === "coaches" ? `<a href="${runMail("coaches")}">Email coaches</a>${(M.coach_emails || []).length ? "" : ' <span class="muted">(no coach emails on file. Add them in the email)</span>'}` : "",
-    i.mail === "final" ? `<a href="${runMail("final")}">Email ${RESULTS_TO}</a>${c.referee && c.ao && c.host ? "" : ' <span class="muted">(add the referee, AO and host coach emails above to cc them)</span>'}` : "",
+    i.mail === "coaches" ? `<a href="#" data-mailpick="coaches">Email coaches</a>${(M.coach_emails || []).length ? "" : ' <span class="muted">(no coach emails on file. Add them in the email)</span>'}` : "",
+    i.mail === "final" ? `<a href="#" data-mailpick="final">Email ${RESULTS_TO}</a>${c.referee && c.ao && c.host ? "" : ' <span class="muted">(add the referee, AO and host coach emails above to cc them)</span>'}` : "",
     i.rule ? `<span class="muted">${esc(i.rule)}</span>` : "",
   ].filter(Boolean).join(" &nbsp;·&nbsp; ");
   const pill = (s, manualOn) => manualOn && s !== 1 ? `<span class="opst done">Checked off</span>` :
@@ -819,18 +819,76 @@ function runRender(fromLoad) {
   }).join("");
 }
 document.addEventListener("click", ev => { if (ev.target.dataset && ev.target.dataset.printed) setTimeout(runLoadOps, 1500); });
-function runMail(kind) {
+function runMail(kind, pick) {
   const c = M.contacts || {}, date = M.date || "";
   const subj = encodeURIComponent(kind === "final" ? `Final Meet Report and results - ${M.name} ${date}` : `Initial results - ${M.name} ${date}`);
   const ended = M.ended ? `Meet ended: ${M.ended.replace("T", " ")}\n` : "";
   if (kind === "final") {
-    const cc = [c.referee, c.ao, c.host].filter(Boolean).join(",");
+    const cc = (pick ? pick.cc : [c.referee, c.ao, c.host].filter(Boolean)).join(",");
     const body = encodeURIComponent(`Attached are the Final Meet Report and the meet results for ${M.name} (${date}${M.location ? ", " + M.location : ""}).\n${ended}`);
     return `mailto:${RESULTS_TO}?${cc ? "cc=" + encodeURIComponent(cc) + "&" : ""}subject=${subj}&body=${body}`;
   }
   const body = encodeURIComponent(`Initial results for ${M.name} (${date}) are attached. Please review them and send any corrections within 24 hours. Change requests will be verified with the meet referee.\n${ended}`);
-  return `mailto:?bcc=${encodeURIComponent((M.coach_emails || []).join(","))}&subject=${subj}&body=${body}`;
+  const cc = pick && pick.cc.length ? "cc=" + encodeURIComponent(pick.cc.join(",")) + "&" : "";
+  return `mailto:?${cc}bcc=${encodeURIComponent((pick ? pick.bcc : M.coach_emails || []).join(","))}&subject=${subj}&body=${body}`;
 }
+
+// ---- pick who gets a results email ----
+async function mailPick(kind) {
+  const c = M.contacts || {}, low = x => (x || "").trim().toLowerCase();
+  let dir = []; try { dir = (await api("/api/contacts")).contacts || []; } catch (e) {}
+  const who = e => { const d = dir.find(x => low(x.email) === low(e)); return d ? [d.name, d.school || d.role].filter(Boolean).join(" · ") : ""; };
+  const key = `mailpick:${M.id}:${kind}`; let saved = null; try { saved = JSON.parse(localStorage.getItem(key)); } catch (e) {}
+  const was = (e, dflt) => saved ? saved.includes(low(e)) : dflt;
+  const offs = [["referee", "Referee", true], ["ao", "AO", kind === "final"], ["host", "Host coach", kind === "final"]];
+  const offSet = new Set(offs.map(o => low(c[o[0]])).filter(Boolean));
+  const coaches = (M.coach_emails || []).filter(e => !offSet.has(low(e)));
+  const refs = dir.filter(x => /referee/i.test(x.role || "") && x.email && !offSet.has(low(x.email)));
+  const box = document.createElement("div");
+  box.style.cssText = "position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto";
+  const row = (attrs, on, main, sub) => `<label style="display:flex;gap:8px;align-items:baseline;padding:3px 0"><input type="checkbox" ${attrs} ${on ? "checked" : ""}><span>${main}${sub ? ` <span class="muted" style="font-size:12px">${esc(sub)}</span>` : ""}</span></label>`;
+  const where = kind === "final" ? "Cc" : "Cc";
+  box.innerHTML = `<div style="background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;max-width:560px;width:100%;padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.35)">
+    <h2 style="margin:0 0 4px">${kind === "final" ? `Email ${esc(RESULTS_TO)}` : "Email initial results"}</h2>
+    <div class="muted" style="font-size:12.5px;margin-bottom:10px">Check who should be on it.${kind === "final" ? ` ${esc(RESULTS_TO)} is always the To.` : " Coaches go in Bcc so they don't see each other's addresses; officials go in Cc."}</div>
+    <h3 style="margin:6px 0 2px;font-size:14px">Officials <span class="muted" style="font-weight:400;font-size:12px">(${where})</span></h3>
+    ${offs.map(([k, l, d]) => `<div style="display:flex;gap:8px;align-items:center;padding:3px 0"><input type="checkbox" data-mpoff="${k}" ${c[k] && was(c[k], d) ? "checked" : ""}>
+      <span style="width:82px">${l}</span><input type="email" data-mpoffv="${k}" value="${esc(c[k] || "")}" placeholder="${l.toLowerCase()} email" style="flex:1"></div>`).join("")}
+    ${refs.length ? `<div class="muted" style="font-size:12px;margin-top:4px">Referees in Contacts:</div>` + refs.map(x => row(`data-mpx="cc" value="${esc(x.email)}"`, was(x.email, false), esc(x.email), [x.name, x.school].filter(Boolean).join(" · "))).join("") : ""}
+    <h3 style="margin:10px 0 2px;font-size:14px">Coaches <span class="muted" style="font-weight:400;font-size:12px">(${kind === "final" ? "Cc" : "Bcc"})</span>
+      <a href="#" data-mpall="1" style="font-size:12px;font-weight:400">all</a> <a href="#" data-mpall="0" style="font-size:12px;font-weight:400">none</a></h3>
+    ${coaches.length ? coaches.map(e => row(`data-mpx="${kind === "final" ? "cc" : "bcc"}" data-mpcoach="1" value="${esc(e)}"`, was(e, kind !== "final"), esc(e), who(e))).join("")
+      : `<div class="muted" style="font-size:13px">No coach emails on file. Add them in Contacts, or type them below.</div>`}
+    <label style="display:block;margin-top:10px;font-size:13px">Other emails (Cc) <input id="mpOther" placeholder="name@school.org, …" style="width:100%"></label>
+    <div class="row" style="margin-top:14px;gap:8px;justify-content:flex-end"><span class="muted" id="mpN" style="font-size:12.5px;margin-right:auto"></span>
+      <button class="ghost" data-mpgo="0">Cancel</button><button data-mpgo="1">Open email</button></div></div>`;
+  document.body.appendChild(box);
+  const count = () => { const n = box.querySelectorAll("input[type=checkbox]:checked").length; box.querySelector("#mpN").textContent = `${n} recipient${n === 1 ? "" : "s"} checked`; };
+  box.addEventListener("change", count); box.addEventListener("input", ev => { const k = ev.target.dataset.mpoffv; if (k) box.querySelector(`[data-mpoff="${k}"]`).checked = !!ev.target.value.trim(); count(); });
+  count();
+  box.addEventListener("click", async ev => {
+    const t = ev.target;
+    if (t === box) return box.remove();
+    if (t.dataset.mpall) { ev.preventDefault(); box.querySelectorAll("[data-mpcoach]").forEach(x => x.checked = t.dataset.mpall === "1"); return count(); }
+    if (!t.dataset.mpgo) return;
+    if (t.dataset.mpgo === "0") return box.remove();
+    const pick = {cc: [], bcc: []}, on = [];
+    const add = (where, e) => { e = (e || "").trim(); if (!e || on.includes(low(e))) return; on.push(low(e)); pick[where].push(e); };
+    const vals = {}; offs.forEach(([k]) => vals[k] = box.querySelector(`[data-mpoffv="${k}"]`).value.trim());
+    offs.forEach(([k]) => box.querySelector(`[data-mpoff="${k}"]`).checked && add("cc", vals[k]));
+    box.querySelectorAll("[data-mpx]:checked").forEach(x => add(x.dataset.mpx, x.value));
+    (box.querySelector("#mpOther").value.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) || []).forEach(e => add("cc", e));
+    if (offs.some(([k]) => vals[k] !== (c[k] || ""))) {
+      try { M = await api(`/api/meets/${M.id}/state`, J("PUT", {contacts: {...c, ...vals}})); } catch (e) {}
+    }
+    try { localStorage.setItem(key, JSON.stringify(on)); } catch (e) {}
+    box.remove();
+    const a = document.createElement("a"); a.href = runMail(kind, pick); a.style.display = "none";
+    document.body.appendChild(a); a.click(); a.remove();
+    runRender(); if (SEND) sendRender();
+  });
+}
+document.addEventListener("click", ev => { const t = ev.target.closest && ev.target.closest("[data-mailpick]"); if (t) { ev.preventDefault(); mailPick(t.dataset.mailpick); } });
 function runStamp() { const n = new Date(), p = x => String(x).padStart(2, "0"); return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())} ${p(n.getHours())}:${p(n.getMinutes())}`; }
 document.addEventListener("change", async ev => {
   const t = ev.target;
@@ -2093,13 +2151,13 @@ async function sendRender() {
     card(1, "Initial results to all coaches", "before leaving the venue",
       pdf + tm,
       `<button ${dis} onclick="location='${base}/send/coaches.zip'">Download both (zip)</button>
-       <a href="${runMail("coaches")}">Email coaches</a><span class="muted" style="font-size:12.5px">${nCoach ? `${nCoach} coach email${nCoach === 1 ? "" : "s"} in Bcc` : "no coach emails on file &mdash; add them in Contacts"} &middot; attach the two files</span>
+       <a href="#" data-mailpick="coaches">Email coaches</a><span class="muted" style="font-size:12.5px">${nCoach ? `pick from ${nCoach} coach email${nCoach === 1 ? "" : "s"} and the referee` : "no coach emails on file &mdash; add them in Contacts"} &middot; attach the two files</span>
        <span class="grow"></span>${mark("coaches", "Sent")}`) +
     card(2, `Final Meet Report and results to ${esc(RESULTS_TO)}`, due ? `due ${fmt(due)}${due < new Date() && !sent.final ? ' <b style="color:var(--err)">overdue</b>' : ""}` : "within 48 hours",
       file("<b>Final Meet Report</b>, signed by both officials and the head coaches", S.fmr ? `<a class="small" href="${base}/store/docs/${encodeURIComponent(S.fmr)}" target="_blank">${esc(S.fmr)}</a> <button class="ghost small" data-fmrup="1">Replace</button>`
         : `<button class="small" data-fmrup="1">Add the signed report…</button>`, S.fmr ? "" : "Scan or photograph the signed form (PDF or picture)") + pdf + tm,
       `<button ${dis} onclick="location='${base}/send/final.zip'">Download all (zip)</button>
-       <a href="${runMail("final")}">Email ${esc(RESULTS_TO)}</a><span class="muted" style="font-size:12.5px">Cc ${cc.map(x => x[1] ? esc(x[0]) : `<s>${esc(x[0])}</s>`).join(", ")}${missCc.length ? ` &mdash; add ${missCc.join(", ")} on the <a href="#" data-gorun="1">Meet checklist</a>` : ""}</span>
+       <a href="#" data-mailpick="final">Email ${esc(RESULTS_TO)}</a><span class="muted" style="font-size:12.5px">Cc ${cc.map(x => x[1] ? esc(x[0]) : `<s>${esc(x[0])}</s>`).join(", ")}${missCc.length ? ` &mdash; add ${missCc.join(", ")} on the <a href="#" data-gorun="1">Meet checklist</a>` : ""}</span>
        <span class="grow"></span>${mark("final", "Sent")}`) +
     card(3, "Keep for the season", "all paperwork, for the whole season",
       file("<b>Meet Manager backup</b> (File &rarr; Restore)", `<button class="ghost small" ${dis} onclick="location='${base}/db/backup'">Download</button>`) + pdf +

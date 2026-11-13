@@ -211,7 +211,7 @@ function render() {
   // team scores at the bottom
   if (D.scores && D.scores.length && !q && !MINE) {
     out.push(`<div class="card"><h2>Team scores${D.scored ? ` · after ${D.scored} event${D.scored == 1 ? "" : "s"}` : ""}</h2><div class="scores">
-      <span class="h">Team</span><span class="h n">Girls</span><span class="h n">Boys</span><span class="h n">Total</span>
+      <span class="h">Team</span><span class="h n">Women</span><span class="h n">Men</span><span class="h n">Total</span>
       ${D.scores.map(s => `<span>${esc(s.name)}</span><span class="n">${s.F}</span><span class="n">${s.M}</span><span class="n"><b>${s.total}</b></span>`).join("")}</div></div>`);
   }
   if (!shown) out.push(`<div class="empty">${MINE ? "Tap ☆ next to a swimmer to follow them here." : q ? "No one matches that." : "No events yet."}</div>`);

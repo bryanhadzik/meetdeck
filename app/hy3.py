@@ -14,7 +14,7 @@ import zipfile
 
 STROKES = {"A": "Free", "B": "Back", "C": "Breast", "D": "Fly", "E": "IM",
            "1": "Free", "2": "Back", "3": "Breast", "4": "Fly", "5": "IM"}
-GENDERS = {"F": "Girls", "W": "Girls", "G": "Girls", "M": "Boys", "B": "Boys", "X": "Mixed"}
+GENDERS = {"F": "Women", "W": "Women", "G": "Women", "M": "Men", "B": "Men", "X": "Mixed"}
 
 
 def checksum(body: bytes) -> bytes:

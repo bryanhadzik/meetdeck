@@ -1501,7 +1501,7 @@ function renderScores() {
   if (stale) html += `<div class="issue">${stale} race(s) changed since they were scored (times, DQs or scratches) &mdash; press <b>Rescore event</b> on them.</div>`;
   if (sc.skipped && sc.skipped.length) html += `<div class="muted" style="font-size:13px;margin-bottom:6px">Not scored (not fully timed): ${sc.skipped.map(esc).join(", ")}</div>`;
   if (sc.pairs && sc.pairs.length) {
-    html += `<table style="max-width:640px"><tr><th>Dual</th><th>Girls</th><th>Boys</th><th>Combined</th></tr>` + sc.pairs.map(p => {
+    html += `<table style="max-width:640px"><tr><th>Dual</th><th>Women</th><th>Men</th><th>Combined</th></tr>` + sc.pairs.map(p => {
       const a = tn(p.a), b = tn(p.b), r = (x, y) => `${x} – ${y}`;
       const ac = p.a_pts.F + p.a_pts.M, bc = p.b_pts.F + p.b_pts.M;
       return `<tr><td><b>${esc(a.abbr)}</b> vs <b>${esc(b.abbr)}</b></td><td>${r(p.a_pts.F, p.b_pts.F)}</td><td>${r(p.a_pts.M, p.b_pts.M)}</td><td><b>${r(ac, bc)}</b> ${ac === bc ? "tie" : esc((ac > bc ? a : b).abbr) + " wins"}</td></tr>`;
@@ -1510,7 +1510,7 @@ function renderScores() {
     const rows = Object.entries(sc.teams || {}).map(([t, v]) => ({t: +t, ...v}));
     const block = (key, title) => { const r = rows.filter(x => x[key]).sort((a, b) => b[key] - a[key]);
       return `<div><h3>${title}</h3>${r.length ? `<table><tr><th></th><th>Team</th><th style="text-align:right">Points</th></tr>${r.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(tn(x.t).name)} <span class="muted">${esc(tn(x.t).abbr)}</span></td><td style="text-align:right"><b>${x[key]}</b></td></tr>`).join("")}</table>` : `<div class="muted">—</div>`}</div>`; };
-    html += `<div class="grid2" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${block("F", "Girls")}${block("M", "Boys")}${block("total", "Combined")}</div>`;
+    html += `<div class="grid2" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${block("F", "Women")}${block("M", "Men")}${block("total", "Combined")}</div>`;
     // per-event breakdown
     const teams = rows.map(x => x.t).sort((a, b) => tn(a).abbr.localeCompare(tn(b).abbr));
     html += `<h3 style="margin-top:14px">By event</h3><div class="scroll"><table style="font-size:13px"><tr><th>Event</th>${teams.map(t => `<th style="text-align:right">${esc(tn(t).abbr)}</th>`).join("")}</tr>` +

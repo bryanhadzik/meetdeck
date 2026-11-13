@@ -820,7 +820,7 @@ def results_pdf(m, db, licensee="", printed=None) -> bytes:
 
 
 # ---------------- timeline (Meet Manager's Session Report) ----------------
-TL_SEX = {"G": "Girls", "B": "Boys", "W": "Women", "F": "Women", "M": "Men", "X": "Mixed"}
+TL_SEX = {"G": "Women", "B": "Men", "W": "Women", "F": "Women", "M": "Men", "X": "Mixed"}
 TL_STROKE = {"A": "Freestyle", "B": "Backstroke", "C": "Breaststroke", "D": "Butterfly", "E": "IM"}
 
 

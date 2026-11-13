@@ -11,7 +11,7 @@ import dqcodes
 import meetdb
 from hy3 import make_line
 
-GENDER = {"F": "Girls", "M": "Boys", "X": "Mixed", "W": "Girls"}
+GENDER = {"F": "Women", "M": "Men", "X": "Mixed", "W": "Women"}
 
 
 def _line(tag: str, fields) -> bytes:
@@ -447,14 +447,14 @@ td,th{{padding:2px 6px;text-align:left}}th{{font-size:11px;color:#555;text-trans
 <h1>{esc(meet['name'])}</h1><div class="sub">{esc(meet['location'])} &middot; {esc(meet['start'])} &middot; Results</div>"""]
     sc = scoring or {}
     if sc.get("pairs"):
-        parts.append("<h2>Team scores</h2><table style='max-width:520px'><tr><th>Dual</th><th class='n'>Girls</th><th class='n'>Boys</th><th class='n'>Combined</th></tr>")
+        parts.append("<h2>Team scores</h2><table style='max-width:520px'><tr><th>Dual</th><th class='n'>Women</th><th class='n'>Men</th><th class='n'>Combined</th></tr>")
         for p in sc["pairs"]:
             a, b = m["teams"].get(p["a"], {}), m["teams"].get(p["b"], {})
             parts.append(f"<tr><td>{esc(a.get('abbr', ''))} vs {esc(b.get('abbr', ''))}</td><td class='n'>{p['a_pts']['F']:g} - {p['b_pts']['F']:g}</td>"
                          f"<td class='n'>{p['a_pts']['M']:g} - {p['b_pts']['M']:g}</td><td class='n'>{p['a_pts']['F'] + p['a_pts']['M']:g} - {p['b_pts']['F'] + p['b_pts']['M']:g}</td></tr>")
         parts.append("</table>")
     elif sc.get("teams"):
-        parts.append("<h2>Team scores</h2><table style='max-width:520px'><tr><th>Team</th><th class='n'>Girls</th><th class='n'>Boys</th><th class='n'>Combined</th></tr>")
+        parts.append("<h2>Team scores</h2><table style='max-width:520px'><tr><th>Team</th><th class='n'>Women</th><th class='n'>Men</th><th class='n'>Combined</th></tr>")
         for t, v in sorted(sc["teams"].items(), key=lambda x: -x[1]["total"]):
             tm = m["teams"].get(int(t), {})
             parts.append(f"<tr><td>{esc(tm.get('name', ''))}</td><td class='n'>{v['F']:g}</td><td class='n'>{v['M']:g}</td><td class='n'><b>{v['total']:g}</b></td></tr>")

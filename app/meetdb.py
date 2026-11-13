@@ -16,7 +16,7 @@ MMDB_DIR = os.environ.get("MMDB_DIR", "/opt/mmdb")
 _proc = None
 
 STROKE = {"A": "Free", "B": "Back", "C": "Breast", "D": "Fly", "E": "IM"}
-GENDER = {"F": "Girls", "M": "Boys", "X": "Mixed", "W": "Women"}
+GENDER = {"F": "Women", "M": "Men", "X": "Mixed", "W": "Women"}   # Women/Men everywhere, like the printed program
 STAT = {"": "", "Q": "DQ", "F": "DQ", "R": "NS", "S": "SCR", "D": "DQ"}
 TABLES = ["Meet", "Team", "Athlete", "Event", "Session", "Sessitem", "Entry", "Relay", "RelayNames", "Scoring"]
 

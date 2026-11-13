@@ -557,7 +557,10 @@ function relayIssues(e) {
     if (!x) return;
     const ind = M.entries.filter(y => y.kind === "I" && y.ath === x);
     const scr = ind.filter(y => y.scr);
-    if (scr.length) out.push({ath: x, msg: `${athName(x)} is scratched${scr.length === ind.length ? " from the meet" : " from " + scr.map(y => "Ev " + ((M.events.find(v => v.ptr === y.event) || {}).no || "?")).join(", ")}`});
+    // Scratching one individual event doesn't take a swimmer off a relay (a swimmer may
+    // drop the 500 and still swim the medley relay). Only flag a swimmer who is
+    // scratched from every individual event - that usually means they're out of the meet.
+    if (ind.length && scr.length === ind.length) out.push({ath: x, msg: `${athName(x)} is scratched from ${ind.length > 1 ? "all their individual events" : "their only individual event"} \u2014 still on this relay?`});
   });
   const open = e.legs.map((x, i) => x ? 0 : i + 1).filter(Boolean);
   if (open.length && open.length < e.legs.length) out.push({msg: `leg ${open.join(", ")} open`});

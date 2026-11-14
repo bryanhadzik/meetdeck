@@ -316,7 +316,7 @@ function show() {
   wtShow();
   lastMinShow();
   missingTeamsShow();
-  $("#problems").innerHTML = scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "");
+  $("#problems").innerHTML = scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "") + laneGapWarning();
   render();
 }
 // ---- teams added in meet setup after the database was built: a database can't take new teams, so offer a rebuild ----
@@ -964,6 +964,24 @@ function renderMeet() {
     <h3>Address</h3>
     <div class="mgrid">${inp("addr1", "Address", mt.addr1, 'maxlength="30" style="width:100%"')}${inp("addr2", "Address line 2", mt.addr2, 'maxlength="30" style="width:100%"')}</div>
     <div class="mgrid4">${inp("city", "City", mt.city, 'maxlength="30"')}${inp("state", "State", mt.state, 'maxlength="3" size="4"')}${inp("zip", "Zip", mt.zip, 'maxlength="10" size="10"')}${inp("country", "Country", mt.country, 'maxlength="3" size="4"')}</div>`;
+}
+// Before the meet starts: a heat with an empty lane between swimmers (a scratch left a hole) is worth
+// fixing - re-seed the event or move a swimmer. Once the first race is swum the warning goes away.
+function laneGapWarning() {
+  if (S.started || !M) return "";
+  const out = [];
+  M.events.forEach(v => {
+    const ents = M.entries.filter(e => e.event === v.ptr && !e.scr && e.heat && e.lane);
+    [...new Set(ents.map(e => e.heat))].sort((a, b) => a - b).forEach(h => {
+      const ln = ents.filter(e => e.heat === h).map(e => e.lane).sort((a, b) => a - b);
+      const holes = [];
+      for (let l = ln[0] + 1; l < ln[ln.length - 1]; l++) if (!ln.includes(l)) holes.push(l);
+      if (holes.length) out.push({ptr: v.ptr, txt: `#${v.no}${v.ltr || ""}${ents.some(e => e.heat > 1) ? " heat " + h : ""} (lane${holes.length > 1 ? "s" : ""} ${holes.join(", ")})`});
+    });
+  });
+  if (!out.length) return "";
+  return `<div class="issue" style="background:var(--warn-bg,#fff4d6);border-color:#d4a72c"><b>Empty lanes in the middle of a heat:</b> ${out.map(x => esc(x.txt)).join(" &middot; ")}.
+    <span class="muted">Re-seed the event or move a swimmer in Seeding. This goes away once the meet starts.</span></div>`;
 }
 function renderChanges() {
   { const other = l => l.kind === "export" || /^(Published|Sent|Downloaded|Exported)\b/.test(l.msg || "");

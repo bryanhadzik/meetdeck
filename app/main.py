@@ -1636,7 +1636,7 @@ def send_draft(mid: str, body: dict):
     m = meetdb.load(_dbfile(d))
     lic = (_dbinfo(d).get("hyb") or "")[28:78].strip() or _any_licensee()
     stem = _stem(m["meet"]["name"])
-    files = [(f"{stem} results.pdf", heatsheet.results_pdf(m, _dbfile(d), lic), "application/pdf")]
+    files = [(f"{stem} results.pdf", heatsheet.results_pdf(m, _dbfile(d), _report_header(d)), "application/pdf")]
     data, name = results_mod.hy3_zip(m, _dbfile(d), lic, int(_dbinfo(d).get("result_exports", 0)) or 1)
     files.append((name, data, "application/zip"))
     if group == "final":
@@ -2847,6 +2847,18 @@ async def font_upload(file: UploadFile = File(...)):
     return heatsheet.font_status()
 
 
+def _report_header(d: Path) -> str:
+    """Top-left line on printed reports: the host school's name (Meet Manager prints its licensee there,
+    which is whoever's copy built the master - e.g. Tooele - even at another school's meet)."""
+    try:
+        h = next((h for h in _hosts() if h["id"] == _meta(d).get("host", "THS")), None)
+        if h and h.get("name"):
+            return h["name"]
+    except Exception:
+        pass
+    return (_dbinfo(d).get("hyb") or "")[28:78].strip() or _any_licensee()
+
+
 def _any_licensee() -> str:
     """Meet Manager licence name from another meet's backup, for meets opened from a bare .mdb."""
     for f in sorted(DATA.glob("*/db/info.json"), key=lambda f: f.stat().st_mtime, reverse=True):
@@ -2916,7 +2928,7 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
     if not db.exists():
         raise HTTPException(400, "No database yet")
     m = meetdb.load(db)
-    licensee = (_dbinfo(d).get("hyb") or "")[28:78].strip() or _any_licensee()
+    licensee = _report_header(d)
     if kind == "heatsheet":
         try:
             m["records"] = _program_records(d)
@@ -3118,7 +3130,7 @@ def send_zip(mid: str, group: str):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         if group in ("coaches", "final", "keep"):
-            z.writestr(f"{stem} results.pdf", heatsheet.results_pdf(m, _dbfile(d), lic))
+            z.writestr(f"{stem} results.pdf", heatsheet.results_pdf(m, _dbfile(d), _report_header(d)))
         if group in ("coaches", "final"):
             data, name = results_mod.hy3_zip(m, _dbfile(d), lic, int(_dbinfo(d).get("result_exports", 0)) or 1)
             for n in zipfile.ZipFile(io.BytesIO(data)).namelist():

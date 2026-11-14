@@ -705,12 +705,9 @@ class _Results(_Sheet):
                               (150.0, teams.get(a.get("team"), {}).get("abbr", ""), "l", 54), (240.0, tm, "r"), (RW, pts, "r")]))
         y = 11.5
         if st in ("Q", "F", "D") and e.get("dq"):
-            if relay:
-                d1 = dqcodes.describe(e["dq"], v["stroke"], True)
-                d2 = dqcodes.describe(e["dq2"], v["stroke"], True) if e.get("dq2") else ""
-                txt = f"{d1}: {d2}" if d2 else d1
-            else:
-                txt = dqcodes.describe(e["dq"], v["stroke"], False)
+            # both infractions with their codes, e.g. "5A Stroke infraction - fly / 1B Kick - back"
+            codes = [c for c in (e["dq"], e.get("dq2")) if c]
+            txt = " / ".join(f"{c} {dqcodes.describe(c, v['stroke'], relay)}".strip() for c in codes)
             lines.append((y, [(30.0, txt, "l", 240)]))
             y += 11.5
         if relay:

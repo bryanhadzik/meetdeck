@@ -19,6 +19,9 @@ $Py     = Join-Path $Root 'python\python.exe'
 $PyW    = Join-Path $Root 'python\pythonw.exe'
 $Timing = Join-Path $App 'timing'
 $Data   = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'MeetDeck'
+# logs and captures go in Documents\MeetDeck\timing, which updates don't replace
+$TimingData = Join-Path $Data 'timing'
+$env:MEETDECK_DATA = $Data
 $Url    = 'http://127.0.0.1:8001/'
 $Repo   = 'bryanhadzik/meetdeck'
 $script:ToolProc = $null
@@ -131,7 +134,7 @@ Set-LauncherShortcuts
 # ---------------------------------------------------------------- window
 $f = New-Object Windows.Forms.Form
 $f.Text = 'MeetDeck'; $f.StartPosition = 'CenterScreen'; $f.FormBorderStyle = 'FixedSingle'; $f.MaximizeBox = $false
-$f.ClientSize = New-Object Drawing.Size(500, 470); $f.Font = New-Object Drawing.Font('Segoe UI', 9.5)
+$f.ClientSize = New-Object Drawing.Size(500, 506); $f.Font = New-Object Drawing.Font('Segoe UI', 9.5)
 $ico = Join-Path $App 'static\meetdeck.ico'; if (Test-Path $ico) { $f.Icon = New-Object Drawing.Icon($ico) }
 
 function Btn($text, $x, $y, $w, $parent, $click) {
@@ -162,7 +165,7 @@ $null = Btn 'Desktop shortcut' 226 88 120 $g1 {
 }
 
 # CTS console tools
-$g2 = New-Object Windows.Forms.GroupBox; $g2.Text = 'CTS console tools'; $g2.Location = New-Object Drawing.Point(12, 150); $g2.Size = New-Object Drawing.Size(476, 270); $f.Controls.Add($g2)
+$g2 = New-Object Windows.Forms.GroupBox; $g2.Text = 'CTS console tools'; $g2.Location = New-Object Drawing.Point(12, 150); $g2.Size = New-Object Drawing.Size(476, 306); $f.Controls.Add($g2)
 $null = Lbl 'Mode' 14 26 90 $g2
 $mode = New-Object Windows.Forms.ComboBox; $mode.DropDownStyle = 'DropDownList'; $mode.Location = New-Object Drawing.Point(110, 22); $mode.Size = New-Object Drawing.Size(350, 24)
 [void]$mode.Items.AddRange(@('Emulator - pretend to be the console', 'Tap - pass through to the real console and record', 'Listen only - record, never answer'))
@@ -218,11 +221,16 @@ $null = Btn 'Stop' 120 222 100 $g2 {
     foreach ($t in Get-ToolProcs) { try { Stop-Process -Id $t.ProcessId -Force } catch { } }
     Set-Status 'Console tool stopped. Its log and capture were saved as it ran.'; Refresh-All
 }
-$null = Btn 'Log' 226 222 100 $g2 { $l = Join-Path $Timing 'emulator-log.txt'; if (Test-Path $l) { Start-Process notepad.exe $l } else { Set-Status 'No log yet.' } }
-$null = Btn 'Capture files' 332 222 128 $g2 { Start-Process explorer.exe $Timing }
+$null = Btn 'Log' 226 222 100 $g2 { $l = Join-Path $TimingData 'emulator-log.txt'; if (Test-Path $l) { Start-Process notepad.exe $l } else { Set-Status 'No log yet.' } }
+$null = Btn 'Capture files' 332 222 128 $g2 { New-Item -ItemType Directory -Force $TimingData | Out-Null; Start-Process explorer.exe $TimingData }
+$null = Btn 'Compare last two runs' 14 258 200 $g2 {
+    # e.g. run the emulator for Meet Manager's send, stop, start it again for MeetDeck's send, stop, then compare
+    Start-Process -FilePath $Py -ArgumentList @('-X', 'utf8', 'emulator.py', '--compare') -WorkingDirectory $Timing
+    Set-Status 'Comparing the two newest captures (also saved as emulator-compare.txt).'
+}
 
 # status line
-$status = New-Object Windows.Forms.Label; $status.Location = New-Object Drawing.Point(14, 430); $status.Size = New-Object Drawing.Size(474, 34)
+$status = New-Object Windows.Forms.Label; $status.Location = New-Object Drawing.Point(14, 466); $status.Size = New-Object Drawing.Size(474, 34)
 $status.ForeColor = [Drawing.Color]::DarkSlateGray; $f.Controls.Add($status)
 function Set-Status($t) { $status.Text = $t; [System.Windows.Forms.Application]::DoEvents() }
 

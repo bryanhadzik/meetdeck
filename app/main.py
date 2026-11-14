@@ -3386,7 +3386,7 @@ def windows_app():
 # here: /api/bridge/<path> -> http://127.0.0.1:8766/<path> on the MeetDeck computer.
 BRIDGE_LOCAL = os.environ.get("MEETDECK_BRIDGE", "http://127.0.0.1:8766").rstrip("/")
 _BRIDGE_PATHS = {"status", "races", "race", "meet", "log", "sequence", "debug",
-                 "connect", "disconnect", "download", "sim/load", "ping", "listen", "probe"}
+                 "connect", "disconnect", "download", "sim/load", "ping", "listen", "probe", "files", "file"}
 
 
 def _bridge_call(method: str, path: str, query: str, body: bytes) -> tuple[int, bytes]:

@@ -127,3 +127,18 @@ def test_tap_passes_through_and_records(tmp_path, monkeypatch):
     log = open(tmp_path / "log.txt").read()
     assert "MM>" in log and "WHO ARE YOU" in log and "<CTS" in log and "console reply" in log
     stop.set()
+
+
+def test_compare_shows_events_left_blank(tmp_path, monkeypatch):
+    def cap(name, evs, msgs):
+        p = tmp_path / name
+        p.write_text(json.dumps({"saved": name, "active_sequence": 1, "meet_names": {"1": "X"}, "labels": {},
+                                 "event_sequences": {"1": {str(n): {"bytes": "aa", "description": "d"} for n in evs}},
+                                 "messages": [[i * 100, m, m] for i, m in enumerate(msgs)]}))
+        return str(p)
+    a = cap("a.json", range(1, 23), ["w", "e21", "e22", "ir"])
+    b = cap("b.json", range(1, 21), ["w"])
+    out = "\n".join(emulator.compare(a, b))
+    assert "21" in out and "(missing)" in out and "A has 22 events, B has 20" in out
+    assert "A went on with" in out and "DIFFERENT" in out
+    assert "SAME" in "\n".join(emulator.compare(a, a))

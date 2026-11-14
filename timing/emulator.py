@@ -38,8 +38,18 @@ import cts  # noqa: E402
 from sim import SimConsole  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-LOG = os.path.join(HERE, "emulator-log.txt")
-CAPTURE = os.path.join(HERE, "emulator-capture.json")
+
+
+def timing_dir() -> str:
+    """Logs and captures live in Documents\\MeetDeck\\timing (MEETDECK_DATA) so an update,
+    which replaces the app folder, doesn't throw them away. Run on its own: next to this file."""
+    d = os.path.join(os.environ["MEETDECK_DATA"], "timing") if os.environ.get("MEETDECK_DATA") else HERE
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+LOG = os.path.join(timing_dir(), "emulator-log.txt")
+CAPTURE = os.path.join(timing_dir(), "emulator-capture.json")
 TABLES = {0: "sex", 1: "age group", 2: "stroke", 3: "bracket"}
 
 
@@ -140,6 +150,8 @@ class Emulator:
         self.unknown: list[str] = []
         self.garbage: list[str] = []
         self.started = time.strftime("%Y-%m-%d %H:%M:%S")
+        self.t0 = None
+        self.messages: list[list] = []          # [ms since the first message, hex, meaning] in arrival order
 
     # ---- framing: [len lo][len hi][command...][check lo][check hi] ----
     def feed(self, data: bytes, now: float):
@@ -175,6 +187,10 @@ class Emulator:
         self.bump(re.sub(r"\d+", "#", what.split(":")[0].split(" = ")[0]) if not what.startswith("UNKNOWN")
                   else "UNKNOWN " + printable(cmd[:2]))
         self.rec.msg("<<", msg, what)
+        now = time.time()
+        self.t0 = self.t0 or now
+        if len(self.messages) < 5000:
+            self.messages.append([round((now - self.t0) * 1000), msg.hex(" "), what])
         if what.startswith("UNKNOWN"):
             self.unknown.append(msg.hex(" "))
         if self.listen_only:
@@ -218,7 +234,7 @@ class Emulator:
         out = {"started": self.started, "saved": time.strftime("%Y-%m-%d %H:%M:%S"),
                "active_sequence": s.active_slot, "meet_names": s.titles, "event_sequences": events, "labels": labels,
                "commands_seen": self.counts, "unknown_commands": self.unknown[-50:],
-               "not_console_messages": self.garbage[-50:]}
+               "not_console_messages": self.garbage[-50:], "messages": self.messages}
         with open(CAPTURE, "w", encoding="utf-8") as f:
             json.dump(out, f, indent=1)
 
@@ -292,6 +308,87 @@ def tap(a, rec):
         mm.close(); con.close()
 
 
+def rotate():
+    """Keep the last run's log and capture under their time stamp, so each run starts clean
+    and two runs (Meet Manager, then MeetDeck) can be compared."""
+    for path in (CAPTURE, LOG):
+        if os.path.exists(path) and os.path.getsize(path):
+            stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(os.path.getmtime(path)))
+            base, ext = os.path.splitext(path)
+            try:
+                os.replace(path, "%s-%s%s" % (base, stamp, ext))
+            except OSError:
+                pass
+
+
+def captures() -> list:
+    """Every capture in the timing folder, newest first."""
+    d = timing_dir()
+    fs = [os.path.join(d, n) for n in os.listdir(d) if n.startswith("emulator-capture") and n.endswith(".json")]
+    return sorted(fs, key=os.path.getmtime, reverse=True)
+
+
+def compare(path_a: str, path_b: str) -> list:
+    """Differences between two captures: what each side left on the console (meet names, labels,
+    events per slot, active meet) and how each sent it (order of messages, timing)."""
+    a, b = (json.load(open(p, encoding="utf-8")) for p in (path_a, path_b))
+    na, nb = os.path.basename(path_a), os.path.basename(path_b)
+    out = ["A = %s (%s)" % (na, a.get("saved", "")), "B = %s (%s)" % (nb, b.get("saved", ""))]
+
+    def diff(title, x, y):
+        keys = sorted(set(x) | set(y), key=lambda k: (len(str(k)), str(k)))
+        rows = [(k, x.get(k), y.get(k)) for k in keys if x.get(k) != y.get(k)]
+        if rows:
+            out.append("")
+            out.append(title + ":")
+            for k, va, vb in rows:
+                out.append("  %-6s A: %s" % (k, va if va is not None else "(missing)"))
+                out.append("  %-6s B: %s" % ("", vb if vb is not None else "(missing)"))
+        return bool(rows)
+
+    same = True
+    same &= not diff("Active meet slot", {"slot": a.get("active_sequence")}, {"slot": b.get("active_sequence")})
+    same &= not diff("Meet names", {k: v for k, v in (a.get("meet_names") or {}).items() if v},
+                     {k: v for k, v in (b.get("meet_names") or {}).items() if v})
+    for t in sorted(set(a.get("labels", {})) | set(b.get("labels", {}))):
+        same &= not diff("Labels - " + t, a.get("labels", {}).get(t, {}), b.get("labels", {}).get(t, {}))
+    ea, eb = a.get("event_sequences", {}), b.get("event_sequences", {})
+    for slot in sorted(set(ea) | set(eb)):
+        fa = {k: "%s  %s" % (v["bytes"], v["description"]) for k, v in ea.get(slot, {}).items()}
+        fb = {k: "%s  %s" % (v["bytes"], v["description"]) for k, v in eb.get(slot, {}).items()}
+        same &= not diff("Events in meet slot " + slot, fa, fb)
+        out.append("")
+        out.append("Meet slot %s: A has %d events, B has %d" % (slot, len(fa), len(fb)))
+    ma, mb = a.get("messages") or [], b.get("messages") or []
+    if ma and mb:
+        out.append("")
+        out.append("Messages: A sent %d in %.1f s, B sent %d in %.1f s" % (len(ma), ma[-1][0] / 1000, len(mb), mb[-1][0] / 1000))
+        for i, (x, y) in enumerate(zip(ma, mb)):
+            if x[1] != y[1]:
+                same = False
+                out.append("First difference at message %d:" % (i + 1))
+                out.append("  A: %s   %s" % (x[1], x[2]))
+                out.append("  B: %s   %s" % (y[1], y[2]))
+                break
+        else:
+            if len(ma) != len(mb):
+                same = False
+                longer, who = (ma, "A") if len(ma) > len(mb) else (mb, "B")
+                out.append("Same messages in the same order, but %s went on with:" % who)
+                for m in longer[min(len(ma), len(mb)):][:10]:
+                    out.append("  %s   %s" % (m[1], m[2]))
+            else:
+                out.append("Every message is the same, in the same order.")
+
+        def gaps(ms):
+            g = sorted(y[0] - x[0] for x, y in zip(ms, ms[1:]))
+            return "median %d ms, longest %d ms" % (g[len(g) // 2], g[-1]) if g else "-"
+        out.append("Gap between messages: A %s; B %s" % (gaps(ma), gaps(mb)))
+    out.append("")
+    out.append("SAME: both left the console identical." if same else "DIFFERENT - see above.")
+    return out
+
+
 def practice(sim: SimConsole):
     import random
     rng = random.Random(3)
@@ -312,9 +409,23 @@ def main():
     ap.add_argument("--delay", type=int, default=40, help="ms to wait before answering (a real console isn't instant)")
     ap.add_argument("--no-pace", action="store_true", help="send replies in one burst instead of at line speed")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--compare", nargs="*", metavar="CAPTURE",
+                    help="compare two captures (default: the two newest) and print the differences")
     ap.add_argument("--forward", metavar="CONSOLE_PORT",
                     help="TAP mode: pass everything through to the REAL console on this port and record both ways")
     a = ap.parse_args()
+    if a.compare is not None:
+        fs = a.compare or captures()[:2][::-1]
+        if len(fs) < 2:
+            print("Need two captures to compare (found %d in %s)." % (len(fs), timing_dir()))
+        else:
+            text = "\n".join(compare(fs[0], fs[1]))
+            print(text)
+            with open(os.path.join(timing_dir(), "emulator-compare.txt"), "w", encoding="utf-8") as f:
+                f.write(text + "\n")
+        if sys.stdin and sys.stdin.isatty():
+            input("\nPress Enter to close.")
+        return
     interactive = not a.port and sys.stdin and sys.stdin.isatty()
     if a.list or not a.port:
         ports = cts.list_ports(detail=True)
@@ -354,6 +465,7 @@ def main():
         if interactive:
             input("\nPress Enter to close.")
         sys.exit(1)
+    rotate()
     sim = SimConsole(lanes=a.lanes)
     if a.practice:
         practice(sim)

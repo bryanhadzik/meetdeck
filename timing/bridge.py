@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -35,7 +36,36 @@ def _version() -> str:
 
 
 VERSION = _version()
-LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cts-log.txt")
+# in Documents\\MeetDeck\\timing when run by MeetDeck, so updates (which replace the app folder) keep it
+TIMING_DIR = (os.path.join(os.environ["MEETDECK_DATA"], "timing") if os.environ.get("MEETDECK_DATA")
+              else os.path.dirname(os.path.abspath(__file__)))
+os.makedirs(TIMING_DIR, exist_ok=True)
+LOG_PATH = os.path.join(TIMING_DIR, "cts-log.txt")
+_FILE_OK = re.compile(r"^(cts-log|emulator-log|emulator-capture|emulator-compare)[\w.-]*\.(txt|json)$")
+
+
+def timing_files() -> dict:
+    """The console logs and emulator captures, newest first."""
+    out = []
+    for n in os.listdir(TIMING_DIR):
+        p = os.path.join(TIMING_DIR, n)
+        if _FILE_OK.match(n) and os.path.isfile(p):
+            out.append({"name": n, "bytes": os.path.getsize(p),
+                        "modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(p)))})
+    return {"folder": TIMING_DIR, "files": sorted(out, key=lambda f: f["modified"], reverse=True)}
+
+
+def timing_file(q: dict) -> dict:
+    """One log or capture (the last `tail` lines of a long log)."""
+    name = os.path.basename(q.get("name", ""))
+    if not _FILE_OK.match(name) or not os.path.isfile(os.path.join(TIMING_DIR, name)):
+        raise ValueError("no such timing file")
+    with open(os.path.join(TIMING_DIR, name), encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    tail = int(q.get("tail", 0) or 0)
+    if tail:
+        text = "\n".join(text.splitlines()[-tail:])
+    return {"name": name, "text": text}
 LOCK = threading.Lock()
 STATE = {"console": None, "serial": None, "port": None, "settings": None, "identity": None, "sim": False,
          "last_probe": None, "connected_at": None, "last_connect_error": None}
@@ -60,6 +90,24 @@ def note(text: str):
     RECENT.append(line)
     with open(LOG_PATH, "a") as f:
         f.write(line + "\n")
+
+
+def download(body: dict) -> dict:
+    """Send the meet's events, noting in the log how far it got (a stop part-way leaves the
+    rest of the events blank on the console)."""
+    evs, slot = body["events"], int(body.get("slot", 1))
+    nos = sorted(int(e["no"]) for e in evs)
+    note(f"download: {len(evs)} events ({nos[0] if nos else '-'}-{nos[-1] if nos else '-'}) to meet slot {slot}")
+    step = [0, 0]
+    t0 = time.time()
+    try:
+        r = need().download_meet(slot, evs, body.get("title"), progress=lambda d, t: step.__setitem__(slice(0, 2), [d, t]))
+    except Exception as e:
+        note(f"download STOPPED at step {step[0] + 1} of {step[1]} after {time.time() - t0:.1f}s: {e}")
+        raise cts.CTSError(f"The download stopped part-way (step {step[0] + 1} of {step[1]}): {e}. "
+                           "Events after that point are blank on the console - send the meet again.")
+    note(f"download finished: {r['events']} events in {time.time() - t0:.1f}s")
+    return r
 
 
 def disconnect():
@@ -318,7 +366,7 @@ class Handler(BaseHTTPRequestHandler):
         routes = {"/status": status, "/races": lambda: need().race_list(), "/race": lambda: get_race(q),
                   "/meet": lambda: need().meet(int(q.get("dir", 0))), "/log": lambda: {"lines": RECENT[-int(q.get("n", 200)):]},
                   "/sequence": lambda: {"slot": int(q.get("slot", 1)), "title": need().sequence_title(int(q.get("slot", 1)))},
-                  "/debug": debug}
+                  "/debug": debug, "/files": timing_files, "/file": lambda: timing_file(q)}
         if u.path not in routes:
             return self._send(404, {"error": "not found"})
         self._run(routes[u.path])
@@ -328,7 +376,7 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length") or 0)
         body = json.loads(self.rfile.read(n) or b"{}") if n else {}
         routes = {"/connect": lambda: connect(body), "/disconnect": lambda: (disconnect(), status())[1],
-                  "/download": lambda: need().download_meet(int(body.get("slot", 1)), body["events"], body.get("title")),
+                  "/download": lambda: download(body),
                   "/sim/load": lambda: sim_load(body), "/ping": ping, "/listen": lambda: listen(body),
                   "/probe": lambda: probe_only(body)}
         if u.path not in routes:

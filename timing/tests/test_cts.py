@@ -167,3 +167,19 @@ def test_sim_real_life_trouble():
     assert 600 <= byl[2].final_ms - byl[2].backup_ms <= 1400              # backup about a second fast
     assert byl[3].final_ms - 62000 >= 400 and byl[3].backup_ms < byl[3].final_ms   # pad late, buttons earlier
     assert 63050 <= byl[4].backup_ms <= 63300 and byl[4].final_ms == 63000         # normal: buttons just after the pad
+
+
+def test_probe_gives_up_by_the_deadline(monkeypatch):
+    import time, cts
+    class Dead:            # a port that takes writes and never answers
+        is_open = True
+        port = "COM9"
+        def write(self, b): return len(b)
+        def read(self, n): time.sleep(0.01); return b""
+        def reset_input_buffer(self): pass
+        def close(self): self.is_open = False
+    monkeypatch.setattr(cts, "open_serial", lambda port, **s: Dead())
+    t = time.time()
+    out = cts.probe("COM9", attempts=(a := []), timeout=0.8, deadline=time.time() + 2.5)
+    assert time.time() - t < 3 and "identity" not in out
+    assert any("out of time" in x["result"] for x in a)

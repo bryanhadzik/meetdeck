@@ -284,8 +284,8 @@ class Console:
         raise CTSError(f"no reply from the console within {timeout:g}s - nothing came back on the serial line")
 
     # -- identity / meets --
-    def who_are_you(self) -> str:
-        r = self.request(CMD_WHO)
+    def who_are_you(self, timeout: float = 2.0) -> str:
+        r = self.request(CMD_WHO, timeout=timeout)
         return r[2:-2].decode("latin-1", errors="replace").strip("\x00 ").strip()
 
     def meet(self, direction: int = 0) -> dict:
@@ -446,9 +446,30 @@ SETTINGS_TO_TRY = [  # the pool's System 6 answers at 9600 8-O-1 (probe, 2026-11
 ]
 
 
+OPEN_PORTS: list = []            # every port opened here, so a stuck request can be cut loose (close_all)
+
+
 def open_serial(port: str, baudrate=9600, parity="N", stopbits=1, timeout=0.1):
     import serial  # pyserial
-    return serial.Serial(port, baudrate=baudrate, bytesize=8, parity=parity, stopbits=stopbits, timeout=timeout)
+    # write_timeout: a write that can't go out (a virtual port nobody reads) fails instead of hanging forever
+    ser = serial.Serial(port, baudrate=baudrate, bytesize=8, parity=parity, stopbits=stopbits, timeout=timeout,
+                        write_timeout=2)
+    OPEN_PORTS[:] = [p for p in OPEN_PORTS if getattr(p, "is_open", False)] + [ser]
+    return ser
+
+
+def close_all() -> list:
+    """Close every port this program still has open (frees it for Meet Manager). Returns their names."""
+    names = []
+    for p in OPEN_PORTS:
+        try:
+            if p.is_open:
+                names.append(p.port)
+                p.close()
+        except Exception:
+            pass
+    OPEN_PORTS.clear()
+    return names
 
 
 def list_ports(detail: bool = False) -> list[dict]:
@@ -510,11 +531,15 @@ def port_details(ser) -> dict:
     return d
 
 
-def probe(port: str, log=None, attempts: list | None = None) -> dict | None:
+def probe(port: str, log=None, attempts: list | None = None, timeout: float = 2.0, deadline: float | None = None) -> dict | None:
     """Try each setting with the identity request; returns the first that answers.
-    `attempts` (if given) gets one line per setting tried, for the debug panel."""
+    `attempts` (if given) gets one line per setting tried, for the debug panel.
+    timeout: wait per setting (the console answers in ~50 ms); deadline: time.time() to give up by."""
     attempts = attempts if attempts is not None else []
     for s in SETTINGS_TO_TRY:
+        if deadline and time.time() + timeout > deadline:
+            attempts.append({"settings": f"{s['baudrate']} {s['parity']}{s['stopbits']}", "result": "not tried (out of time)"})
+            continue
         label = f"{s['baudrate']} {s['parity']}{s['stopbits']}"
         try:
             ser = open_serial(port, **s)
@@ -524,7 +549,7 @@ def probe(port: str, log=None, attempts: list | None = None) -> dict | None:
         c = Console(ser, log=log)
         t0 = time.time()
         try:
-            ident = c.who_are_you()
+            ident = c.who_are_you(timeout)
             attempts.append({"settings": label, "result": f"answered: '{ident}'", "ms": round((time.time() - t0) * 1000)})
             return {**s, "identity": ident, "serial": ser, "attempts": attempts}
         except Exception as e:

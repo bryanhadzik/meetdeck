@@ -67,6 +67,7 @@ def timing_file(q: dict) -> dict:
         text = "\n".join(text.splitlines()[-tail:])
     return {"name": name, "text": text}
 LOCK = threading.Lock()
+CONNECT_SECS = 5                # Connect gives up (and lets go of the port) after this long
 STATE = {"console": None, "serial": None, "port": None, "settings": None, "identity": None, "sim": False,
          "last_probe": None, "connected_at": None, "last_connect_error": None}
 STARTED = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -155,7 +156,8 @@ def connect(body: dict) -> dict:
     else:
         note(f"probing {port}")
         attempts = []
-        found = cts.probe(port, log=log, attempts=attempts)
+        # 5 seconds in all (the console answers in ~50 ms), so a port that never answers is let go quickly
+        found = cts.probe(port, log=log, attempts=attempts, timeout=0.8, deadline=time.time() + CONNECT_SECS)
         STATE["last_probe"] = {"port": port, "when": time.strftime("%H:%M:%S"), "attempts": attempts}
         for a in attempts:
             note(f"probe {port} {a['settings']}: {a['result']}")
@@ -349,16 +351,42 @@ class Handler(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
-    def _run(self, fn, *a):
-        try:
-            with LOCK:
-                self._send(200, fn(*a))
-        except (ValueError, cts.CTSError) as e:
+    def _run(self, fn, *a, limit: float = 15):
+        """Run a request with the serial port, but never longer than `limit` seconds: a request
+        that hangs (a port that never answers) has its port closed so Meet Manager can use it."""
+        box = {}
+
+        def work():
+            if not LOCK.acquire(timeout=limit):
+                box["err"] = cts.CTSError("the bridge is busy with another request - try again in a moment")
+                return
+            try:
+                box["ok"] = fn(*a)
+            except Exception as e:
+                box["err"] = e
+            finally:
+                LOCK.release()
+        t = threading.Thread(target=work, daemon=True)
+        t.start()
+        t.join(limit)
+        if t.is_alive():
+            port = STATE.get("port")
+            freed = cts.close_all()
+            STATE.update(console=None, serial=None, port=None, settings=None, identity=None, sim=False)
+            msg = (f"No answer after {limit:g} seconds - gave up and released "
+                   f"{', '.join(freed) or port or 'the port'} so Meet Manager can use it. "
+                   "Check the port, and that nothing else (Meet Manager) has it open.")
+            STATE["last_connect_error"] = msg
+            note("TIMEOUT: " + msg)
+            return self._send(504, {"error": msg})
+        e = box.get("err")
+        if e is None:
+            return self._send(200, box.get("ok"))
+        if isinstance(e, (ValueError, cts.CTSError)):
             note(f"error: {e}")
-            self._send(400, {"error": str(e)})
-        except Exception as e:  # keep the bridge alive
-            note(f"error: {type(e).__name__}: {e}")
-            self._send(500, {"error": f"{type(e).__name__}: {e}"})
+            return self._send(400, {"error": str(e)})
+        note(f"error: {type(e).__name__}: {e}")   # keep the bridge alive
+        self._send(500, {"error": f"{type(e).__name__}: {e}"})
 
     def do_GET(self):
         u = urlparse(self.path)
@@ -369,7 +397,7 @@ class Handler(BaseHTTPRequestHandler):
                   "/debug": debug, "/files": timing_files, "/file": lambda: timing_file(q)}
         if u.path not in routes:
             return self._send(404, {"error": "not found"})
-        self._run(routes[u.path])
+        self._run(routes[u.path], limit={"/races": 60, "/race": 30}.get(u.path, 15))
 
     def do_POST(self):
         u = urlparse(self.path)
@@ -381,7 +409,9 @@ class Handler(BaseHTTPRequestHandler):
                   "/probe": lambda: probe_only(body)}
         if u.path not in routes:
             return self._send(404, {"error": "not found"})
-        self._run(routes[u.path])
+        limits = {"/connect": CONNECT_SECS + 1, "/download": 120, "/probe": 30,
+                  "/listen": float(body.get("secs", 5) or 5) + 10, "/sim/load": 30}
+        self._run(routes[u.path], limit=limits.get(u.path, 15))
 
 
 def main():

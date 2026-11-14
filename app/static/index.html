@@ -394,7 +394,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   <section>
     <h2>Drive write access</h2>
     <div id="sWriteState" style="margin-bottom:8px"></div>
-    <div class="muted" style="font-size:13px">A share link only lets the app read. To file backups and organize the folder, add a small script that runs as you and can only work inside this folder (it never deletes anything). One-time, about two minutes:</div>
+    <div class="muted" style="font-size:13px">A share link only lets the app read. To file backups in it, add a small script that runs as you and can only work inside this folder (it never deletes anything). One-time, about two minutes:</div>
     <ol style="font-size:13.5px;margin:8px 0;padding-left:20px;line-height:1.6">
       <li>Open <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com &rarr; New project</a>, delete what's there and paste the script below. <button class="ghost small" id="sCopy">Copy script</button> <span class="muted" id="sCopyMsg"></span></li>
       <li>Rename it (click "Untitled project", e.g. <i>MeetDeck</i>) and press <b>Ctrl+S</b> to save.</li>
@@ -405,12 +405,6 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     <div class="muted" style="font-size:12.5px;margin:-4px 0 8px">Seeing "Access blocked: The OAuth client was not found"? The project wasn't saved yet &mdash; save it, wait a minute, and run <b>authorize</b> again. Still blocked: try a private window signed in to only the account that owns the swim folder.</div>
     <div class="row"><input id="sUrl" placeholder="https://script.google.com/macros/s/…/exec" style="flex:1;min-width:280px"><button class="small" id="sUrlSave">Save &amp; test</button></div>
     <details style="margin-top:8px"><summary class="muted">Show the script</summary><textarea id="sScript" rows="12" readonly style="width:100%;margin-top:6px;font:12px ui-monospace,monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px"></textarea></details>
-  </section>
-  <section>
-    <h2>Organize the folder</h2>
-    <div class="muted" style="font-size:13px">Reads every backup and entry file in the folder to find which meet it belongs to, then sorts them into <b>season / date + meet name</b> folders, e.g. <code>2025-26/2025-12-19 THS Mel Roberts Invitational</code>.</div>
-    <div class="row" style="margin-top:8px"><button class="ghost small" id="sScan">Scan folder</button><span class="muted" id="sScanMsg" style="font-size:13px"></span></div>
-    <div id="sPlan" style="margin-top:8px"></div>
   </section>
   <section>
     <h2>Meet board</h2>
@@ -467,14 +461,6 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     <h2>MeetDeck for Windows</h2>
     <div class="muted" style="font-size:13px">Runs all of MeetDeck on a Windows laptop, no server needed: unzip, double-click <b>MeetDeck.bat</b>. Comes with your host schools, rules library and meets.</div>
     <div class="row" style="margin-top:6px"><button onclick="location='/download/MeetDeck-Windows.zip'">Download MeetDeck for Windows</button></div>
-  </section>
-  <section>
-    <h2>Report font</h2>
-    <div class="muted" style="font-size:13px">Meet Manager prints heat sheets, referee programs and timer sheets in <b>Cambria</b>, which comes with Windows. Add your PC's copy and printed reports use it too; without it they use Caladea, a free look-alike with the same letter widths.</div>
-    <div id="fontStatus" style="margin:6px 0;font-size:13.5px"></div>
-    <div class="row"><label class="small">Add files from <code>C:\Windows\Fonts</code>: <b>cambria.ttc</b> and <b>cambriab.ttf</b>
-      <input type="file" id="fontIn" accept=".ttc,.ttf" multiple></label><span class="muted" id="fontMsg" style="font-size:13px"></span></div>
-    <div class="muted" style="font-size:12px;margin-top:4px">Tip: in the file picker, paste <code>C:\Windows\Fonts</code> into the address bar. If the folder only shows "Cambria" tiles, copy those two files to your Desktop first.</div>
   </section>
 </main>
 
@@ -647,7 +633,6 @@ document.addEventListener("click", async ev => {
 });
 
 // ---------------- setup ----------------
-let PLAN = null, scanTimer = null;
 async function loadSetup() {
   SET = await api("/api/settings");
   seasonSelFill();
@@ -671,30 +656,7 @@ async function loadSetup() {
   $("#sGcLink").textContent = SET.goatcounter ? " open stats" : ""; $("#sGcLink").href = SET.goatcounter ? `https://${SET.goatcounter}.goatcounter.com` : "#";
   $("#sPubUrl").textContent = $("#sPubUrl").href = SET.public_url || "";
   $("#sWriteState").innerHTML = !SET.drive_folder ? `<span class="muted">Save the folder first.</span>` : SET.drive_write ? `<span class="badge ok">Set up</span> <span class="muted" style="font-size:13px">Backups you download are also filed into Drive.</span>` : `<span class="badge no">Not set up</span>`;
-  loadPlan();
   bkLoad();
-}
-async function loadPlan() {
-  if (!SET.drive_folder) { $("#sPlan").innerHTML = ""; return; }
-  PLAN = await api("/api/drive/plan");
-  const sc = PLAN.scan;
-  clearTimeout(scanTimer);
-  if (sc.running) { $("#sScanMsg").textContent = `Scanning… ${sc.done} item(s) read${sc.current ? " — " + sc.current.split("/").pop() : ""}`; scanTimer = setTimeout(loadPlan, 2500); }
-  else $("#sScanMsg").textContent = sc.error ? "Scan failed: " + sc.error : PLAN.when ? `Last scan ${PLAN.when} · ${PLAN.files} file(s)` : "Not scanned yet.";
-  if (!PLAN.when) { $("#sPlan").innerHTML = ""; return; }
-  const bySeason = {};
-  PLAN.meets.forEach(m => (bySeason[m.folder.split("/")[0]] ??= []).push(m));
-  $("#sPlan").innerHTML = `<div class="grid2">${Object.keys(bySeason).sort().reverse().map(se => `<div><b>${esc(se)}</b><ul style="margin:4px 0;padding-left:18px;font-size:13px">${bySeason[se].map(m => `<li>${esc(m.folder.split("/")[1])}</li>`).join("")}</ul></div>`).join("")}</div>` +
-    (PLAN.moves.length ? `<div class="issue warn" style="margin-top:8px"><b>${PLAN.moves.length} item(s) to move</b> into those folders.
-       <details><summary class="muted" style="font-weight:400">Show the moves</summary><table style="font-size:12.5px">${PLAN.moves.map(m => `<tr><td>${esc(m.from)}</td><td>&rarr;</td><td>${esc(m.to.join("/"))}</td></tr>`).join("")}</table></details>
-       <div class="row" style="margin-top:6px"><button class="small" id="sOrg" ${SET.drive_write ? "" : "disabled title='Set up Drive write access first'"}>Organize now</button>${SET.drive_write ? "" : `<span class="muted" style="font-size:13px">Needs write access (above).</span>`}<span class="muted" id="sOrgMsg"></span></div></div>`
-     : `<div class="okbox" style="margin-top:8px">Everything is already in its season / meet folder.</div>`) +
-    (PLAN.unsorted.length ? `<div class="muted" style="font-size:13px;margin-top:6px">Left where they are (no meet found): ${PLAN.unsorted.map(esc).join(", ")}</div>` : "");
-  if ($("#sOrg")) $("#sOrg").onclick = async () => {
-    $("#sOrg").disabled = true; $("#sOrgMsg").textContent = "Moving… (takes a minute or two)";
-    try { const r = await api("/api/drive/organize", {method: "POST"}); $("#sOrgMsg").textContent = `Moved ${r.moved}.` + (r.failed.length ? ` ${r.failed.length} failed: ${r.failed[0].error}` : ""); setTimeout(loadPlan, 1500); }
-    catch (e) { $("#sOrgMsg").textContent = e.message; $("#sOrg").disabled = false; }
-  };
 }
 $("#sDriveSave").onclick = async () => {
   try { SET = await api("/api/settings", J("PUT", {drive_folder: $("#sDrive").value.trim()})); loadSetup(); }
@@ -703,7 +665,7 @@ $("#sDriveSave").onclick = async () => {
 $("#sUrlSave").onclick = async () => {
   try {
     SET = await api("/api/settings", J("PUT", {drive_url: $("#sUrl").value.trim()}));
-    if (SET.drive_write) { const r = await api("/api/drive/test", {method: "POST"}); $("#sWriteState").innerHTML = `<span class="badge ok">Working</span> <span class="muted" style="font-size:13px">Connected to "${esc(r.name)}". Backups you download are also filed into Drive.</span>`; loadPlan(); }
+    if (SET.drive_write) { const r = await api("/api/drive/test", {method: "POST"}); $("#sWriteState").innerHTML = `<span class="badge ok">Working</span> <span class="muted" style="font-size:13px">Connected to "${esc(r.name)}". Backups you download are also filed into Drive.</span>`; }
     else loadSetup();
   } catch (e) { $("#sWriteState").innerHTML = `<span class="badge no">Not working</span> <span style="color:var(--err);font-size:13px">${esc(e.message)}</span>`; }
 };
@@ -952,22 +914,6 @@ document.addEventListener("click", async ev => {
 $("#tabRules").onclick = () => tab("rules");
 $("#tabSend").onclick = () => tab("send");
 $("#tabContacts").onclick = () => tab("contacts");
-async function fontShow() {
-  try {
-    const f = await api("/api/settings/font");
-    $("#fontStatus").innerHTML = f.cambria ? `<span class="badge ok">Cambria installed</span> Reports print in Meet Manager's font.`
-      : `<span class="badge no">Using Caladea</span> ${f.files["cambria.ttc"] ? "Regular added; still need <b>cambriab.ttf</b> (bold)." : f.files["cambriab.ttf"] ? "Bold added; still need <b>cambria.ttc</b> (regular)." : ""}`;
-  } catch (e) { $("#fontStatus").textContent = e.message; }
-}
-$("#fontIn").onchange = async e => {
-  for (const file of e.target.files) {
-    const fd = new FormData(); fd.append("file", file);
-    try { await api("/api/settings/font", {method: "POST", body: fd}); $("#fontMsg").textContent = `Added ${file.name}`; }
-    catch (x) { $("#fontMsg").textContent = `${file.name}: ${x.message}`; }
-  }
-  e.target.value = ""; fontShow();
-};
-fontShow();
 $("#sTolSave").onclick = async () => {
   try { SET = await api("/api/settings", J("PUT", {time_tolerance: +$("#sTol").value})); $("#sTol").value = SET.time_tolerance.toFixed(2); $("#sTolMsg").textContent = `Saved: ${Math.round(SET.time_tolerance * 1000)} ms`; }
   catch (e) { $("#sTolMsg").textContent = e.message; }
@@ -1025,7 +971,6 @@ $("#sPubAuto").onchange = async () => {
   try { SET = await api("/api/settings", J("PUT", {public_auto: $("#sPubAuto").checked})); $("#sPubMsg").textContent = SET.public_auto ? "Auto-publish on" : "Auto-publish off"; }
   catch (e) { $("#sPubMsg").textContent = e.message; }
 };
-$("#sScan").onclick = async () => { await api("/api/drive/inventory", {method: "POST"}); loadPlan(); };
 $("#sCopy").onclick = async () => {
   const ta = $("#sScript"); let ok = false;
   try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(ta.value); ok = true; } } catch (e) {}

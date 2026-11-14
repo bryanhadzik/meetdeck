@@ -183,3 +183,31 @@ def test_probe_gives_up_by_the_deadline(monkeypatch):
     out = cts.probe("COM9", attempts=(a := []), timeout=0.8, deadline=time.time() + 2.5)
     assert time.time() - t < 3 and "identity" not in out
     assert any("out of time" in x["result"] for x in a)
+
+
+def test_download_is_as_quick_as_meet_manager():
+    """A console that answers in 40 ms: 22 events (105 messages) in well under 10 s (Meet Manager ~5 s).
+    It used to take ~25 s, and events 21-22 at the end of a slow send came out blank at the pool."""
+    import time, cts
+    from sim import SimConsole
+
+    class SlowPort:            # pyserial-like: read(n) returns once n bytes are in, else after 0.1 s
+        def __init__(self):
+            self.sim, self.ready, self.buf = SimConsole(), 0.0, b""
+        def write(self, b):
+            self.sim.write(b); self.buf += self.sim.read(1 << 16); self.ready = time.time() + 0.04
+        def read(self, n):
+            wait = self.ready - time.time()
+            if wait > 0.1:
+                time.sleep(0.1); return b""
+            time.sleep(max(0, wait))
+            out, self.buf = self.buf[:n], self.buf[n:]
+            if not out:
+                time.sleep(0.1)
+            return out
+        def reset_input_buffer(self): pass
+    evs = [{"no": n, "distance": 100, "gender": "F", "stroke": "Free"} for n in range(1, 23)]
+    c = cts.Console(SlowPort())
+    t = time.time()
+    c.download_meet(1, evs, "speed")
+    assert time.time() - t < 8, time.time() - t

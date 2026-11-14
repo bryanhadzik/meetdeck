@@ -203,9 +203,9 @@ class Emulator:
                 time.sleep(self.delay_ms / 1000.0)
             if self.pace_baud:                  # one byte at a time, ~10 bits each, like a real 9600 line
                 gap = 10.0 / self.pace_baud
+                # no flush(): on some virtual ports (HHD) it never returns, and the emulator froze
                 for b in reply:
                     self.ser.write(bytes((b,)))
-                    self.ser.flush()
                     time.sleep(gap)
             else:
                 self.ser.write(reply)

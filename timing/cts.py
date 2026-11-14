@@ -200,7 +200,10 @@ class Console:
     """Talks to the console over any object with read(n), write(b), reset_input_buffer()
     (a pyserial Serial, or sim.SimConsole for testing)."""
 
-    def __init__(self, port, log=None, settle=0.15):
+    def __init__(self, port, log=None, settle=0.0):
+        # settle: pause after each write before reading. Not needed: read_reply waits for the
+        # reply itself. It was 0.15 s, which (with reading 512 bytes at a time) made a meet
+        # download take ~25 s against Meet Manager's ~5 s.
         self.port = port
         self.log = log            # callable(direction, bytes) or None
         self.settle = settle
@@ -225,7 +228,8 @@ class Console:
         self.stats["bytes_out"] += len(msg)
         self.stats["last_tx"] = time.strftime("%H:%M:%S")
         t0 = time.time()
-        time.sleep(self.settle)
+        if self.settle:
+            time.sleep(self.settle)
         r = self.read_reply(timeout)
         self.stats["last_rtt_ms"] = round((time.time() - t0) * 1000)
         return r
@@ -244,7 +248,12 @@ class Console:
         end = time.time() + timeout
         buf = b""
         while time.time() < end:
-            chunk = self.port.read(512)
+            # ask for exactly what's still missing (2 length bytes, then the rest), so the read
+            # returns the moment the reply is in instead of waiting out the port timeout
+            want = 2 - len(buf) if len(buf) < 2 else max(1, u16(buf[0], buf[1]) - len(buf))
+            if not 4 <= (u16(buf[0], buf[1]) if len(buf) >= 2 else 4) <= 4096:
+                want = 512
+            chunk = self.port.read(want)
             if chunk:
                 buf += chunk
                 self.stats["bytes_in"] += len(chunk)

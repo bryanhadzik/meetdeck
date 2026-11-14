@@ -135,9 +135,11 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
 <script src="/static/utah-rules.js"></script>
 </head>
 <body>
+<script>window.APPBAR = {app: "meetdeck", active: "setup", page: ""};</script>
+<script src="/static/appbar.js"></script>
 <header>
-  <h1>MeetDeck</h1>
-  <nav><button id="tabMeets" class="on">Meets</button><button id="tabSchools">Schools &amp; records</button><button id="tabRun">Meet checklist</button><button id="tabSend">Send results</button><button id="tabContacts">Contacts</button><button id="tabRules">Rules</button><button id="tabSetup">Setup</button></nav>
+  <h1 class="hidden">MeetDeck</h1>
+  <nav><button id="tabMeets" class="on">Entries &amp; seeding</button><button id="tabRun">Checklist</button><button id="tabSend" class="hidden">Finish the meet</button><button id="tabSchools" class="hidden">Schools &amp; records</button><button id="tabContacts" class="hidden">Contacts</button><button id="tabRules" class="hidden">Rules</button><button id="tabSetup" class="hidden">Setup</button><span id="pageTitle" class="hidden" style="font-weight:700;font-size:16px;padding:4px 6px"></span></nav>
   <span id="meetBar" class="row"><label class="muted" style="font-size:13px">Season <select id="seasonSel"></select></label><select id="meetSel"></select><button class="ghost" id="newBtn">New meet</button><button class="ghost" id="openBarBtn" title="Open an existing Meet Manager meet (backup .zip or .mdb) from this computer or Google Drive">Open meet…</button></span>
   <span class="muted" id="verTag" style="font-size:11.5px;white-space:nowrap;margin-left:auto" title="MeetDeck version"></span>
 </header>
@@ -505,9 +507,22 @@ function tab(which) {
   if (which === "contacts") ctLoad();
   if (which === "send") sendRender();
   $("#meetBar").classList.toggle("hidden", which !== "meets" && which !== "send");
+  // the shared top bar: Set up meet = entries + checklist, Finish the meet belongs to Run meet, the rest is Setup
+  const ADMIN = {schools: "Schools & records", contacts: "Contacts", rules: "Rules", setup: "MeetDeck setup"};
+  const title = ADMIN[which] || (which === "send" ? "Finish the meet" : "");
+  $("#tabMeets").classList.toggle("hidden", !!title); $("#tabRun").classList.toggle("hidden", !!title);
+  $("#pageTitle").textContent = title; $("#pageTitle").classList.toggle("hidden", !title);
+  if (window.AppBar) AppBar.setActive(ADMIN[which] ? "admin" : which === "send" ? "run" : "setup", which === "setup" ? "mdsetup" : which);
+  if (location.hash.slice(1) !== which) history.replaceState(null, "", "#" + which);
   store("tab", which);
   if (which === "schools") loadSchools(); else if (which === "setup") loadSetup(); else loadMeets();
 }
+// the shared top bar links here with #schools, #setup, ... (and #runmeet for the meet page)
+window.addEventListener("hashchange", () => {
+  const h = location.hash.slice(1);
+  if (h === "runmeet") { const m = recall("meet"); location.href = m ? "/db?meet=" + encodeURIComponent(m) : "/#meets"; return; }
+  if (["schools", "setup", "meets", "rules", "run", "contacts", "send"].includes(h)) tab(h);
+});
 $("#tabSetup").onclick = () => tab("setup");
 $("#tabMeets").onclick = () => tab("meets");
 $("#tabSchools").onclick = () => tab("schools");
@@ -2243,7 +2258,9 @@ document.addEventListener("click", e => { if (e.target.id === "updBanGo") instal
 })();
 (async () => { await loadHosts();
   const qm = new URLSearchParams(location.search).get("meet");      // "← Meet setup" from the meet page lands on that meet
-  if (qm) { store("meet", qm); store("tab", "meets"); history.replaceState(null, "", "/"); }
+  const hash = location.hash;
+  if (qm) { store("meet", qm); store("tab", "meets"); history.replaceState(null, "", "/" + hash); }
+  if (hash === "#runmeet") { const m = recall("meet"); if (m) { location.replace("/db?meet=" + encodeURIComponent(m)); return; } history.replaceState(null, "", "/#meets"); }
   const h0 = location.hash.slice(1), t0 = ["schools", "setup", "meets", "rules", "run", "contacts", "send"].includes(h0) ? h0 : (recall("tab") || "meets"); tab(["schools", "setup", "rules", "run", "contacts", "send"].includes(t0) ? t0 : "meets"); })();
 </script>
 <script>

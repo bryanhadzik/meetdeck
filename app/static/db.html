@@ -11,7 +11,7 @@
 @media (prefers-color-scheme:dark){:root{--bg:#0f1418;--card:#172028;--ink:#e6edf3;--muted:#93a1ae;--line:#2a3742;--accent:#3aa0d8;--accent-ink:#06121a;--err:#ff8b80;--err-bg:#3a1714;--warn:#f5c26b;--warn-bg:#352a12;--ok:#6fd49a;--ok-bg:#12301f;--sel:#16303f}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
-header{background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:var(--abh,0px);z-index:5}
 header h1{font-size:17px;margin:0}
 .grow{flex:1}
 nav{display:flex;gap:4px}
@@ -122,12 +122,17 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
 <script src="/static/utah-rules.js"></script>
 </head>
 <body>
+<script>window.APPBAR = {app: "meetdeck", active: "run", page: ""};</script>
+<script src="/static/appbar.js"></script>
 <header>
-  <a id="backBtn" href="/" class="ghost small" style="text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;white-space:nowrap" title="Back to this meet's setup: entries, rule check, seeding">← Meet setup</a>
+  <a id="backBtn" href="/" class="ghost small hidden" style="text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;white-space:nowrap" title="Back to this meet's setup: entries, rule check, seeding">← Meet setup</a>
   <h1 id="title">Meet database</h1>
   <span class="muted" id="src" style="font-size:12.5px"></span>
   <span class="grow"></span>
-  <nav id="tabs" class="hidden"><button data-tab="events" class="on">Events</button><button data-tab="swimmers">Swimmers</button><button data-tab="scores">Scores</button><button data-tab="teams">Teams</button><button data-tab="meet">Meet</button><button data-tab="rules">Rules</button><button data-tab="changes">Changes</button></nav>
+  <nav id="tabs" class="hidden"><button data-tab="events" class="on">Events</button><button data-tab="swimmers">Swimmers</button><button data-tab="scores">Scores</button>
+    <div class="menu" id="moreMenu"><button type="button" id="moreBtn">More &#9662;</button>
+      <div class="pop hidden" id="morePop" style="min-width:170px;left:0;right:auto"><button data-tab="teams">Teams</button><button data-tab="meet">Meet info</button><button data-tab="rules">Rules</button><button data-tab="changes">Changes</button></div></div></nav>
+  <a class="hidden" id="finishBtn" href="#" style="text-decoration:none;background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:5px 11px;font-size:13px;white-space:nowrap" title="Send results: emails, files, Meet Manager backup">Finish the meet &rarr;</a>
   <button class="small hidden" id="scoreBtn" title="Scoring settings (Utah high school / NFHS tables)">Scoring</button>
   <button class="ghost small hidden" id="undoBtn" title="Undo the last change">Undo</button>
   <div class="menu hidden" id="printMenu"><button class="ghost small" id="printBtn">Print ▾</button>
@@ -317,10 +322,10 @@ function show() {
       .catch(e => { $("#startMsg").textContent = "Couldn't build it automatically: " + e.message; });
     return;
   }
-  if (!S.exists) { $("#start").classList.remove("hidden"); $("#app").classList.add("hidden"); ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn"].forEach(s => $(s).classList.add("hidden")); return; }
+  if (!S.exists) { $("#start").classList.remove("hidden"); $("#app").classList.add("hidden"); ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn", "#finishBtn"].forEach(s => $(s).classList.add("hidden")); return; }
   M = S.model;
   $("#start").classList.add("hidden"); $("#app").classList.remove("hidden");
-  ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn"].forEach(s => $(s).classList.remove("hidden"));
+  ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn", "#finishBtn"].forEach(s => $(s).classList.remove("hidden"));
   { const sel = $("#prLane"), cur = sel.value; sel.innerHTML = `<option value="">all lanes</option>` + Array.from({length: M.meet.lanes || 8}, (_, i) => `<option value="${i + 1}">lane ${i + 1}</option>`).join(""); sel.value = cur; }
   $("#src").textContent = `${M.meet.name !== (S.meet_name) ? M.meet.name + " · " : ""}${M.meet.start}${S.info.source ? " · " + S.info.source : ""}`;
   const last = S.log.find(l => l.kind === "change");
@@ -502,6 +507,9 @@ async function change(op, args) {
 }
 function render() {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === TAB));
+  $("#moreBtn").classList.toggle("on", ["teams", "meet", "rules", "changes"].includes(TAB));
+  $("#moreBtn").innerHTML = ({teams: "Teams", meet: "Meet info", rules: "Rules", changes: "Changes"}[TAB] || "More") + " &#9662;";
+  $("#morePop").classList.add("hidden");
   document.body.classList.toggle("meetPanels", TAB === "events" || TAB === "swimmers");   // board / phone / console panels
   ["events", "swimmers", "scores", "teams", "meet", "rules", "changes"].forEach(t => $("#tab-" + t).classList.toggle("hidden", t !== TAB));
   if (TAB === "events") renderEvents();
@@ -1605,6 +1613,8 @@ document.addEventListener("click", async ev => {
     return;
   }
   if (ev.target.id === "exportBtn") { $("#exportPop").classList.toggle("hidden"); $("#printPop").classList.add("hidden"); return; }
+  if (ev.target.closest("#moreBtn")) { $("#morePop").classList.toggle("hidden"); return; }
+  if (ev.target.id === "finishBtn") { ev.preventDefault(); try { localStorage.setItem("meet", MID); } catch (x) {} location.href = "/?meet=" + encodeURIComponent(MID) + "#send"; return; }
   if (ev.target.id === "printBtn") { $("#printPop").classList.toggle("hidden"); $("#exportPop").classList.add("hidden"); return; }
   if (d.pr || d.pdf) {
     const kind = d.pr || d.pdf, lane = kind === "timer" && $("#prLane").value ? `?lane=${$("#prLane").value}` : "";

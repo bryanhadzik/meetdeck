@@ -1242,17 +1242,32 @@ HOSTS_DIR = DATA_ROOT / "hosts"
 HOSTS_DIR.mkdir(parents=True, exist_ok=True)
 HOSTS_FILE = DATA_ROOT / "hosts.json"
 DEFAULT_HOSTS = [
-    {"id": "THS", "name": "Tooele High School", "short": "Tooele", "team_codes": ["TOOEL", "THS", "TOOE"], "team_tags": [3]},
+    {"id": "THS", "name": "Tooele High School", "short": "Tooele", "team_codes": ["TOOEL", "TOOE"], "team_tags": [3]},
     {"id": "SHS", "name": "Stansbury High School", "short": "Stansbury", "team_codes": ["SHS", "STAN", "STANS"], "team_tags": []},
-    {"id": "GHS", "name": "Grantsville High School", "short": "Grantsville", "team_codes": ["GHS", "GRANT", "GRAN"], "team_tags": []},
+    {"id": "GHS", "name": "Grantsville High School", "short": "Grantsville", "team_codes": ["GHS", "GRANT"], "team_tags": []},
     {"id": "DPHS", "name": "Deseret Peak High School", "short": "Deseret Peak", "team_codes": ["DPHS", "DPEAK", "DP", "DESE"], "team_tags": []},
 ]
+
+
+# Team codes that belong to another school in the state Team Manager list
+# (utahswimcoach.com): THS is Timpanogos, GRAN is Granger.
+_NOT_OURS = {"THS": {"THS"}, "GHS": {"GRAN"}}
 
 
 def _hosts() -> list[dict]:
     if not HOSTS_FILE.exists():
         HOSTS_FILE.write_text(json.dumps(DEFAULT_HOSTS, indent=1))
-    return json.loads(HOSTS_FILE.read_text())
+    hs = json.loads(HOSTS_FILE.read_text())
+    changed = False
+    for h in hs:
+        bad = _NOT_OURS.get(h.get("id"), set())
+        codes = [c for c in h.get("team_codes", []) if c.upper() not in bad]
+        if codes != h.get("team_codes", []):
+            h["team_codes"] = codes
+            changed = True
+    if changed:
+        HOSTS_FILE.write_text(json.dumps(hs, indent=1))
+    return hs
 
 
 def _host(hid: str) -> dict:

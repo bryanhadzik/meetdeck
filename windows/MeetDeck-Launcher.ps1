@@ -68,6 +68,18 @@ function Get-Ports {
 function PortOf($text) { if ($text -match '(COM\d+)') { $Matches[1] } else { ($text -as [string]).Trim() } }
 
 function Update-MeetDeck {
+    # MeetDeck running: let it update itself (it downloads in the background and restarts),
+    # so this window doesn't freeze while 6 MB downloads
+    if (Test-Running) {
+        Set-Status 'Checking for a newer MeetDeck...'
+        $u = Invoke-RestMethod ($Url + 'api/update?fresh=1') -TimeoutSec 20
+        if (-not $u.available) { Set-Status "MeetDeck $($u.current) is the newest."; return }
+        if ([System.Windows.Forms.MessageBox]::Show("Update MeetDeck $($u.current) to $($u.latest.version)?`nMeetDeck closes for a moment and starts again.",
+                'MeetDeck', 'YesNo', 'Question') -ne 'Yes') { return }
+        Invoke-RestMethod ($Url + 'api/update/install') -Method Post -TimeoutSec 120 | Out-Null
+        Set-Status "Updating to $($u.latest.version) - MeetDeck restarts by itself in about 15 seconds."
+        return
+    }
     Set-Status 'Checking GitHub for a newer MeetDeck...'
     $rel = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest" -Headers @{ 'User-Agent' = 'MeetDeck-launcher' }
     $latest = ($rel.tag_name -replace '^v', '')

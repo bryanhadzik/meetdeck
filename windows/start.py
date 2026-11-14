@@ -30,7 +30,7 @@ def swap():
                 break
             time.sleep(0.25)
         time.sleep(0.5)
-    for attempt in range(20):
+    for attempt in range(10):
         try:
             shutil.rmtree(old, ignore_errors=True)
             if app.exists():
@@ -41,6 +41,24 @@ def swap():
             if old.exists() and not app.exists():        # half-way: put the old one back
                 old.rename(app)
             time.sleep(0.5)
+    # The app folder can't be renamed while another program has it open (a terminal or
+    # Explorer window sitting in it). Its files can still be replaced: copy instead.
+    try:
+        shutil.rmtree(old, ignore_errors=True)
+        shutil.copytree(app, old, ignore=shutil.ignore_patterns("__pycache__"))
+        keep = {p.relative_to(new) for p in new.rglob("*")}
+        for p in sorted(app.rglob("*"), key=lambda q: len(q.parts), reverse=True):
+            rel = p.relative_to(app)
+            if "__pycache__" in rel.parts or rel in keep:
+                continue
+            try:
+                p.unlink() if p.is_file() else p.rmdir()
+            except OSError:
+                pass
+        shutil.copytree(new, app, dirs_exist_ok=True)
+        shutil.rmtree(new, ignore_errors=True)
+    except OSError:
+        pass
 
 
 swap()

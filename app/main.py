@@ -279,7 +279,7 @@ def get_settings():
     cur = season_of()
     y = int(cur[:4])
     seasons = {f"{y + i}-{(y + i + 1) % 100:02d}" for i in (-1, 0, 1)} | {m["season"] for m in list_meets()} | {st["season"]}
-    pub = {k: v for k, v in st.items() if k not in ("drive_token", "public_token", "gmail_app_password")}
+    pub = {k: v for k, v in st.items() if k not in ("drive_token", "public_token")}
     pub.setdefault("public_repo", public_results.DEFAULT_REPO)
     pub["public_token_set"] = bool(st.get("public_token"))
     pub.setdefault("public_domain", public_results.DEFAULT_DOMAIN)
@@ -328,6 +328,8 @@ def put_settings(body: dict):
         st["public_domain"] = dom
     if "public_auto" in body:
         st["public_auto"] = bool(body["public_auto"])
+    if "debug_tools" in body:
+        st["debug_tools"] = bool(body["debug_tools"])
     if "goatcounter" in body:
         # GoatCounter site code for the phone page's visit stats: "prattswim" or its whole address
         gc = (body["goatcounter"] or "").strip().lower().removeprefix("https://").removeprefix("http://").split(".goatcounter.com")[0].strip("/")
@@ -1605,106 +1607,21 @@ def mm_backup(mid: str):
                              "X-Build-Report": json.dumps(report)[:4000]})
 
 
-# ---- Gmail scan ---------------------------------------------------------------
-import gmail as gmail_mod
-
-
-gmail_mod.creds_fn = lambda: (_settings().get("gmail_user", ""), _settings().get("gmail_app_password", ""))
-
-
-@app.get("/api/gmail/status")
-def gmail_status():
-    return {"configured": gmail_mod.configured(), "user": gmail_mod.creds()[0],
-            "from_env": bool(os.environ.get("GMAIL_USER") and os.environ.get("GMAIL_APP_PASSWORD"))}
-
-
-@app.post("/api/gmail/login")
-def gmail_login(body: dict):
-    """Save the Gmail address + app password (Setup > Gmail) after checking they work. Blank both to disconnect."""
-    st = _settings()
-    u, pw = (body.get("user") or "").strip(), re.sub(r"\s", "", body.get("password") or "")
-    if not u and not pw:
-        st.pop("gmail_user", None); st.pop("gmail_app_password", None); _write_settings(st)
-        return gmail_status()
-    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[a-z]{2,}", u, re.I) or len(pw) != 16:
-        raise HTTPException(400, "Enter the Gmail address and the 16-letter app password")
-    old = (st.get("gmail_user"), st.get("gmail_app_password"))
-    st["gmail_user"], st["gmail_app_password"] = u, pw
-    _write_settings(st)
+# ---- Gmail was removed (2026-11-14): MeetDeck no longer reads or drafts mail ----------
+def _forget_gmail():
+    """Drop any Gmail address / app password an older version saved."""
     try:
-        gmail_mod._connect().logout()
-    except Exception as e:
-        st["gmail_user"], st["gmail_app_password"] = old
-        if not old[0]:
+        st = _settings()
+        if "gmail_user" in st or "gmail_app_password" in st:
             st.pop("gmail_user", None); st.pop("gmail_app_password", None)
-        _write_settings(st)
-        raise HTTPException(400, f"Gmail didn't accept that ({str(e)[:120]}). Check the address and app password.")
-    return gmail_status()
+            _write_settings(st)
+    except Exception:
+        pass
+    import shutil as _sh2
+    _sh2.rmtree(DATA_ROOT / "gmail-cache", ignore_errors=True)
 
 
-@app.post("/api/meets/{mid}/send/draft")
-def send_draft(mid: str, body: dict):
-    """Make a Gmail draft with the results files attached (coaches or final). Nothing is sent."""
-    if not gmail_mod.configured():
-        raise HTTPException(400, "Connect Gmail in Setup first")
-    group = body.get("kind")
-    if group not in ("coaches", "final"):
-        raise HTTPException(400, "Unknown email")
-    d = _dir(mid)
-    if not _dbfile(d).exists():
-        raise HTTPException(400, "No meet database yet - open Run the meet first")
-    import heatsheet
-    m = meetdb.load(_dbfile(d))
-    lic = (_dbinfo(d).get("hyb") or "")[28:78].strip() or _any_licensee()
-    stem = _stem(m["meet"]["name"])
-    files = [(f"{stem} results.pdf", heatsheet.results_pdf(m, _dbfile(d), _report_header(d)), "application/pdf")]
-    data, name = results_mod.hy3_zip(m, _dbfile(d), lic, int(_dbinfo(d).get("result_exports", 0)) or 1)
-    files.append((name, data, "application/zip"))
-    if group == "final":
-        f = _fmr(d)
-        if f:
-            import mimetypes
-            files.append((f.name, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream"))
-        r = db_backup(mid)       # Utah Top 50 also wants the Meet Manager backup
-        files.append((r.headers["content-disposition"].split('filename="')[1].rstrip('"'), r.body, "application/zip"))
-    clean = lambda xs: [x.strip() for x in (xs or []) if isinstance(x, str) and "@" in x]  # noqa: E731
-    try:
-        r = gmail_mod.make_draft(clean(body.get("to")), clean(body.get("cc")), clean(body.get("bcc")),
-                                 str(body.get("subject") or ""), str(body.get("body") or ""), files)
-    except Exception as e:
-        raise HTTPException(502, f"Couldn't make the Gmail draft: {str(e)[:200]}")
-    return {**r, "files": [f[0] for f in files]}
-
-
-@app.get("/api/meets/{mid}/gmail")
-def gmail_scan(mid: str, days: int = 14, words: str = ""):
-    d = _dir(mid)
-    if not gmail_mod.configured():
-        return {"configured": False, "messages": []}
-    try:
-        msgs = gmail_mod.scan(days=max(1, min(days, 90)), words=words)
-    except Exception as e:
-        raise HTTPException(502, f"Gmail scan failed: {e}")
-    done = set(_meta(d).get("imported_mail", []))
-    for m in msgs:
-        for a in m["attachments"]:
-            a["imported"] = a["id"] in done
-    return {"configured": True, "messages": msgs}
-
-
-@app.post("/api/meets/{mid}/gmail/import")
-def gmail_import(mid: str, body: dict):
-    d = _dir(mid)
-    try:
-        fn, data, info = gmail_mod.cached(body.get("id", ""))
-    except FileNotFoundError:
-        raise HTTPException(404, "attachment not in cache - scan again")
-    r = ingest(d, fn, data, source=f"Gmail: {info.get('from', '')} — {info.get('subject', '')}"[:200])
-    meta = _meta(d)
-    meta["imported_mail"] = sorted(set(meta.get("imported_mail", [])) | {body["id"]})
-    _save(d, meta)
-    return r
-
+_forget_gmail()
 
 
 # ---- Google Drive folder: setup, inventory, organize, backups -------------------

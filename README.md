@@ -30,8 +30,7 @@ previous versions). A meet picks its host; its MM backup is built from that host
 Uploads accept Team Manager/SwimTopia .hy3/.zip (used as-is), SDIF .cl2/.sd3 and Word/.txt entry lists
 (app/importers.py) plus a paste box; non-hy3 formats are converted to .hy3 numbered from the host master's events,
 with reading notes kept in files/<name>.hy3.json. Per-team status board + "teams expected" + cross-team duplicate
-swimmer check. Gmail scan (app/gmail.py): read-only IMAP (BODY.PEEK, EXAMINE) using GMAIL_USER/GMAIL_APP_PASSWORD
-from ./.env (Bryan sets it; not in code). Tests: tests/make_cl2.py builds an SDIF file with the independent `sdif` lib.
+swimmer check. (The Gmail scan was removed 2026-11-14; entries come by upload, paste or Drive.) Tests: tests/make_cl2.py builds an SDIF file with the independent `sdif` lib.
 
 ## Seasons, meet files, Google Drive (2026-10-31)
 - Season picker in the header (data/settings.json); a meet's season comes from its date (seasons start in July).
@@ -172,7 +171,7 @@ from ./.env (Bryan sets it; not in code). Tests: tests/make_cl2.py builds an SDI
 - Data lives in `Documents\MeetDeck` (first start copies the host schools' master meets, rules library, settings and meets that ship in the zip).
 - No Java, nothing to install: 32-bit embeddable Python is inside, and Meet Manager files are opened with Windows' built-in **Microsoft Access (Jet) ODBC driver** - the engine Meet Manager uses. `app/mdbjet.py` is the Python port of `mmdb/Svc.java` + `Builder.java`; `app/mdbpass.py` reads the database password from the .mdb header (same method as Jackcess). `meetdb.JET` picks it on Windows; the Docker server keeps using Java.
 - Timing bridge runs inside the app (port 8766), so the CTS console plugs straight into the laptop.
-- Gmail: `Documents\MeetDeck\meetdeck.env` (GMAIL_USER / GMAIL_APP_PASSWORD). Report font: Cambria from `C:\Windows\Fonts`.
+- Report font: Cambria from `C:\Windows\Fonts`.
 - Build: `windows/build.sh --with-meets` on plex (downloads Python + Windows wheels, writes `windows/dist/MeetDeck-Windows.zip` and copies it into the server's download folder).
 - Verified on Windows 10: all three Meet Manager fixture meets export identical .hy3/.cl2 through the Jet driver; edits, scratches, PDFs and the Meet Manager backup (identical to the Java builder's) all work.
 

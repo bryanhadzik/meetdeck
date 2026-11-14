@@ -35,6 +35,8 @@ section{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 .topstrip .ch.bad{color:var(--err)}
 .topstrip button.small{margin-left:auto}
 body.topShut #mbBox, body.topShut #pubBox, body.topShut #timing, body.topShut #missingTeams, body.topShut #lastMin, body.topShut #problems{display:none!important}
+/* debug tools: shown only when Setup > Troubleshooting tools is on */
+body:not(.dbgOn) .dbg{display:none!important}
 h2{font-size:15px;margin:0 0 8px}
 button,select,input{font:inherit;color:inherit}
 button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:6px 11px;cursor:pointer}
@@ -167,21 +169,21 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
   <section id="timing" style="margin-bottom:14px"><div class="row"><b>Timing console</b><span id="tmState" class="badge">not connected</span><span class="grow"></span>
           <button class="ghost small" id="tmToggle">Hide</button></div>
           <div id="tmBody" style="margin-top:8px">
-            <div class="row"><label class="muted" style="font-size:12.5px">Bridge <input id="tmUrl" size="22"></label>
+            <div class="row"><label class="muted dbg" style="font-size:12.5px">Bridge <input id="tmUrl" size="22"></label>
               <select id="tmPort"><option value="">COM port…</option></select>
-              <button class="small" id="tmConnect">Connect</button><button class="ghost small" id="tmSim">Simulator</button><button class="ghost small hidden" id="tmDisc" title="Let go of the port (for Meet Manager). Turns automatic connecting off until the next Connect.">Disconnect</button>
+              <button class="small" id="tmConnect">Connect</button><button class="ghost small dbg" id="tmSim">Simulator</button><button class="ghost small hidden" id="tmDisc" title="Let go of the port (for Meet Manager). Turns automatic connecting off until the next Connect.">Disconnect</button>
               <button class="ghost small" id="tmRecon" title="Close and reopen the console's port on the MeetDeck computer - for when it stops answering">Reconnect</button>
-              <a href="/timing/bridge.zip" class="muted" style="font-size:12.5px">Download the bridge for the timing laptop</a></div>
+              <a href="/timing/bridge.zip" class="muted dbg" style="font-size:12.5px">Download the bridge for the timing laptop</a></div>
             <div class="row" style="margin-top:6px"><label class="muted" style="font-size:12.5px">Send the meet to console meet slot <select id="tmSlot"><option selected>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
               <button class="ghost small" id="tmSend">Send events</button>
-              <button class="ghost small hidden" id="tmPractice" title="Simulator only: fills it with made-up times for this event's heats">Load practice times</button>
-              <a href="#" id="tmLogBtn" class="muted" style="font-size:12.5px">Console log</a>
-              <a href="#" id="tmDbgBtn" class="muted" style="font-size:12.5px">Serial debug</a></div>
+              <button class="ghost small hidden dbg" id="tmPractice" title="Simulator only: fills it with made-up times for this event's heats">Load practice times</button>
+              <a href="#" id="tmLogBtn" class="muted dbg" style="font-size:12.5px">Console log</a>
+              <a href="#" id="tmDbgBtn" class="muted dbg" style="font-size:12.5px">Serial debug</a></div>
             <div id="tmNoDb" class="muted hidden" style="font-size:12.5px;margin-top:6px">Build or open this meet's database below to get times into heats and send events. Connecting and the simulator work now.</div>
             <div id="tmAuto" class="muted" style="font-size:12.5px;margin-top:6px"></div>
             <div id="tmMsg" class="muted" style="font-size:12.5px;margin-top:6px"></div>
-            <pre id="tmLog" class="hidden" style="max-height:200px;overflow:auto;font-size:11px;background:var(--bg);padding:6px;border-radius:6px"></pre>
-            <div id="tmDbg" class="hidden" style="margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px">
+            <pre id="tmLog" class="hidden dbg" style="max-height:200px;overflow:auto;font-size:11px;background:var(--bg);padding:6px;border-radius:6px"></pre>
+            <div id="tmDbg" class="hidden dbg" style="margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px">
               <div class="row"><b>Serial debug</b><span class="muted" id="tmDbgWhen"></span><span class="grow"></span>
                 <button class="ghost small" id="tmPing" title="Send the console's identity request once and time the reply">Ping console</button>
                 <button class="ghost small" id="tmListen" title="Read whatever arrives on the line for 5 seconds without sending anything">Listen 5 s</button>
@@ -283,7 +285,7 @@ const API = `/api/meets/${MID}/db`;
 let AUTO_BUILT = false;
 let S = null, M = null, EV = null, TAB = "events", EDIT_SW = null, RELAY_SW = null, TOL = 0.30;
 let MB = {url: "", auto: false, sig: null, timer: null, busy: false};
-fetch("/api/settings").then(r => r.json()).then(st => { if (st.time_tolerance) TOL = st.time_tolerance; MB.url = st.meetboard_url || ""; MB.auto = !!st.meetboard_auto; mbShow(); }).catch(() => {});
+fetch("/api/settings").then(r => r.json()).then(st => { document.body.classList.toggle("dbgOn", !!st.debug_tools); if (st.time_tolerance) TOL = st.time_tolerance; MB.url = st.meetboard_url || ""; MB.auto = !!st.meetboard_auto; mbShow(); }).catch(() => {});
 try { EV = +sessionStorage.getItem("db-ev-" + MID) || null; } catch (e) {}
 
 async function api(url, opt) {

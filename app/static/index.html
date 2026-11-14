@@ -201,7 +201,6 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       </details>
       <details style="margin-top:6px" id="driveBox"><summary class="muted">From Google Drive</summary>
         <div id="driveMsg" class="muted" style="margin-top:6px;font-size:13px"></div><div id="driveList"></div></details>
-      <details style="margin-top:6px" id="gmailBox"><summary class="muted">Find entries in Gmail</summary><div id="gmailBody" style="margin-top:6px"></div></details>
       <details style="margin-top:6px"><summary class="muted">Files received</summary><div class="scroll"><table id="filesTbl" style="margin-top:6px"></table></div></details>
     </section>
 
@@ -452,6 +451,12 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <button class="small" id="sTolSave">Save</button><span class="muted" id="sTolMsg" style="font-size:13px"></span></div>
     <div class="muted" style="font-size:13px;margin-top:4px">Used in the meet database page when you get times from the timing console. 0.30 = 300 ms.</div>
   </section>
+  <section>
+    <h2>Troubleshooting tools</h2>
+    <label><input type="checkbox" id="sDbg"> Show the debug tools</label><span class="muted" id="sDbgMsg" style="font-size:13px;margin-left:8px"></span>
+    <div class="muted" style="font-size:13px;margin-top:4px">Timing console: the simulator, practice times, console log, serial debug (ping, listen, try all settings),
+      the bridge address and the bridge download. Hidden otherwise, so a normal meet only shows Connect, Reconnect and Send events.</div>
+  </section>
   <section id="updBox" class="hidden">
     <h2>Updates</h2>
     <div id="updStatus" style="font-size:13.5px"></div>
@@ -470,10 +475,6 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     <div class="row"><label class="small">Add files from <code>C:\Windows\Fonts</code>: <b>cambria.ttc</b> and <b>cambriab.ttf</b>
       <input type="file" id="fontIn" accept=".ttc,.ttf" multiple></label><span class="muted" id="fontMsg" style="font-size:13px"></span></div>
     <div class="muted" style="font-size:12px;margin-top:4px">Tip: in the file picker, paste <code>C:\Windows\Fonts</code> into the address bar. If the folder only shows "Cambria" tiles, copy those two files to your Desktop first.</div>
-  </section>
-  <section>
-    <h2>Gmail</h2>
-    <div id="sGmail" class="muted" style="font-size:13px">Checking…</div>
   </section>
 </main>
 
@@ -549,7 +550,8 @@ async function loadMeets(select) {
   else seasonSelFill();   // settings may have been loaded elsewhere (Setup) before the Season box was filled
   const all = await api("/api/meets");
   if (select) { const m = all.find(x => x.id === select); if (m && m.season !== SET.season) { SET = await api("/api/settings", J("PUT", {season: m.season})); await loadSeasons(); } }
-  const meets = all.filter(m => m.season === SET.season);
+  // newest meet first (no date sorts last)
+  const meets = all.filter(m => m.season === SET.season).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(a.name).localeCompare(String(b.name)));
   $("#meetSel").innerHTML = meets.length
     ? meets.map(m => `<option value="${m.id}">${esc(m.name)}${m.date ? " — " + m.date : ""}</option>`).join("")
     : `<option value="">No meets in ${esc(SET.season)}</option>`;
@@ -664,30 +666,13 @@ async function loadSetup() {
   $("#sPubDom").value = SET.public_domain || "";
   $("#sPubTok").value = ""; $("#sPubTok").placeholder = SET.public_token_set ? "saved (type to replace)" : "github_pat_…";
   $("#sPubAuto").checked = !!SET.public_auto;
+  $("#sDbg").checked = !!SET.debug_tools;
   $("#sGc").value = SET.goatcounter || "";
   $("#sGcLink").textContent = SET.goatcounter ? " open stats" : ""; $("#sGcLink").href = SET.goatcounter ? `https://${SET.goatcounter}.goatcounter.com` : "#";
   $("#sPubUrl").textContent = $("#sPubUrl").href = SET.public_url || "";
   $("#sWriteState").innerHTML = !SET.drive_folder ? `<span class="muted">Save the folder first.</span>` : SET.drive_write ? `<span class="badge ok">Set up</span> <span class="muted" style="font-size:13px">Backups you download are also filed into Drive.</span>` : `<span class="badge no">Not set up</span>`;
   loadPlan();
   bkLoad();
-  const g = await api("/api/gmail/status");
-  gmailSetup(g);
-}
-function gmailSetup(g) {
-  const use = `<div style="margin-top:6px">MeetDeck uses it to find coach entry files (it never marks, moves or deletes mail) and to put results emails in your <b>Drafts</b> with the files attached. It never sends anything.</div>`;
-  $("#sGmail").innerHTML = g.configured
-    ? `<span class="badge ok">Connected</span> ${esc(g.user)}${g.from_env ? "" : ` <button class="ghost small" id="gmOff">Disconnect</button>`}${use}`
-    : `Not connected. One-time setup:<ol style="margin:6px 0 0;padding-left:20px">
-      <li>Google Account &rarr; Security &rarr; 2-Step Verification on &rarr; <a href="https://myaccount.google.com/apppasswords" target="_blank"><b>App passwords</b></a> &rarr; create one named "MeetDeck".</li>
-      <li>Enter it here:</li></ol>
-      <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><input id="gmUser" type="email" placeholder="you@gmail.com" size="24">
-        <input id="gmPw" type="password" placeholder="16-letter app password" size="22" autocomplete="new-password"><button class="small" id="gmGo">Connect</button></div>
-      <div id="gmErr" style="font-size:12.5px;color:var(--err);margin-top:4px"></div>${use}`;
-  const go = $("#gmGo"), off = $("#gmOff");
-  if (go) go.onclick = async () => { $("#gmErr").textContent = ""; go.disabled = true;
-    try { gmailSetup(await api("/api/gmail/login", J("POST", {user: $("#gmUser").value, password: $("#gmPw").value}))); }
-    catch (e) { $("#gmErr").textContent = e.message; go.disabled = false; } };
-  if (off) off.onclick = async () => { if (confirm("Disconnect Gmail from MeetDeck?")) gmailSetup(await api("/api/gmail/login", J("POST", {user: "", password: ""}))); };
 }
 async function loadPlan() {
   if (!SET.drive_folder) { $("#sPlan").innerHTML = ""; return; }
@@ -886,7 +871,6 @@ async function mailPick(kind) {
     <label style="display:block;margin-top:10px;font-size:13px">Other emails (Cc) <input id="mpOther" placeholder="name@school.org, …" style="width:100%"></label>
     <div class="row" style="margin-top:14px;gap:8px;justify-content:flex-end"><span class="muted" id="mpN" style="font-size:12.5px;margin-right:auto"></span>
       <button class="ghost" data-mpgo="0">Cancel</button>
-      <button class="ghost" data-mpgo="draft" title="Puts a draft in your Gmail Drafts folder with the results files already attached. Nothing is sent.">Gmail draft with files</button>
       <button data-mpgo="1">Open email</button></div>
     <div id="mpMsg" style="font-size:12.5px;margin-top:6px"></div></div>`;
   document.body.appendChild(box);
@@ -899,7 +883,6 @@ async function mailPick(kind) {
     if (t.dataset.mpall) { ev.preventDefault(); box.querySelectorAll("[data-mpcoach]").forEach(x => x.checked = t.dataset.mpall === "1"); return count(); }
     if (!t.dataset.mpgo) return;
     if (t.dataset.mpgo === "0") return box.remove();
-    const draft = t.dataset.mpgo === "draft";
     const pick = {cc: [], bcc: []}, on = [];
     const add = (where, e) => { e = (e || "").trim(); if (!e || on.includes(low(e))) return; on.push(low(e)); pick[where].push(e); };
     const vals = {}; offs.forEach(([k]) => vals[k] = box.querySelector(`[data-mpoffv="${k}"]`).value.trim());
@@ -910,18 +893,6 @@ async function mailPick(kind) {
       try { M = await api(`/api/meets/${M.id}/state`, J("PUT", {contacts: {...c, ...vals}})); } catch (e) {}
     }
     try { localStorage.setItem(key, JSON.stringify(on)); } catch (e) {}
-    if (draft) {
-      const msg = box.querySelector("#mpMsg");
-      const g = await api("/api/gmail/status").catch(() => ({}));
-      if (!g.configured) { msg.innerHTML = `<span style="color:var(--err)">Gmail isn't connected. Add the address and app password in <a href="#" data-gosetup="1">Setup &rarr; Gmail</a>.</span>`; return; }
-      t.disabled = true; msg.textContent = `Making the draft in ${g.user}…`;
-      try {
-        const r = await api(`/api/meets/${M.id}/send/draft`, J("POST", {kind, ...runMailParts(kind, pick)}));
-        msg.innerHTML = `<span style="color:var(--ok)">&#10003; Draft saved in ${esc(r.user)} &rarr; Drafts with ${r.files.map(esc).join(", ")}.</span>
-          <a href="https://mail.google.com/mail/?authuser=${encodeURIComponent(r.user)}#drafts" target="_blank">Open Gmail Drafts</a>`;
-      } catch (e) { msg.innerHTML = `<span style="color:var(--err)">${esc(e.message)}</span>`; }
-      t.disabled = false; return;
-    }
     box.remove();
     const a = document.createElement("a"); a.href = runMail(kind, pick); a.style.display = "none";
     document.body.appendChild(a); a.click(); a.remove();
@@ -1023,6 +994,10 @@ $("#sMbSave").onclick = async () => {
 $("#sMbAuto").onchange = async () => {
   try { SET = await api("/api/settings", J("PUT", {meetboard_auto: $("#sMbAuto").checked})); $("#sMbMsg").textContent = SET.meetboard_auto ? "Auto-send on" : "Auto-send off"; }
   catch (e) { $("#sMbMsg").textContent = e.message; }
+};
+$("#sDbg").onchange = async e => {
+  try { SET = await api("/api/settings", J("PUT", {debug_tools: e.target.checked})); $("#sDbgMsg").textContent = SET.debug_tools ? "On - reload the meet page to see them" : "Off"; }
+  catch (x) { $("#sDbgMsg").textContent = x.message; }
 };
 $("#sGcSave").onclick = async () => {
   try { SET = await api("/api/settings", J("PUT", {goatcounter: $("#sGc").value})); $("#sGcMsg").textContent = " Saved - phones count from the next publish";
@@ -1764,7 +1739,7 @@ document.addEventListener("change", ev => {
 });
 $("#recTeamSel").onchange = e => save({record_team: e.target.value === "__auto" ? null : e.target.value});
 $("#seasonSel").onchange = async e => { SET = await api("/api/settings", J("PUT", {season: e.target.value})); store("meet"); $("#newBox").classList.add("hidden"); loadMeets(); };
-$("#meetSel").onchange = e => { gmailLoaded = false; $("#gmailBox").open = false; return e.target.value && open(e.target.value); };
+$("#meetSel").onchange = e => e.target.value && open(e.target.value);
 $("#newBtn").onclick = () => { $("#newBox").classList.toggle("hidden"); $("#newName").focus(); };
 $("#createBtn").onclick = async () => {
   store("host", $("#newHost").value);
@@ -1927,38 +1902,6 @@ $("#pasteBtn").onclick = async () => {
   catch (e) { $("#uploadMsg").textContent = "Couldn't add pasted entries: " + e.message; }
   open(M.id);
 };
-let gmailLoaded = false;
-$("#gmailBox").addEventListener("toggle", () => { if ($("#gmailBox").open && !gmailLoaded) gmailScan(); });
-async function gmailScan() {
-  gmailLoaded = true;
-  const st = await api("/api/gmail/status");
-  if (!st.configured) {
-    $("#gmailBody").innerHTML = `<div class="muted" style="font-size:13px">Gmail isn't connected yet &mdash; see <a href="#" data-gosetup="1">Setup</a>.</div>`;
-    return;
-  }
-  $("#gmailBody").innerHTML = `<div class="row"><label class="muted">Last <input id="gDays" type="number" value="14" min="1" max="90" style="width:60px"> days</label>
-    <input id="gWords" placeholder="optional words, e.g. Stansbury" size="24"><button class="small" id="gGo">Search</button>
-    <span class="muted" id="gMsg">${esc(st.user)}</span></div><div id="gList" style="margin-top:8px"></div>`;
-  $("#gGo").onclick = gmailRun; gmailRun();
-}
-async function gmailRun() {
-  $("#gMsg").textContent = "Searching…"; $("#gList").innerHTML = "";
-  try {
-    const r = await api(`/api/meets/${M.id}/gmail?days=${+$("#gDays").value || 14}&words=${encodeURIComponent($("#gWords").value)}`);
-    $("#gMsg").textContent = `${r.messages.length} email(s) with entry attachments`;
-    $("#gList").innerHTML = r.messages.length ? `<table><tr><th>Date</th><th>From / subject</th><th>Attachments</th></tr>` + r.messages.map(m => `<tr>
-      <td style="white-space:nowrap;font-size:13px">${esc(m.date)}</td><td>${esc(m.from)}<div class="muted" style="font-size:13px">${esc(m.subject)}</div></td>
-      <td>${m.attachments.map(a => `<div class="row" style="gap:6px;margin-bottom:3px"><span style="font-size:13px">${esc(a.filename)}</span>
-        ${a.imported ? `<span class="badge ok">imported</span>` : ""}<button class="${a.imported ? "ghost " : ""}small" data-gimport="${a.id}">${a.imported ? "Import again" : "Import"}</button></div>`).join("")}</td></tr>`).join("") + `</table>`
-      : `<div class="muted">Nothing found. Try more days or fewer words.</div>`;
-  } catch (e) { $("#gMsg").textContent = e.message; }
-}
-document.addEventListener("click", async ev => {
-  const id = ev.target.dataset && ev.target.dataset.gimport; if (!id) return;
-  ev.target.disabled = true; ev.target.textContent = "Importing…";
-  try { showResult(await api(`/api/meets/${M.id}/gmail/import`, J("POST", {id}))); ev.target.textContent = "Imported"; await open(M.id); }
-  catch (e) { ev.target.textContent = "Failed"; $("#uploadMsg").textContent = e.message; }
-});
 async function upload(files) {
   if (!files.length) return;
   const fd = new FormData(); [...files].forEach(f => fd.append("files", f));

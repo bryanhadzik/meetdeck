@@ -49,12 +49,11 @@ def first_run():
 
 
 def load_env():
-    """Optional settings file Documents\\MeetDeck\\meetdeck.env (KEY=value lines), e.g. GMAIL_USER / GMAIL_APP_PASSWORD."""
+    """Optional settings file Documents\\MeetDeck\\meetdeck.env (KEY=value lines), e.g. MEETDECK_PORT."""
     f = DATA / "meetdeck.env"
     if not f.exists():
         f.write_text("# MeetDeck settings - KEY=value, one per line. Restart MeetDeck after changing.\n"
-                     "# Gmail inbox for coaches' entry files (use a Google app password):\n"
-                     "# GMAIL_USER=you@gmail.com\n# GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx\n", encoding="utf-8")
+                     , encoding="utf-8")
     for line in f.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:

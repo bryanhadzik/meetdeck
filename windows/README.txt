@@ -22,8 +22,5 @@ Needs:   Windows 10 or 11. Nothing to install - Python is inside this folder, an
 Timing:  plug the CTS console into this laptop; the Timing console panel on the Run the meet page
          finds it (the bridge runs inside MeetDeck).
 
-Gmail:   to pull coaches' entry files from Gmail, put GMAIL_USER and GMAIL_APP_PASSWORD in
-         Documents\MeetDeck\meetdeck.env, then Quit and start MeetDeck again.
-
 Trouble: "MeetDeck (show log).bat" runs it with a window showing what happens; the log is also in
          Documents\MeetDeck\meetdeck.log.

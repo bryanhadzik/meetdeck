@@ -1102,7 +1102,7 @@ $("#tmSend").onclick = async () => {
   const slot = +$("#tmSlot").value;
   if (!confirm(`Send ${events.length} events to meet slot ${slot} on the console? Whatever meet is in that slot is replaced. (Console must be in RESET with Allow Remote Setup on.)`)) return;
   tmMsg("Sending the meet… (about 25 seconds - wait for the result here before touching the console)");
-  try { const r = await bridge("/download", {slot, events, title: (M.meet.name || "").slice(0, 20)}); tmMsg(`Sent ${r.events} events to meet slot ${r.slot} as \"${esc(r.title)}\". Advance heats on the console as usual.`); api(`${API}/activity`, J({key: "console"})).catch(() => {}); } catch (e) { tmMsg(e.message, true); }
+  try { const r = await bridge("/download", {slot, events, title: (M.meet.name || "").slice(0, 20)}); tmMsg(`Sent ${r.events} events to meet slot ${r.slot} as \"${esc(r.title)}\". ` + (r.capture ? `Saved as a capture - use the Launcher's \"Compare last two runs\" to set it beside Meet Manager's.` : `Advance heats on the console as usual.`)); api(`${API}/activity`, J({key: "console"})).catch(() => {}); } catch (e) { tmMsg(e.message, true); }
 };
 // lanes still needing watch times (same rule as the Watches needed printout)
 function watchesNeeded() {

@@ -101,14 +101,45 @@ def download(body: dict) -> dict:
     note(f"download: {len(evs)} events ({nos[0] if nos else '-'}-{nos[-1] if nos else '-'}) to meet slot {slot}")
     step = [0, 0]
     t0 = time.time()
+    con = need()
+    sent = []                       # on the Simulator: every message, for a capture like the emulator's
+    if STATE["sim"]:
+        prev = con.log
+        def con_log(d, b):
+            if d == ">":
+                sent.append([round((time.time() - t0) * 1000), b])
+            if prev:
+                prev(d, b)
+        con.log = con_log
     try:
-        r = need().download_meet(slot, evs, body.get("title"), progress=lambda d, t: step.__setitem__(slice(0, 2), [d, t]))
+        r = con.download_meet(slot, evs, body.get("title"), progress=lambda d, t: step.__setitem__(slice(0, 2), [d, t]))
     except Exception as e:
         note(f"download STOPPED at step {step[0] + 1} of {step[1]} after {time.time() - t0:.1f}s: {e}")
         raise cts.CTSError(f"The download stopped part-way (step {step[0] + 1} of {step[1]}): {e}. "
                            "Events after that point are blank on the console - send the meet again.")
+    finally:
+        if STATE["sim"]:
+            con.log = prev
     note(f"download finished: {r['events']} events in {time.time() - t0:.1f}s")
+    if STATE["sim"]:
+        r["capture"] = sim_capture(STATE["serial"], sent)
     return r
+
+
+def sim_capture(sim, sent: list) -> str:
+    """Save what MeetDeck just sent to the Simulator as an emulator capture, so the Launcher's
+    'Compare last two runs' can set it beside Meet Manager's run through the emulator."""
+    import emulator
+    emulator.rotate()
+    emu = emulator.Emulator(None, emulator.Recorder(os.devnull), sim=sim)
+    emu.started = time.strftime("%Y-%m-%d %H:%M:%S")
+    for ms, b in sent:
+        what = emulator.describe(b[2:-2])
+        emu.bump(re.sub(r"\d+", "#", what.split(":")[0].split(" = ")[0]))
+        emu.messages.append([ms, b.hex(" "), what])
+    emu.save()
+    note(f"capture saved: {emulator.CAPTURE}")
+    return emulator.CAPTURE
 
 
 def disconnect():

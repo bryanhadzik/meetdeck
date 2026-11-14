@@ -659,7 +659,7 @@ class _Results(_Sheet):
         else:
             self.text(c + 24.0, h, "Name", bold=True, size=RTSZ)
             self.text(c + 138.0, h, "Yr", bold=True, size=RTSZ, align="r")
-            self.text(c + 137.6, h, "School", bold=True, size=RTSZ)
+            self.text(c + 150.0, h, "School", bold=True, size=RTSZ)   # clear of the Yr column
         self.text(c + 240.0, h, "Finals Time", bold=True, size=RTSZ, align="r")
         if self.has_pts:
             self.text(c + RW, h, "Points", bold=True, size=RTSZ, align="r")
@@ -702,7 +702,7 @@ class _Results(_Sheet):
         else:
             a = aths.get(e["ath"], {})
             lines.append((0, [(18.0, place, "r"), (24.0, nm(a), "l", 108), (138.0, a.get("yr", ""), "r"),
-                              (144.0, teams.get(a.get("team"), {}).get("abbr", ""), "l", 60), (240.0, tm, "r"), (RW, pts, "r")]))
+                              (150.0, teams.get(a.get("team"), {}).get("abbr", ""), "l", 54), (240.0, tm, "r"), (RW, pts, "r")]))
         y = 11.5
         if st in ("Q", "F", "D") and e.get("dq"):
             if relay:

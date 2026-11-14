@@ -174,6 +174,8 @@ def start_bridge():
         from http.server import ThreadingHTTPServer
         srv = ThreadingHTTPServer(("127.0.0.1", BRIDGE_PORT), bridge.Handler)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
+        if hasattr(bridge, "start_auto"):
+            bridge.start_auto()        # connects to the console's remembered port by itself
         log("timing bridge on 8766")
     except Exception:
         log("bridge: " + traceback.format_exc())

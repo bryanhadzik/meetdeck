@@ -26,6 +26,15 @@ section{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 .shr > :first-child{font-size:12.5px}
 .shr > :first-child button:not(.shrBtn), .shr > :first-child a, .shr > :first-child label, .shr > :first-child select{display:none!important}
 .shrBtn{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;font-size:12px;line-height:1;padding:3px 7px;cursor:pointer;margin-left:6px}
+/* one line that folds every status box at the top of Run the meet */
+.topstrip{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 10px;margin-bottom:8px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:12.5px;cursor:pointer;user-select:none}
+.topstrip .tg{color:var(--muted);font-weight:600;margin-right:2px}
+.topstrip .ch{display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap;max-width:420px;overflow:hidden;text-overflow:ellipsis}
+.topstrip .ch i{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+.topstrip .ch.ok i{background:var(--ok)} .topstrip .ch.bad i{background:var(--err)} .topstrip .ch.warn i{background:#d4a017}
+.topstrip .ch.bad{color:var(--err)}
+.topstrip button.small{margin-left:auto}
+body.topShut #mbBox, body.topShut #pubBox, body.topShut #timing, body.topShut #missingTeams, body.topShut #lastMin, body.topShut #problems{display:none!important}
 h2{font-size:15px;margin:0 0 8px}
 button,select,input{font:inherit;color:inherit}
 button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:6px 11px;cursor:pointer}
@@ -142,6 +151,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
     </div></div>
 </header>
 <main>
+  <div id="topStrip" class="topstrip" title="Click to show or hide the status boxes"></div>
   <section id="mbBox" class="hidden" style="margin-bottom:14px"><div class="row"><b>Meet board</b><span id="mbState" class="badge"></span>
       <span class="muted" style="font-size:12.5px" id="mbUrl"></span><span class="grow"></span>
       <label class="muted" style="font-size:12.5px" title="Send again by itself after scratches, lane moves, relay swimmer or name changes"><input type="checkbox" id="mbAuto"> auto</label>
@@ -159,7 +169,8 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
           <div id="tmBody" style="margin-top:8px">
             <div class="row"><label class="muted" style="font-size:12.5px">Bridge <input id="tmUrl" size="22"></label>
               <select id="tmPort"><option value="">COM port…</option></select>
-              <button class="small" id="tmConnect">Connect</button><button class="ghost small" id="tmSim">Simulator</button><button class="ghost small hidden" id="tmDisc">Disconnect</button>
+              <button class="small" id="tmConnect">Connect</button><button class="ghost small" id="tmSim">Simulator</button><button class="ghost small hidden" id="tmDisc" title="Let go of the port (for Meet Manager). Turns automatic connecting off until the next Connect.">Disconnect</button>
+              <button class="ghost small" id="tmRecon" title="Close and reopen the console's port on the MeetDeck computer - for when it stops answering">Reconnect</button>
               <a href="/timing/bridge.zip" class="muted" style="font-size:12.5px">Download the bridge for the timing laptop</a></div>
             <div class="row" style="margin-top:6px"><label class="muted" style="font-size:12.5px">Send the meet to console meet slot <select id="tmSlot"><option selected>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
               <button class="ghost small" id="tmSend">Send events</button>
@@ -167,6 +178,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
               <a href="#" id="tmLogBtn" class="muted" style="font-size:12.5px">Console log</a>
               <a href="#" id="tmDbgBtn" class="muted" style="font-size:12.5px">Serial debug</a></div>
             <div id="tmNoDb" class="muted hidden" style="font-size:12.5px;margin-top:6px">Build or open this meet's database below to get times into heats and send events. Connecting and the simulator work now.</div>
+            <div id="tmAuto" class="muted" style="font-size:12.5px;margin-top:6px"></div>
             <div id="tmMsg" class="muted" style="font-size:12.5px;margin-top:6px"></div>
             <pre id="tmLog" class="hidden" style="max-height:200px;overflow:auto;font-size:11px;background:var(--bg);padding:6px;border-radius:6px"></pre>
             <div id="tmDbg" class="hidden" style="margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px">
@@ -1026,6 +1038,9 @@ function tmShow() {
   $("#tmState").style.background = TM.connected ? "var(--ok-bg)" : "";
   $("#tmState").style.color = TM.connected ? "var(--ok)" : "";
   $("#tmDisc").classList.toggle("hidden", !TM.connected);
+  const au = TM.auto || {};
+  $("#tmAuto").innerHTML = au.on && au.port ? `Connects to <b>${esc(au.port)}</b> by itself when the console is plugged in and on${TM.connected ? "" : au.last ? ` &middot; last try ${esc(au.last)}` : ""}.`
+    : au.port ? `Automatic connecting is off (Disconnect was used). Connect or Reconnect turns it back on.` : "";
   $("#tmPractice").classList.toggle("hidden", !TM.sim);
   if (TM.ports) { const cur = $("#tmPort").value; $("#tmPort").innerHTML = `<option value="">COM port…</option>` + TM.ports.map(p => `<option value="${esc(p.port)}">${esc(p.port)} ${esc(p.desc || "")}</option>`).join(""); $("#tmPort").value = cur || TM.port || ""; }
 }
@@ -1051,6 +1066,13 @@ $("#tmSim").onclick = async () => {
 };
 // keep checking for the bridge until it's connected, so starting it after the page loads just works
 setInterval(() => { if (!TM.connected && !document.hidden) tmStatus(); }, 4000);
+$("#tmRecon").onclick = async () => {
+  tmMsg("Reconnecting on the MeetDeck computer…");
+  try { TM = await bridge("/reconnect", $("#tmPort").value ? {port: $("#tmPort").value} : {}); tmShow(); tmMsg(`Reconnected: ${TM.identity} on ${TM.port}`); }
+  catch (e) { tmMsg(e.message, true); tmStatus(); }
+};
+// while connected, check now and then too, so a console that went away shows as not connected
+setInterval(() => { if (TM.connected && !document.hidden) tmStatus(); }, 20000);
 $("#tmDisc").onclick = async () => { try { TM = await bridge("/disconnect", {}); tmShow(); tmMsg("Disconnected."); } catch (e) { tmMsg(e.message, true); } };
 // ---- serial debug panel: live port details, line states, traffic counters, probe results ----
 let TMDBG = null, TMDBG_T = null;
@@ -1664,6 +1686,58 @@ if (!MID) document.body.innerHTML = "<main><section>Open this from a meet's page
 fetch("/api/version").then(r => r.json()).then(v => { const t = document.getElementById("verTag"); if (t && v.version) t.textContent = "v" + v.version; }).catch(() => {});
 </script>
 <script>
+/* the strip above the status boxes: one click folds them all into this line; remembered on this computer */
+(function () {
+  const strip = document.getElementById("topStrip");
+  const get = () => { try { return localStorage.getItem("topShut") === "1"; } catch (e) { return false; } };
+  const set = v => { try { localStorage.setItem("topShut", v ? "1" : "0"); } catch (e) {} };
+  const txt = sel => { const e = document.querySelector(sel); return e ? e.textContent.trim().replace(/\s+/g, " ") : ""; };
+  function chip(label, state, cls, title) {
+    return `<span class="ch ${cls}" title="${esc(title || "")}"><i></i><b>${esc(label)}</b>${state ? " " + esc(state) : ""}</span>`;
+  }
+  let pending = false;
+  function draw() {
+    pending = false;
+    const shut = get();
+    document.body.classList.toggle("topShut", shut);
+    const out = [`<span class="tg">${shut ? "\u25B8 Status" : "\u25BE Status"}</span>`];
+    const mb = document.getElementById("mbBox"), pub = document.getElementById("pubBox"), app = document.getElementById("app");
+    if (mb && !mb.classList.contains("hidden")) {
+      const st = txt("#mbState"), stale = !document.getElementById("mbStale").classList.contains("hidden");
+      out.push(chip("Meet board", st, stale ? "warn" : /fail|error|can't|not/i.test(st) ? "bad" : st ? "ok" : "", stale ? txt("#mbStale") : txt("#mbMsg")));
+    }
+    if (pub && !pub.classList.contains("hidden")) {
+      const st = txt("#pubState"), stale = !document.getElementById("pubStale").classList.contains("hidden");
+      out.push(chip("Phone results", st, stale ? "warn" : /fail|error/i.test(st) ? "bad" : "ok", stale ? txt("#pubStale") : txt("#pubMsg")));
+    }
+    const tm = txt("#tmState");
+    out.push(chip("Timing console", tm, /not/i.test(tm) ? "bad" : "ok", txt("#tmMsg")));
+    if (app && !app.classList.contains("hidden")) {
+      const miss = txt("#missingTeams");
+      if (miss) out.push(chip("Teams missing", "", "bad", miss));
+      const lm = txt("#lastMin");
+      if (lm) out.push(chip("Last-minute", lm.replace(/^Last-minute changes\s*/i, "").split("\u2610")[0].trim().slice(0, 60), /waiting/i.test(lm) ? "warn" : "ok", lm));
+      const pr = document.getElementById("problems");
+      const items = pr ? [...pr.children].filter(c => c.textContent.trim()) : [];
+      const score = items.find(c => /^Team scores/i.test(c.textContent.trim()));
+      if (score) out.push(chip("Scores", score.textContent.trim().replace(/^Team scores after \d+ race\(s\):\s*/i, ""), "ok", score.textContent.trim()));
+      const warns = items.filter(c => c !== score);
+      if (warns.length) out.push(chip(`${warns.length} check${warns.length > 1 ? "s" : ""}`, "", "warn", warns.map(c => c.textContent.trim()).join("\n\n").slice(0, 600)));
+    }
+    out.push(`<button type="button" class="ghost small" data-recon>Reconnect console</button>`);
+    strip.innerHTML = out.join("");
+  }
+  const later = () => { if (!pending) { pending = true; requestAnimationFrame(draw); } };
+  strip.addEventListener("click", e => {
+    if (e.target.closest("[data-recon]")) { e.stopPropagation(); const b = document.getElementById("tmRecon"); if (b) b.click(); return; }
+    set(!get()); draw();
+  });
+  ["mbBox", "pubBox", "timing", "app", "missingTeams", "lastMin", "problems"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) new MutationObserver(later).observe(el, {childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class"]});
+  });
+  draw();
+})();
 /* shrink / expand the boxes at the top of Run the meet; remembered on this computer */
 (function () {
   const BOXES = [["#mbBox", "mb"], ["#pubBox", "pub"], ["#timing", "tm"], ["#wtBox", "wt"], ["#lastMin > div", "lm"]];

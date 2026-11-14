@@ -142,6 +142,135 @@ def sim_capture(sim, sent: list) -> str:
     return emulator.CAPTURE
 
 
+# ---- remember the console's port; connect to it by itself -------------------------
+PREF_PATH = os.path.join(TIMING_DIR, "bridge.json")
+AUTO_EVERY = 10          # seconds between tries while not connected
+HEARTBEAT = 30           # seconds between "are you there?" checks while connected and idle
+
+
+def pref() -> dict:
+    try:
+        with open(PREF_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_pref(**kw):
+    p = pref()
+    p.update(kw)
+    try:
+        with open(PREF_PATH, "w", encoding="utf-8") as f:
+            json.dump(p, f)
+    except OSError:
+        pass
+
+
+def _open_saved(port: str, s: dict, timeout: float = 0.8):
+    """Open the remembered port with the settings that worked and check the console answers.
+    Returns (serial, identity); raises if it doesn't."""
+    ser = cts.open_serial(port, **s)
+    try:
+        ident = cts.Console(ser).who_are_you(timeout)
+    except Exception:
+        ser.close()
+        raise
+    return ser, ident
+
+
+def auto_connect_once() -> bool:
+    """One try at the remembered port (only that port, so it never grabs the scoreboard's)."""
+    p = pref()
+    if not p.get("auto") or not p.get("port") or STATE["console"]:
+        return False
+    if not any(x["port"] == p["port"] for x in cts.list_ports()):
+        return False
+    if not LOCK.acquire(blocking=False):
+        return False
+    try:
+        if STATE["console"]:
+            return False
+        try:
+            ser, ident = _open_saved(p["port"], p.get("settings") or {})
+        except Exception as e:
+            STATE["auto_last"] = f"{time.strftime('%H:%M:%S')} {p['port']}: no answer ({e})"[:200]
+            return False
+        STATE.update(console=cts.Console(ser, log=log), serial=ser, port=p["port"], settings=p.get("settings") or {},
+                     identity=ident, sim=False, connected_at=time.strftime("%H:%M:%S"), last_connect_error=None)
+        note(f"auto-connected {p['port']} {p.get('settings')} '{ident}'")
+        return True
+    finally:
+        LOCK.release()
+
+
+def heartbeat_once() -> None:
+    """While connected (and nothing else is using the line): is the console still there? Two misses
+    in a row and it counts as disconnected, so auto-connect takes over when it comes back."""
+    c = STATE["console"]
+    if not c or STATE["sim"] or not LOCK.acquire(blocking=False):
+        return
+    try:
+        try:
+            c.who_are_you(1.0)
+            STATE["missed"] = 0
+        except Exception:
+            STATE["missed"] = STATE.get("missed", 0) + 1
+            if STATE["missed"] >= 2:
+                note(f"console stopped answering on {STATE['port']} - disconnected; will reconnect when it's back")
+                disconnect()
+                STATE["missed"] = 0
+    finally:
+        LOCK.release()
+
+
+_auto_started = False
+
+
+def start_auto():
+    """Background: connect to the remembered port when it's there, and notice when the console goes away."""
+    global _auto_started
+    if _auto_started:
+        return
+    _auto_started = True
+
+    def loop():
+        last_beat = time.time()
+        while True:
+            time.sleep(AUTO_EVERY)
+            try:
+                if STATE["console"]:
+                    if time.time() - last_beat >= HEARTBEAT:
+                        last_beat = time.time()
+                        heartbeat_once()
+                else:
+                    auto_connect_once()
+            except Exception as e:
+                note(f"auto-connect: {type(e).__name__}: {e}")
+    threading.Thread(target=loop, daemon=True, name="console-auto").start()
+
+
+def reconnect(body: dict | None = None) -> dict:
+    """Close and open the console port again (same port and settings, or try them all)."""
+    p = pref()
+    port = (body or {}).get("port") or STATE.get("port") or p.get("port")
+    if not port or port == "SIMULATOR":
+        raise ValueError("No console port to reconnect to yet - pick the COM port and Connect once")
+    disconnect()
+    note(f"reconnect {port}")
+    s = p.get("settings") if p.get("port") == port else None
+    if s:
+        try:
+            ser, ident = _open_saved(port, s)
+            STATE.update(console=cts.Console(ser, log=log), serial=ser, port=port, settings=s, identity=ident, sim=False,
+                         connected_at=time.strftime("%H:%M:%S"), last_connect_error=None)
+            save_pref(auto=True)
+            note(f"reconnected {port} {s} '{ident}'")
+            return status()
+        except Exception as e:
+            note(f"reconnect with the saved settings failed ({e}); trying them all")
+    return connect({"port": port})
+
+
 def disconnect():
     s = STATE.get("serial")
     if s:
@@ -207,6 +336,7 @@ def connect(body: dict) -> dict:
     STATE.update(console=c, serial=ser, port=port, settings=s, identity=ident, sim=False,
                  connected_at=time.strftime("%H:%M:%S"), last_connect_error=None)
     note(f"connected {port} {s} '{ident}' {cts.port_details(ser)}")
+    save_pref(port=port, settings={k: v for k, v in s.items() if k in ("baudrate", "parity", "stopbits")}, auto=True)
     return status()
 
 
@@ -293,8 +423,10 @@ def probe_only(body: dict) -> dict:
 
 
 def status() -> dict:
+    p = pref()
     return {"bridge": VERSION, "connected": bool(STATE["console"]), "port": STATE["port"], "settings": STATE["settings"],
-            "identity": STATE["identity"], "sim": STATE["sim"], "ports": cts.list_ports(), "log": LOG_PATH}
+            "identity": STATE["identity"], "sim": STATE["sim"], "ports": cts.list_ports(), "log": LOG_PATH,
+            "auto": {"on": bool(p.get("auto")), "port": p.get("port"), "running": _auto_started, "last": STATE.get("auto_last")}}
 
 
 def need():
@@ -434,13 +566,14 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         n = int(self.headers.get("Content-Length") or 0)
         body = json.loads(self.rfile.read(n) or b"{}") if n else {}
-        routes = {"/connect": lambda: connect(body), "/disconnect": lambda: (disconnect(), status())[1],
+        routes = {"/connect": lambda: connect(body), "/disconnect": lambda: (disconnect(), save_pref(auto=False), note("disconnected by hand - auto-connect off until the next Connect"), status())[3],
+                  "/reconnect": lambda: reconnect(body),
                   "/download": lambda: download(body),
                   "/sim/load": lambda: sim_load(body), "/ping": ping, "/listen": lambda: listen(body),
                   "/probe": lambda: probe_only(body)}
         if u.path not in routes:
             return self._send(404, {"error": "not found"})
-        limits = {"/connect": CONNECT_SECS + 1, "/download": 120, "/probe": 30,
+        limits = {"/connect": CONNECT_SECS + 1, "/reconnect": CONNECT_SECS + 3, "/download": 120, "/probe": 30,
                   "/listen": float(body.get("secs", 5) or 5) + 10, "/sim/load": 30}
         self._run(routes[u.path], limit=limits.get(u.path, 15))
 
@@ -465,6 +598,7 @@ def main():
     if a.sim:
         connect({"sim": True})
     srv = ThreadingHTTPServer((a.host, a.listen), Handler)
+    start_auto()
     print(f"Timing bridge {VERSION} on http://localhost:{a.listen}  (log: {LOG_PATH})")
     print("Open the meet database page and use the Timing console panel. Ctrl+C to stop.")
     try:

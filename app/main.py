@@ -328,6 +328,12 @@ def put_settings(body: dict):
         st["public_domain"] = dom
     if "public_auto" in body:
         st["public_auto"] = bool(body["public_auto"])
+    if "goatcounter" in body:
+        # GoatCounter site code for the phone page's visit stats: "prattswim" or its whole address
+        gc = (body["goatcounter"] or "").strip().lower().removeprefix("https://").removeprefix("http://").split(".goatcounter.com")[0].strip("/")
+        if gc and not re.fullmatch(r"[a-z0-9-]{2,50}", gc):
+            raise HTTPException(400, "Enter the GoatCounter code, e.g. prattswim (from prattswim.goatcounter.com)")
+        st["goatcounter"] = gc
     if "backup_drive" in body:
         st["backup_drive"] = bool(body["backup_drive"])
     if "drive_token" in body:            # write-only: the token in an Apps Script deployed from another MeetDeck copy
@@ -2681,6 +2687,8 @@ def _public_doc(mid: str) -> dict:
     _usc.refresh()
     doc = public_results.build(meetdb.load(db), _dbinfo(d).get("scoring"), _usc if _settings().get("usc_on", True) else None)
     doc["stream"] = _stream_link()
+    if _settings().get("goatcounter"):
+        doc["stats"] = {"goatcounter": _settings()["goatcounter"]}
     doc["meet"]["id"] = mid
     name = (_meta(d).get("name") or "").strip()
     if name:                         # MeetDeck's name for the meet wins over the one typed in Meet Manager

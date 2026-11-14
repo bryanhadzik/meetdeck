@@ -138,13 +138,28 @@ async function load() {
       // a new meet on the page: forget which events were opened for the last one (stars stay - same swimmers)
       const mid = (d.meet && (d.meet.id || d.meet.name + d.meet.date)) || "";
       if (mid && store.get("meet", "") !== mid) { store.set("meet", mid); OPEN = new Set(); store.set("open", []); FRESH = new Set(); }
-      D = d; render();
+      D = d; render(); stats();
     }
     else $("#msub").textContent = sub();
   } catch (e) {
     if (!D) $("#main").innerHTML = `<div class="empty">No results posted yet. This page fills in once the meet starts.</div>`;
   }
 }
+
+// ---- visit stats (GoatCounter; only when MeetDeck has a code set). No cookies, no personal details.
+let GC = null;
+function stats() {
+  const code = D && D.stats && D.stats.goatcounter;
+  if (!code || GC || !/^[a-z0-9-]+$/.test(code)) return;
+  GC = document.createElement("script");
+  GC.async = true; GC.src = "https://gc.zgo.at/count.js";
+  GC.dataset.goatcounter = `https://${code}.goatcounter.com/count`;     // counts this visit when it loads
+  document.head.appendChild(GC);
+}
+function track(path, title) {
+  try { if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({path: path.slice(0, 200), title: (title || path).slice(0, 200), event: true}); } catch (e) {}
+}
+const slug = t => String(t || "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
 
 function sub() {
   const m = D.meet || {};
@@ -272,19 +287,25 @@ document.addEventListener("click", e => {
     const k = s.dataset.star, adding = !STARS.has(k);
     adding ? STARS.add(k) : STARS.delete(k); store.set("stars", [...STARS]); render();
     const nm = k.split("|")[0].split(", ").reverse().join(" ");
+    const tm = k.split("|")[1] || "";
+    track(`${adding ? "star" : "unstar"}/${slug(tm)}/${slug(nm)}`, `${adding ? "★" : "☆"} ${nm} (${tm})`);
     toast(adding ? `<b>★</b> Following ${esc(nm)}. Tap <b>★ Mine</b> to see only your swimmers, relays included.` : `Stopped following ${esc(nm)}.`);
     hint(); return;
   }
-  if (e.target.id === "hintX") { store.set("hint_done", true); hint(); return; }
+  if (e.target.id === "hintX") { store.set("hint_done", true); hint(); track("hint-closed"); return; }
   const t = e.target.closest("[data-tog]");
   if (t) {
     const no = t.dataset.tog, v = (D.events || []).find(x => String(x.no) === no);
+    if (!OPEN.has(no)) track(`open/event-${no}`, `Opened event ${no}${v && v.name ? " " + v.name : ""}`);
     OPEN.has(no) ? OPEN.delete(no) : OPEN.add(no);
     FRESH.delete(no);
     store.set("open", [...OPEN]); render();
   }
 });
-$("#q").addEventListener("input", () => D && render());
+let searchT = null, searched = false;
+$("#q").addEventListener("input", () => { D && render();
+  // one "search" per visit once someone types 3+ letters (what they typed isn't sent)
+  clearTimeout(searchT); searchT = setTimeout(() => { if (!searched && $("#q").value.trim().length >= 3) { searched = true; track("search", "Used search"); } }, 1500); });
 let toastT = null;
 function toast(html) {
   let t = document.getElementById("toast");
@@ -295,7 +316,7 @@ function toast(html) {
 // the follow hint stays until someone stars a swimmer or closes it
 function hint() { $("#hint").hidden = STARS.size > 0 || store.get("hint_done", false); }
 hint();
-$("#mine").addEventListener("click", () => { MINE = !MINE; $("#mine").classList.toggle("on", MINE); D && render(); });
+$("#mine").addEventListener("click", () => { MINE = !MINE; if (MINE) track("mine", "★ Mine filter"); $("#mine").classList.toggle("on", MINE); D && render(); });
 // Share: the phone's own share sheet (Messages, email, ...) when it has one; otherwise text / copy
 $("#share").addEventListener("click", () => {
   const url = location.href.split("#")[0].split("?")[0], st = D && D.stream && D.stream.url ? D.stream : null;
@@ -317,8 +338,17 @@ $("#share").addEventListener("click", () => {
     <button data-copy="${esc(st.url)}">🔗 Copy the stream link</button>` : ""}
     <button class="x" id="closeSheet">Close</button>`;
   document.body.appendChild(el);
+  track("share/open", "Opened share");
+  el.addEventListener("click", ev => {        // links in the sheet: text / email / watch the stream
+    const a = ev.target.closest("a"); if (!a) return;
+    const h = a.getAttribute("href") || "";
+    track(h.startsWith("sms:") ? (h.includes(encodeURIComponent("Watch")) ? "share/text-stream" : "share/text-results")
+          : h.startsWith("mailto:") ? "share/email" : "stream/watch-from-share");
+  });
   el.addEventListener("click", async ev => {
     const t = ev.target.closest("button"); if (!t) return;
+    if (t.dataset.native) track(`share/native-${t.dataset.native === "str" ? "stream" : "results"}`);
+    if (t.dataset.copy) track(`share/copy-${st && t.dataset.copy === st.url ? "stream" : "results"}`);
     if (t.id === "closeSheet") return el.remove();
     if (t.dataset.native) {
       const isStr = t.dataset.native === "str";
@@ -340,6 +370,14 @@ const CHANNELS = [["https://www.youtube.com/@PrattAquaticCenter?sub_confirmation
   ["https://www.youtube.com/playlist?list=PLUt1eDeuyxoc", "Deseret Peak Swimming", "Golden Eagles \u00b7 this season's meets", "#C9B45C", "Playlist"]];
 document.querySelector(".ytl").innerHTML = CHANNELS.map(([u, n, s, c, b]) => `<a href="${u}" target="_blank" rel="noopener">
   <span class="dot" style="background:${c}"></span><span class="nm">${esc(n)}<small>${esc(s)}</small></span><span class="sub">${b}</span></a>`).join("");
+// YouTube channel / playlist taps, and any other outside link (the stream link on the page)
+document.addEventListener("click", e => {
+  const a = e.target.closest("a[href^='http']"); if (!a || a.closest("#sheet")) return;
+  const yt = a.closest(".ytl");
+  if (a.id === "liveBtn") return track("stream/watch", "Watch the stream (LIVE button)");
+  track(yt ? `youtube/${slug(a.querySelector(".nm") ? a.querySelector(".nm").firstChild.textContent : a.href)}` : `link/${slug(new URL(a.href).hostname)}`,
+        yt ? `YouTube: ${(a.querySelector(".nm") || a).firstChild.textContent}` : `Link: ${a.href}`);
+});
 load();
 setInterval(load, 30000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });

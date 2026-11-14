@@ -430,6 +430,10 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <button class="small" id="sPubSave">Save</button><span class="muted" id="sPubMsg" style="font-size:13px"></span></div>
     <div class="muted" style="font-size:12.5px;margin-top:4px">Token: GitHub &rarr; Settings &rarr; Developer settings &rarr; Fine-grained tokens &rarr; only this repository,
       permission <b>Contents: read and write</b>. It stays on this computer.</div>
+    <div class="row" style="margin-top:8px"><label>Visit stats (GoatCounter code) <input id="sGc" placeholder="prattswim" style="width:160px" autocomplete="off"></label>
+      <button class="small" id="sGcSave">Save</button><a id="sGcLink" target="_blank" rel="noopener" style="font-size:13px"></a><span class="muted" id="sGcMsg" style="font-size:13px"></span></div>
+    <div class="muted" style="font-size:12.5px;margin-top:4px">Counts visits, stars (per swimmer), opened events, searches, shares and stream/YouTube taps on the phone page.
+      No cookies or personal details. Free account at goatcounter.com; takes effect at the next publish.</div>
     <label class="row" style="margin-top:6px;font-size:13.5px"><input type="checkbox" id="sPubAuto"> Publish automatically after each scored race</label>
     <div class="row" style="margin-top:4px;font-size:13.5px">Spectators go to: <a id="sPubUrl" target="_blank" rel="noopener"></a></div>
   </section>
@@ -660,6 +664,8 @@ async function loadSetup() {
   $("#sPubDom").value = SET.public_domain || "";
   $("#sPubTok").value = ""; $("#sPubTok").placeholder = SET.public_token_set ? "saved (type to replace)" : "github_pat_…";
   $("#sPubAuto").checked = !!SET.public_auto;
+  $("#sGc").value = SET.goatcounter || "";
+  $("#sGcLink").textContent = SET.goatcounter ? " open stats" : ""; $("#sGcLink").href = SET.goatcounter ? `https://${SET.goatcounter}.goatcounter.com` : "#";
   $("#sPubUrl").textContent = $("#sPubUrl").href = SET.public_url || "";
   $("#sWriteState").innerHTML = !SET.drive_folder ? `<span class="muted">Save the folder first.</span>` : SET.drive_write ? `<span class="badge ok">Set up</span> <span class="muted" style="font-size:13px">Backups you download are also filed into Drive.</span>` : `<span class="badge no">Not set up</span>`;
   loadPlan();
@@ -1017,6 +1023,11 @@ $("#sMbSave").onclick = async () => {
 $("#sMbAuto").onchange = async () => {
   try { SET = await api("/api/settings", J("PUT", {meetboard_auto: $("#sMbAuto").checked})); $("#sMbMsg").textContent = SET.meetboard_auto ? "Auto-send on" : "Auto-send off"; }
   catch (e) { $("#sMbMsg").textContent = e.message; }
+};
+$("#sGcSave").onclick = async () => {
+  try { SET = await api("/api/settings", J("PUT", {goatcounter: $("#sGc").value})); $("#sGcMsg").textContent = " Saved - phones count from the next publish";
+    $("#sGcLink").textContent = SET.goatcounter ? " open stats" : ""; $("#sGcLink").href = SET.goatcounter ? `https://${SET.goatcounter}.goatcounter.com` : "#"; }
+  catch (e) { $("#sGcMsg").textContent = e.message; }
 };
 $("#sPubSave").onclick = async () => {
   const body = {public_repo: $("#sPubRepo").value, public_domain: $("#sPubDom").value};

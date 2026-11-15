@@ -150,7 +150,7 @@ def load(db) -> dict:
         st = _s(r["Event_stroke"])
         stroke = ("Medley Relay" if st == "E" else f"{STROKE.get(st, st)} Relay") if ir == "R" else STROKE.get(st, st)
         g = _s(r["Event_gender"]) or _s(r["Event_sex"])
-        events.append({"ptr": r["Event_ptr"], "no": r["Event_no"], "ltr": _s(r["Event_ltr"]), "ind_rel": ir,
+        events.append({"ptr": r["Event_ptr"], "no": r["Event_no"], "ltr": _s(r["Event_ltr"]), "ind_rel": ir, "status": _s(r.get("Event_stat")),
                        "gender": g, "sex": _s(r["Event_sex"]), "dist": int(r["Event_dist"] or 0), "stroke": st, "rounds": r.get("Event_rounds") or 1,
                        "label": f"{GENDER.get(g, g)} {int(r['Event_dist'] or 0)} {stroke}",
                        "order": order.get(r["Event_ptr"], (99, r["Event_no"] or 0, 1))[:2],

@@ -154,6 +154,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
     <div class="pop hidden" id="exportPop">
       <button class="small" data-x="backup">Meet Manager backup (.zip) &mdash; restore in MM</button>
       <button class="small" data-x="hy3" title="The same zip as Meet Manager's File > Export > Results for Team Manager: Meet Results-&lt;meet&gt;-&lt;date&gt;-001.zip with the .hy3 and .cl2">Utah Top 50 results (.hy3 + .cl2 zip) &mdash; also imports into Team Manager</button>
+      <div class="row" style="gap:6px;align-items:center;flex-wrap:nowrap"><select id="xTeam" style="font-size:13px;max-width:190px" title="One team's results only - Meet Manager's same export with one team selected"></select><button class="small" data-x="hy3team">One team's results (.hy3 + .cl2)</button></div>
       <button class="ghost small" data-x="html">Printable results</button>
       <button class="ghost small" data-x="csv">Results spreadsheet (.csv)</button>
       <div class="muted" style="font-size:12px;padding:2px 4px">Backups are also filed in this meet's Google Drive folder.</div>
@@ -334,6 +335,9 @@ function show() {
   if (!S.exists) { $("#start").classList.remove("hidden"); $("#app").classList.add("hidden"); ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn", "#finishBtn"].forEach(s => $(s).classList.add("hidden")); return; }
   M = S.model;
   $("#start").classList.add("hidden"); $("#app").classList.remove("hidden");
+  { const sel = $("#xTeam"), cur = sel.value, o = Object.values(M.teams).sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+      .map(t => `<option value="${t.no}">${esc(t.name || t.abbr)}</option>`).join("");
+    if (sel.dataset.o !== o) { sel.innerHTML = o; sel.dataset.o = o; if (cur) sel.value = cur; } }
   ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn", "#finishBtn"].forEach(s => $(s).classList.remove("hidden"));
   { const sel = $("#prLane"), cur = sel.value; sel.innerHTML = `<option value="">all lanes</option>` + Array.from({length: M.meet.lanes || 8}, (_, i) => `<option value="${i + 1}">lane ${i + 1}</option>`).join(""); sel.value = cur; }
   $("#src").textContent = `${M.meet.name !== (S.meet_name) ? M.meet.name + " · " : ""}${M.meet.start}${S.info.source ? " · " + S.info.source : ""}`;
@@ -1617,6 +1621,7 @@ document.addEventListener("click", async ev => {
     $("#exportPop").classList.add("hidden");
     if (d.x === "backup") location = `${API}/backup`;
     else if (d.x === "html") window.open(`${API}/export/html`, "_blank");
+    else if (d.x === "hy3team") location = `${API}/export/hy3?team=${encodeURIComponent($("#xTeam").value)}`;
     else location = `${API}/export/${d.x}`;
     if (d.x === "backup") setTimeout(load, 1500);
     return;

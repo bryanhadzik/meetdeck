@@ -349,6 +349,6 @@ def describe(code: str, event_stroke: str = "", relay: bool = False) -> str:
     if not c:
         return ""
     d = c["desc"]
-    if (relay or event_stroke == "E") and c["group"] in ("fly", "back", "breast", "free"):
+    if (relay or event_stroke == "E") and c["group"] in ("fly", "back", "breast", "free", "IM"):
         d += f" - {c['group']}"
     return d

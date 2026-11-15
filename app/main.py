@@ -2587,7 +2587,7 @@ import results as results_mod
 
 
 @app.get("/api/meets/{mid}/db/export/{fmt}")
-def db_export(mid: str, fmt: str):
+def db_export(mid: str, fmt: str, team: str | None = None):
     d = _dir(mid)
     db = _dbfile(d)
     if not db.exists():
@@ -2597,10 +2597,20 @@ def db_export(mid: str, fmt: str):
     _activity(d, f"export_{fmt}")
     if fmt == "hy3":
         info = _dbinfo(d)
-        seq = int(info.get("result_exports", 0)) + 1          # Meet Manager numbers its exports -001, -002 ...
+        tq, team = team, None
+        if tq not in (None, ""):
+            team = int(tq)
+            if team not in m["teams"]:
+                raise HTTPException(400, "That team isn't in this meet")
+        # Meet Manager numbers its exports -001, -002 ... (per team for one-team exports)
+        counts = info.setdefault("result_exports_team", {})
+        seq = (int(counts.get(str(team), 0)) if team is not None else int(info.get("result_exports", 0))) + 1
         # the licensee goes in the .hy3 header; a meet opened from a bare .mdb borrows it from another meet
-        data, name = results_mod.hy3_zip(m, db, (info.get("hyb") or "")[28:78].strip() or _any_licensee(), seq)
-        info["result_exports"] = seq
+        data, name = results_mod.hy3_zip(m, db, (info.get("hyb") or "")[28:78].strip() or _any_licensee(), seq, team)
+        if team is not None:
+            counts[str(team)] = seq
+        else:
+            info["result_exports"] = seq
         (_dbdir(d) / "info.json").write_text(json.dumps(info))
         _dblog(d, f"Exported results for Utah Top 50 / Team Manager ({name})", "export")
         return Response(data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{name}"'})

@@ -101,7 +101,7 @@ def _result_fields(e, date_col: int, date: str):
             (15, "0", 5, "r"), (20, e["heat"], 3, "r"), (23, e["lane"], 3, "r"), (26, e["heatplace"], 3, "r"),
             (29, e["place"], 4, "r"), (33, "0", 3, "r"), (36, _t(e["backup"]), 8, "r"), (44, _t(e.get("back2")), 8, "r"),
             (52, _t(e.get("back3")), 8, "r"), (63, e.get("dq2") if stat in ("Q", "F", "D") else "", 2), (65, _t(e["pad"]), 8, "r"),
-            (74, "0.00", 8, "r"), (date_col, date, 8), (date_col + 8, time_code(e), 1),
+            (74, _t(e.get("watch")), 8, "r"), (date_col, date, 8), (date_col + 8, time_code(e), 1),
             (date_col + 9, "" if e.get("dq_official") is None else e["dq_official"], 4, "r"), (122, "0", 1)]
 
 
@@ -115,7 +115,7 @@ def _dq_lines(e, v) -> list:
         return []
     relay = e["kind"] == "R"
     out = [_line("H1", [(2, e["dq"], 2), (4, dqcodes.describe(e["dq"], v["stroke"], relay), 124)])]
-    if e.get("dq2"):
+    if e.get("dq2") and relay:          # Meet Manager writes the second code's line for relays only
         out.append(_line("H2", [(2, e["dq2"], 2), (4, dqcodes.describe(e["dq2"], v["stroke"], True), 124)]))
     return out
 
@@ -130,7 +130,8 @@ def _alt(meet) -> str:
     return "" if a is None else str(int(a))
 
 
-def hy3(m: dict, db, licensee: str = "", now=None) -> bytes:
+def hy3(m: dict, db, licensee: str = "", now=None, only=None) -> bytes:
+    """only = a team number: that team's results only (Meet Manager's export with one team selected)."""
     meet, teams, aths = m["meet"], m["teams"], m["athletes"]
     ev = {e["ptr"]: e for e in m["events"]}
     sp = splits(db)
@@ -144,9 +145,12 @@ def hy3(m: dict, db, licensee: str = "", now=None) -> bytes:
                         (100, "0.00", 6, "r")])]
     start = dt.date.fromisoformat(meet["start"]) if meet["start"] else dt.date.today()
     day = lambda v: (start + dt.timedelta(days=(v.get("day") or 1) - 1)).strftime("%m%d%Y")
-    sty = "A" if meet.get("style") == 3 else "S"      # 3+ team double-dual meets mark every entry A
+    # Meet Manager writes the event's status letter: A for an event marked A in its Run screen, else S
+    sty_of = lambda v: "A" if v.get("status") == "A" else "S"
     active = [e for e in m["entries"] if not e["scr"] and _swum(e)]
     for tno, tm in sorted(teams.items(), key=lambda x: _skey(x[1]["name"])):
+        if only is not None and tno != only:
+            continue
         swam = {e["ath"] for e in active if e["kind"] == "I"} | {x for e in active if e["kind"] == "R" for x in e["legs"] if x}
         mine = [a for a in aths.values() if a["team"] == tno and a["no"] in swam]
         rels = [e for e in active if e["kind"] == "R" and e["team"] == tno]
@@ -170,7 +174,7 @@ def hy3(m: dict, db, licensee: str = "", now=None) -> bytes:
                 v = ev[e["event"]]
                 out.append(_line("E1", [(2, a["sex"], 1), (3, a["no"], 5, "r"), (8, a["last"], 5), (13, a["sex"], 1),
                                         (14, v.get("sex") or _sex_evt(v["gender"]), 1), (15, v["dist"], 6, "r"), (21, v["stroke"], 1),
-                                        (22, "0", 3, "r"), (25, "109", 3), (30, "0", 1), (31, sty, 1), (32, "0.00", 6, "r"),
+                                        (22, "0", 3, "r"), (25, "109", 3), (30, "0", 1), (31, sty_of(v), 1), (32, "0.00", 6, "r"),
                                         (38, v["no"], 3, "r"), (41, v.get("ltr", ""), 1), (42, _t(e["seed"]), 8, "r"), (50, e.get("seed_crs", "Y"), 1),
                                         (51, _t(e["seed"]), 8, "r"), (59, e.get("seed_crs", "Y"), 1), (60, _t(e["points"]), 8, "r"),
                                         (68, "0.00", 8, "r"), (79, "NN", 2), (83, "X" if e["exh"] else "", 1), (96, "N", 1)]))
@@ -182,7 +186,7 @@ def hy3(m: dict, db, licensee: str = "", now=None) -> bytes:
             g = "F" if v["gender"] in ("F", "W") else ("X" if v["gender"] == "X" else "M")
             out.append(_line("F1", [(2, tm["abbr"], 5), (7, e["ltr"], 1), (11, "0", 1), (12, e.get("rel_sex") or g, 1), (13, g, 1),
                                     (14, v.get("sex") or _sex_evt(v["gender"]), 1), (15, v["dist"], 6, "r"), (21, v["stroke"], 1),
-                                    (22, "0", 3, "r"), (25, "109", 3), (30, "0", 1), (31, sty, 1), (32, "0.00", 6, "r"),
+                                    (22, "0", 3, "r"), (25, "109", 3), (30, "0", 1), (31, sty_of(v), 1), (32, "0.00", 6, "r"),
                                     (38, v["no"], 3, "r"), (41, v.get("ltr", ""), 1), (42, _t(e["seed"]), 8, "r"), (50, e.get("seed_crs", "Y"), 1),
                                     (51, _t(e["seed"]), 8, "r"), (59, e.get("seed_crs", "Y"), 1), (60, _t(e["points"]), 8, "r"),
                                     (68, "0.00", 8, "r"), (79, "NN", 2), (84, "4", 1), (96, "N", 1), (97, e["ltr"], 1)]))
@@ -248,7 +252,26 @@ def _splits_cum(sp, final):
     return pts
 
 
-def cl2(m: dict, db, export_time=None) -> bytes:
+def _gappy(sp, dist=0) -> bool:
+    """Some splits missing (a button not pressed): the Split rows aren't numbered 1, 2, 3... or stop short."""
+    if not sp:
+        return False
+    return [n for n, _ in sp] != list(range(1, len(sp) + 1)) or (dist and len(sp) < dist // 50 - 1)
+
+
+def _mm_gap_splits(sp, final, dist):
+    """How Meet Manager lays out splits with a gap: the final time is filed as split number <how many splits it has>
+    (so it can land mid-list), the count is the splits it has plus the final, and the split distance is the event
+    distance over that count when it divides evenly (else 50). -> (values, count, interval)"""
+    keyed = [(n, 0, t) for n, t in sp]
+    if final:
+        keyed.append((len(sp), 1, final))
+    vals = [t for _, _, t in sorted(keyed, key=lambda x: (x[0], x[1]))]
+    cnt = len(vals)
+    return vals, cnt, (dist // cnt if cnt and dist % cnt == 0 and dist // cnt >= 50 else 50)
+
+
+def cl2(m: dict, db, export_time=None, only=None) -> bytes:
     meet, teams, aths = m["meet"], m["teams"], m["athletes"]
     ev = {e["ptr"]: e for e in m["events"]}
     sp = splits(db)
@@ -273,11 +296,11 @@ def cl2(m: dict, db, export_time=None) -> bytes:
         st = (e["stat"] or "").strip()
         return "DQ" if st == "Q" else ("NS" if st in ("R", "F") else ("DNF" if st == "D" else _st(e["time"])))
 
-    def g0(nm, lsc, pts, total, reg=""):
+    def g0(nm, lsc, pts, total, reg="", interval=50):
         lines = []
         for i in range(0, max(len(pts), 1), 10):
             chunk = pts[i:i + 10]
-            f = [(2, "9", 1), (3, lsc, 2), (15, nm, 28), (43, reg[:12], 12), (55, i // 10 + 1, 1), (56, total, 2, "r"), (58, "50", 4, "r"), (62, "C", 1),
+            f = [(2, "9", 1), (3, lsc, 2), (15, nm, 28), (43, reg[:12], 12), (55, i // 10 + 1, 1), (56, total, 2, "r"), (58, interval, 4, "r"), (62, "C", 1),
                  (143, "F", 1)]
             for j, t in enumerate(chunk):
                 f.append((63 + 8 * j, _st(t), 8, "r"))
@@ -291,6 +314,8 @@ def cl2(m: dict, db, export_time=None) -> bytes:
         return (t.get("lsc") or "").ljust(2) + t.get("abbr", "")[:4]
 
     for tno, tm in sorted(teams.items(), key=lambda x: _skey(x[1]["name"])):
+        if only is not None and tno != only:
+            continue
         mine = [a for a in aths.values() if a["team"] == tno and a["no"] in swam]
         rels = [e for e in active if e["kind"] == "R" and e["team"] == tno]
         inds = [e for e in active if e["kind"] == "I" and aths.get(e["ath"], {}).get("team") == tno]
@@ -325,7 +350,14 @@ def cl2(m: dict, db, export_time=None) -> bytes:
                     out.append(_sline("D3", [(2, a.get("reg", ""), 14), (16, a.get("pref", ""), 15)]))
                     n["S"] += 1
                     first = False
-                pts = _splits_cum(sp.get(e["key"], []), final_of(e))
+                raw = sp.get(e["key"], [])
+                if _gappy(raw, v["dist"]):
+                    vals, cnt, iv = _mm_gap_splits(raw, final_of(e), v["dist"])
+                    gl = g0(name(a), lsc, vals, cnt, a.get("reg", ""), iv)
+                    out += gl
+                    n["G"] += len(gl)
+                    continue
+                pts = _splits_cum(raw, final_of(e))
                 if pts:
                     gl = g0(name(a), lsc, [t for _, t in pts], v["dist"] // 50, a.get("reg", ""))
                     out += gl
@@ -349,7 +381,10 @@ def cl2(m: dict, db, export_time=None) -> bytes:
             total = v["dist"] // 50
             per = max(1, total // max(1, len(legs)))
             bynum = dict(sp.get(e["key"], []))
-            if final_of(e):
+            gap = None
+            if _gappy(sp.get(e["key"], []), v["dist"]):
+                gap = _mm_gap_splits(sp.get(e["key"], []), final_of(e), v["dist"])
+            elif final_of(e):
                 # Meet Manager shows the final in a blank last split if it falls in the last leg
                 # (a blank split in an earlier leg stays blank), and as the race's last split when it's missing
                 if bynum and max(bynum) > total - per and not bynum[max(bynum)] and not (e["stat"] or "").strip():
@@ -361,6 +396,12 @@ def cl2(m: dict, db, export_time=None) -> bytes:
                                          (65, _mdy(a.get("birth", "")), 8), (73, str(a.get("age") or a.get("yr") or 0), 2), (106, a.get("pref", ""), 15), (75, a.get("sex", ""), 1), (78, k + 1, 1)]))
                 n["F"] += 1
                 # every leg gets a split line (blank when the splits are missing), like Meet Manager
+                if gap:
+                    mine_pts = gap[0][k * per:(k + 1) * per]
+                    gl = g0(name(a), lsc, mine_pts, gap[1], a.get("reg", ""), gap[2])
+                    out += gl
+                    n["G"] += len(gl)
+                    continue
                 mine_pts = [bynum.get(j, 0) for j in range(k * per + 1, (k + 1) * per + 1)]
                 while mine_pts and not mine_pts[-1]:
                     mine_pts.pop()
@@ -369,24 +410,28 @@ def cl2(m: dict, db, export_time=None) -> bytes:
                 n["G"] += len(gl)
     out.append(_sline("Z0", [(2, "9", 1), (3, "Meet Res", 8), (11, "02", 2), (13, f"Successful Build on {now.month}/{now.day}/{now.year}", 30),
                              (43, 1, 3, "r"), (46, 1, 3, "r"), (49, n["C"], 4, "r"), (53, n["C"], 4, "r"), (57, n["D"], 6, "r"),
-                             (63, len(swam), 6, "r"), (69, n["E"], 5, "r"), (74, n["F"], 6, "r"), (80, n["G"], 6, "r")]))
+                             (63, len(swam) if only is None else sum(1 for a in aths.values() if a["team"] == only and a["no"] in swam), 6, "r"), (69, n["E"], 5, "r"), (74, n["F"], 6, "r"), (80, n["G"], 6, "r")]))
     return b"".join(out)
 
 
-def results_stem(m, seq: int = 1) -> str:
-    """Meet Manager's name: 'Meet Results-<meet>-30Oct2026-002' (& and other unsafe characters become '-')."""
+def results_stem(m, seq: int = 1, team=None) -> str:
+    """Meet Manager's name: 'Meet Results-<meet>-30Oct2026-002' (& and other unsafe characters become '-');
+    one team: 'Meet Results-<meet>-13Nov2026-Ben Lomond High School-VA-001'."""
     import re
     d = dt.date.fromisoformat(m["meet"]["start"]) if m["meet"]["start"] else dt.date.today()
-    name = re.sub(r'[&/\\:*?"<>|]', "-", m["meet"]["name"])
-    return f"Meet Results-{name}-{d.strftime('%d%b%Y')}-{seq:03d}"
+    safe = lambda x: re.sub(r'[&/\\:*?"<>|]', "-", x)
+    name = safe(m["meet"]["name"])
+    tm = m["teams"].get(team) if team is not None else None
+    mid = f"-{safe(tm['name'])}-{tm.get('lsc') or ''}" if tm else ""
+    return f"Meet Results-{name}-{d.strftime('%d%b%Y')}{mid}-{seq:03d}"
 
 
-def hy3_zip(m, db, licensee="", seq: int = 1) -> tuple[bytes, str]:
-    stem = results_stem(m, seq)
+def hy3_zip(m, db, licensee="", seq: int = 1, team=None) -> tuple[bytes, str]:
+    stem = results_stem(m, seq, team)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr(stem + ".cl2", cl2(m, db))
-        z.writestr(stem + ".hy3", hy3(m, db, licensee))
+        z.writestr(stem + ".cl2", cl2(m, db, only=team))
+        z.writestr(stem + ".hy3", hy3(m, db, licensee, only=team))
     return buf.getvalue(), stem + ".zip"
 
 

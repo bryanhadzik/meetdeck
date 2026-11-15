@@ -176,7 +176,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <div id="meetFields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 16px">
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Meet name <input id="mName"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px"><span>Meet type <span id="mKindTip" style="cursor:help;border:1px solid var(--line);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">?</span></span> <select id="mKind"></select>
-          <span id="mChampWrap" style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="mChamp" style="margin:0"> Championship rules
+          <span id="mChampWrap" style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap"><input type="checkbox" id="mChamp" style="margin:0;width:auto;flex:none"> Championship rules
           <span id="mChampTip" style="cursor:help;border:1px solid var(--line);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">?</span></span></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Date <input id="mDate" type="date"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Start time <input id="mTime" type="time" title="When the first event starts. Goes into the meet database (heat sheet, timeline) and the meet board's warm-up slide."></label>

@@ -176,7 +176,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <div id="meetFields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 16px">
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Meet name <input id="mName"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px"><span>Meet type <span id="mKindTip" style="cursor:help;border:1px solid var(--line);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">?</span></span> <select id="mKind"></select>
-          <span id="mChampWrap" style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="mChamp" style="margin:0"> Championship rules <span id="mChampAuto" class="muted" style="font-size:12px"></span>
+          <span id="mChampWrap" style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="mChamp" style="margin:0"> Championship rules
           <span id="mChampTip" style="cursor:help;border:1px solid var(--line);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">?</span></span></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Date <input id="mDate" type="date"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Start time <input id="mTime" type="time" title="When the first event starts. Goes into the meet database (heat sheet, timeline) and the meet board's warm-up slide."></label>
@@ -1171,8 +1171,7 @@ function render() {
   $("#openDb").href = `/db?meet=${M.id}`;
   { const k = $("#mKind"), o = Object.entries(M.kinds || {}).map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("");
     if (k.dataset.k !== o) { k.innerHTML = o; k.dataset.k = o; } k.value = M.kind || "dual";
-    $("#mChamp").checked = !!M.championship; $("#mChamp").disabled = !!M.champ_auto;
-    $("#mChampAuto").textContent = M.champ_auto ? "(always on with 4+ teams)" : "";
+    $("#mChamp").checked = !!M.championship;
     $("#mChampWrap").dataset.tip = CHAMP_TIP; $("#mChampTip").dataset.tip = CHAMP_TIP; $("#mKindTip").dataset.tip = KIND_TIP; }
   [["#mName", M.name], ["#mDate", M.date || ""], ["#mTime", M.start_time || ""], ["#mLoc", M.location || ""]].forEach(([k, v]) => { if (document.activeElement !== $(k)) $(k).value = v; });
   $("#hostSel").value = M.host;
@@ -1245,19 +1244,18 @@ function render() {
   $("#strictWrap").dataset.tip = $("#strictTip").dataset.tip = STRICT_TIP;
   if (!timeSeeded && M.strict_lanes) $("#seedHow").textContent = "Strict NFHS 5-3: every swimmer swims in their own team's lanes in every heat, even a heat with only one team in it. A team with more swimmers than lanes gets an extra heat instead of borrowing the other team's lanes. Every heat still gets at least 3 swimmers where the team's own lanes allow it.";
   const nT = M.lanes.order.length;
-  const laneChoice = M.lane_choice ? `<div class="row" style="gap:14px;font-size:13.5px;margin:4px 0" data-tip="NFHS 5-3-2 (p. 45): with ${nT} teams in ${M.lanes.count || 8} lanes, Table 5-1 leaves lanes open, so meet management may seed instead.">
-      <label><input type="radio" name="laneMode" value="teams" ${M.lane_mode !== "seed" ? "checked" : ""}> Team lanes (Table 5-1)</label>
-      <label><input type="radio" name="laneMode" value="seed" ${M.lane_mode === "seed" ? "checked" : ""}> Seed by time</label></div>` : "";
+  const laneChoice = nT >= 2 && M.seed_why !== "championship" && M.seed_why !== "teams" ? `<div class="row" style="gap:14px;font-size:13.5px;margin:4px 0;flex-basis:100%" data-tip="Seeds every event by seed time (fastest heat last, fastest swimmers in the middle lanes) instead of giving each team its own lanes. NFHS 5-3-2 (p. 45) lets meet management seed a multi-team meet. Championship rules aren't needed for this.">
+      <label><input type="checkbox" id="seedByTime" ${M.lane_mode === "seed" ? "checked" : ""}> Seed by time, not team lanes</label></div>` : "";
   if (timeSeeded) {
     const why = M.seed_why === "championship" ? "Championship rules: every event is seeded by time"
-      : M.seed_why === "chosen" ? "Seeded by time instead of team lanes (your choice, allowed by NFHS 5-3-2)"
+      : M.seed_why === "chosen" ? "Seeded by time instead of team lanes (your choice under NFHS 5-3-2; championship rules are off)"
       : `With ${nT} teams the meet is seeded by time (NFHS 5-3-2, p. 45: multi-team meets with more than five teams are seeded, and Table 5-1 has no team lanes for this many teams in ${M.lanes.count || 8} lanes)`;
     $("#order").innerHTML = laneChoice + `<span class="muted" style="font-size:13px">${why} &mdash; the fastest heat swims last, with the fastest swimmers in the middle lanes (Table 5-2: lanes 4, 5, 3, 6, 2, 7, 1, 8).</span>`;
     $("#lanePlan").innerHTML = "";
   } else { const o = M.lanes.order, tn = t => esc(M.teams[t]?.name || t);
     const lanesOf = k => M.lane_plan.filter(l => l.team === o[k]).map(l => l.lane).join(", ");
     $("#order").innerHTML = !o.length ? `<span class="muted">Upload entries first.</span>` : o.length === 2 ?
-      `<span class="muted" style="font-size:12.5px;flex-basis:100%" data-tip="NFHS 5-3-1 (p. 45): in dual meets the visiting team chooses the odd or the even lanes for all swimming events.">Dual meet: the visiting team picks odd or even (NFHS 5-3-1, p. 45).</span>` +
+      laneChoice + `<span class="muted" style="font-size:12.5px;flex-basis:100%" data-tip="NFHS 5-3-1 (p. 45): in dual meets the visiting team chooses the odd or the even lanes for all swimming events.">Dual meet: the visiting team picks odd or even (NFHS 5-3-1, p. 45).</span>` +
       [0, 1].map(k => `<label class="muted" style="display:flex;flex-direction:column;gap:4px">${k ? "Even" : "Odd"} lanes (${lanesOf(k)})
         <select data-oddeven="${k}">${o.map(t => `<option value="${esc(t)}" ${t === o[k] ? "selected" : ""}>${tn(t)}</option>`).join("")}</select></label>`).join("") :
       laneChoice + `<span class="muted" style="font-size:13px;flex-basis:100%">NFHS Table 5-1 (p. 46) lanes for ${o.length} teams${M.lane_plan.length < (M.lanes.count || 8) ? `, lanes ${Array.from({length: M.lanes.count || 8}, (_, i) => i + 1).filter(l => !M.lane_plan.some(p => p.lane === l)).join(" & ")} open &mdash; that's the rule for 3 teams; choose <b>Seed by time</b> to use all 8` : ""}. The rule assigns them by lot (a random draw):</span>
@@ -1335,8 +1333,7 @@ const CHAMP_TIP = "<b>Championship rules</b> (NFHS; usually region/state, but an
   "<ul style='margin:6px 0 0;padding-left:18px'>" +
   "<li><b>Entries:</b> up to 4 swimmers per team in each individual event and 1 relay per team per event (3-1-1, p. 14) &mdash; extras are flagged.</li>" +
   "<li><b>Seeding:</b> by time, not team lanes (5-3-3/5-3-4, p. 46&ndash;47).</li>" +
-  "<li><b>Scoring:</b> championship scoring (16 places, relays double). Picking championship scoring on the Run meet page turns these rules on too, and picking dual scoring turns them off.</li>" +
-  "<li><b>Always on</b> for meets with 4 or more teams.</li>" +
+  "<li><b>Scoring:</b> championship scoring (16 places, relays double). In a 2&ndash;3 team meet, picking championship scoring on the Run meet page turns these rules on too, and picking dual scoring turns them off. To seed by time without the rest of these rules, use <b>Seed by time</b> under Seeding instead.</li>" +
   "<li><b>No show:</b> a swimmer who doesn't compete is out of the rest of the meet unless a doctor or the referee excuses them (3-2-2 penalty 3, p. 16) &mdash; MeetDeck offers to pull them.</li>" +
   "<li><b>False starts:</b> need written dual confirmation by the referee and starter (8-1-3, p. 59&ndash;60).</li>" +
   "<li><b>Officials:</b> a full crew &mdash; at least two stroke judges, turn and takeoff judges, dual confirmation on relay takeoffs (4-1-1, 4-4-1, 4-6-3).</li></ul>";
@@ -1680,7 +1677,7 @@ document.addEventListener("click", e => {
   const when = new Date().toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"});
   save({lanes: {...M.lanes, order: o}, lane_draw: {when, order: o}});
 });
-document.addEventListener("change", e => { if (e.target.name === "laneMode") save({lane_mode: e.target.value}); });
+document.addEventListener("change", e => { if (e.target.id === "seedByTime") save({lane_mode: e.target.checked ? "seed" : "teams"}); });
 document.addEventListener("change", e => { const k = e.target.dataset && e.target.dataset.oddeven; if (k === undefined) return;
   const o = [...M.lanes.order], i = +k, j = o.indexOf(e.target.value); if (j < 0 || j === i) return;
   [o[i], o[j]] = [o[j], o[i]]; save({lanes: {...M.lanes, order: o}}); });

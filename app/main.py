@@ -238,7 +238,7 @@ def _state(d: Path) -> dict:
     st_lanes = {"order": order}
     auto_rt = _record_team({"lanes": st_lanes}, host, {})
     return {"id": d.name, "name": meta["name"], "kind": "invitational" if meta.get("kind") == "championship" else meta.get("kind", "dual"),
-            "championship": _is_champ(meta, nt), "champ_auto": _n_teams(meta, nt) >= CHAMP_TEAMS, "time_seeded": not plan,
+            "championship": _is_champ(meta, nt), "time_seeded": not plan,
             "strict_lanes": bool(meta.get("strict_lanes")), "seed_why": seed_why, "lane_mode": meta.get("lane_mode", "teams"), "lane_draw": meta.get("lane_draw"),
             "lane_choice": table_has_open(order, POOL_LANES), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "start_time": meta.get("start_time", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),
@@ -2128,7 +2128,7 @@ def _jet3(db: Path) -> bool:
 
 
 # ---- last-minute changes: re-seeding and each team's "done" -----------------------------------------
-CHAMP_TEAMS = 4       # 4+ teams: always championship rules (scoring, seeding by time, entry caps)
+CHAMP_TEAMS = 4       # 4+ teams: championship scoring by default (championship rules stay optional)
 
 
 def _n_teams(meta: dict, n: int) -> int:
@@ -2136,11 +2136,8 @@ def _n_teams(meta: dict, n: int) -> int:
 
 
 def _is_champ(meta: dict, n_teams: int) -> bool:
-    """One switch for championship rules: scoring, seeding by time and entry caps all follow it.
-    4+ teams always; otherwise the meet's setting (saved by the checkbox or by picking championship scoring),
-    else on for an invitational."""
-    if _n_teams(meta, n_teams) >= CHAMP_TEAMS:
-        return True
+    """One switch for championship rules: seeding by time, entry caps and the no-show rule follow it.
+    The meet's setting (the checkbox, or picking championship scoring in a 2-3 team meet), else on for an invitational."""
     if meta.get("championship") is not None:
         return bool(meta["championship"])
     return meta.get("kind") in ("invitational", "championship")
@@ -2169,8 +2166,8 @@ def _team_lanes(meta: dict, order: list):
         return None, "championship"
     if len(order) > 5 or (len(order) > 2 and not hy3_table(order)):
         return None, "teams"                 # more than five teams (or a count the table seeds) must be seeded
-    if table_has_open(order, POOL_LANES) and meta.get("lane_mode") == "seed":
-        return None, "chosen"
+    if len(order) >= 2 and meta.get("lane_mode") == "seed":
+        return None, "chosen"                # meet management chose to seed by time instead of team lanes
     return table_plan(order, POOL_LANES, 1), ""
 
 
@@ -2441,8 +2438,6 @@ def db_score(mid: str, body: dict):
     if method not in meetdb.SCORING:
         raise HTTPException(400, "Unknown scoring method")
     meta = _meta(d)
-    if body.get("method") and method != "champ" and _n_teams(meta, _db_teams(m)) >= CHAMP_TEAMS:
-        raise HTTPException(400, f"Meets with {CHAMP_TEAMS} or more teams use championship rules, so they're scored as a championship")
     if body.get("method") and bool(meta.get("championship")) != (method == "champ") and _n_teams(meta, _db_teams(m)) < CHAMP_TEAMS:
         meta["championship"] = method == "champ"      # championship scoring = championship rules (seeding by time, entry caps)
         _save(d, meta)
@@ -2866,8 +2861,8 @@ def _lanes_info(d: Path) -> dict:
     if why == "championship":
         text = "Championship rules: every event is seeded by time, fastest swimmers in the middle lanes (Rule 5-3-3, Table 5-2). Teams don't get their own lanes."
     elif why == "chosen":
-        text = (f"Seeded by time. With {n} teams in 8 lanes, Table 5-1 would leave lanes open, so Rule 5-3-2 lets meet management "
-                "seed instead: all 8 lanes are used, but teams no longer have their own lanes.")
+        text = ("Seeded by time instead of team lanes: every event is seeded by seed time, fastest swimmers in the middle lanes "
+                "(Table 5-2). Teams don't get their own lanes.")
     elif why:
         text = f"With {n} teams the meet is seeded by time (Rule 5-3-2: meets with more than five teams are seeded, and Table 5-1 has no team lanes for this many teams in 8 lanes)."
     elif n == 2:

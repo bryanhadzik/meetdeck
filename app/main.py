@@ -2526,11 +2526,27 @@ def db_undo(mid: str, body: dict | None = None):
     return db_get(mid)
 
 
+def _mm_event_status(d: Path, info: dict):
+    """Meet Manager's event status (Run screen): events MeetDeck scored show as Scored ('S'), not Seeded ('1')."""
+    scored = {int(p) for p in ((info.get("scoring") or {}).get("events") or [])}
+    if not scored:
+        return
+    try:
+        rows = meetdb.read(_dbfile(d), ["Event"])["Event"]["rows"]
+        ops = [{"op": "update", "table": "Event", "match": {"Event_ptr": r["Event_ptr"]}, "set": {"Event_stat": "S"}}
+               for r in rows if r["Event_ptr"] in scored and (r.get("Event_stat") or "").strip() != "S"]
+        if ops:
+            meetdb.apply(_dbfile(d), ops)
+    except Exception as e:
+        print("event status:", e)
+
+
 @app.get("/api/meets/{mid}/db/backup")
 def db_backup(mid: str):
     """The working database as a Meet Manager backup (File > Restore)."""
     d = _dir(mid)
     info = _dbinfo(d)
+    _mm_event_status(d, info)
     meetdb.close(_dbfile(d))
     mdb = _dbfile(d).read_bytes()
     name = info.get("mdb_name") or f"{_stem(_meta(d)['name'])}.mdb"

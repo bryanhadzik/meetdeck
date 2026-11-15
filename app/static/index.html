@@ -1219,7 +1219,7 @@ function render() {
       <table><tr><th>Swimmer</th><th>Yr</th><th>Events</th></tr>${rows}<tr><th colspan="3">Relays <a class="chip addc" style="font-weight:400" data-addrelay="${esc(t.code)}">+ Add relay</a><div class="addslot" data-slot="relay:${esc(t.code)}"></div></th></tr>${rrows}</table></details>`;
   }).join("") || `<div class="muted">No entries yet.</div>`;
   const mmSeeded = MM_SEEDED();
-  $("#seedBtn").classList.toggle("hidden", !!M.preseed || mmSeeded);
+  $("#seedBtn").classList.toggle("hidden", !!M.preseed || mmSeeded || !!M.started);
   $("#unseedBtn").classList.toggle("hidden", !M.preseed || mmSeeded);
   $("#seedState").innerHTML = mmSeeded ? `<b style="color:var(--ok,#3fb950)">&#10003; Heats seeded in Meet Manager</b> &middot; moving a swimmer here changes the meet database` : M.preseed ? `<b style="color:var(--ok,#3fb950)">&#10003; Heats seeded</b> &middot; at least 3 swimmers in every heat` : "at least 3 swimmers in every heat";
   const si = M.seed_info || [];
@@ -1240,12 +1240,13 @@ function render() {
     ? (M.championship ? "Championship seeding:" : "Seeded meet:") + " by seed time only, fastest heat last and fastest swimmers in the middle lanes, with at least 3 swimmers in every heat."
     : $("#seedHow").dataset.dual;
   $("#strictRow").style.display = timeSeeded ? "none" : "";
-  $("#strictLanes").checked = !!M.strict_lanes;
+  $("#strictLanes").checked = !!M.strict_lanes; $("#strictLanes").disabled = !!M.started;
+  $("#strictMsg").textContent = M.started ? " The meet has started, so the heats are locked." : "";
   $("#strictWrap").dataset.tip = $("#strictTip").dataset.tip = STRICT_TIP;
   if (!timeSeeded && M.strict_lanes) $("#seedHow").textContent = "Strict NFHS 5-3: every swimmer swims in their own team's lanes in every heat, even a heat with only one team in it. A team with more swimmers than lanes gets an extra heat instead of borrowing the other team's lanes. Every heat still gets at least 3 swimmers where the team's own lanes allow it.";
   const nT = M.lanes.order.length;
   const laneChoice = nT >= 2 && M.seed_why !== "championship" && M.seed_why !== "teams" ? `<div class="row" style="gap:14px;font-size:13.5px;margin:4px 0;flex-basis:100%" data-tip="Seeds every event by seed time (fastest heat last, fastest swimmers in the middle lanes) instead of giving each team its own lanes. NFHS 5-3-2 (p. 45) lets meet management seed a multi-team meet. Championship rules aren't needed for this.">
-      <label><input type="checkbox" id="seedByTime" ${M.lane_mode === "seed" ? "checked" : ""}> Seed by time, not team lanes</label></div>` : "";
+      <label><input type="checkbox" id="seedByTime" ${M.lane_mode === "seed" ? "checked" : ""} ${M.started ? "disabled" : ""}> Seed by time, not team lanes</label>${M.started ? `<span class="muted" style="font-size:12.5px">The meet has started, so the heats are locked.</span>` : ""}</div>` : "";
   if (timeSeeded) {
     const why = M.seed_why === "championship" ? "Championship rules: every event is seeded by time"
       : M.seed_why === "chosen" ? "Seeded by time instead of team lanes (your choice under NFHS 5-3-2; championship rules are off)"

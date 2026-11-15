@@ -228,17 +228,19 @@ def _state(d: Path) -> dict:
         else:                       # seeded meet (NFHS 5-3): by time only, no team lanes
             seed_lanes, seed_info = _standard_seed_meet(entries, removed, min_heat, set(combo_lanes))
     seed_moved = _apply_seed_moves(meta.get("seed_moves", {}), entries, removed, seed_lanes, combo_lanes)
-    nt = len(order)
-    if not nt and _dbfile(d).exists():       # meet opened from a Meet Manager file: count its teams
+    nt, started = len(order), False
+    if _dbfile(d).exists():
         try:
-            nt = _db_teams(meetdb.load(_dbfile(d)))
+            mdb = meetdb.load(_dbfile(d))
+            started = _meet_started(mdb)
+            nt = nt or _db_teams(mdb)           # meet opened from a Meet Manager file: count its teams
         except Exception:
             pass
     host = next((h for h in _hosts() if h["id"] == meta.get("host", "THS")), None) or {"id": "THS", "team_codes": [], "short": "?"}
     st_lanes = {"order": order}
     auto_rt = _record_team({"lanes": st_lanes}, host, {})
     return {"id": d.name, "name": meta["name"], "kind": "invitational" if meta.get("kind") == "championship" else meta.get("kind", "dual"),
-            "championship": _is_champ(meta, nt), "time_seeded": not plan,
+            "championship": _is_champ(meta, nt), "started": started, "time_seeded": not plan,
             "strict_lanes": bool(meta.get("strict_lanes")), "seed_why": seed_why, "lane_mode": meta.get("lane_mode", "teams"), "lane_draw": meta.get("lane_draw"),
             "lane_choice": table_has_open(order, POOL_LANES), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "start_time": meta.get("start_time", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),
@@ -738,7 +740,8 @@ def seed_move(mid: str, body: dict):
 def put_state(mid: str, body: dict):
     d = _dir(mid)
     meta = _meta(d)
-    if "strict_lanes" in body and bool(body["strict_lanes"]) != bool(meta.get("strict_lanes")) and (d / "db" / "meet.mdb").exists():
+    if (("strict_lanes" in body and bool(body["strict_lanes"]) != bool(meta.get("strict_lanes")))
+            or ("lane_mode" in body and body["lane_mode"] != meta.get("lane_mode", "teams"))) and (d / "db" / "meet.mdb").exists():
         if _meet_started(meetdb.load(d / "db" / "meet.mdb")):
             raise HTTPException(409, "The meet has started, so the heats can't be re-seeded now.")
     before = json.loads(json.dumps(meta))

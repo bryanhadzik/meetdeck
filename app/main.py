@@ -2527,18 +2527,31 @@ def db_undo(mid: str, body: dict | None = None):
 
 
 def _mm_event_status(d: Path, info: dict):
-    """Meet Manager's event status (Run screen): events MeetDeck scored show as Scored ('S'), not Seeded ('1')."""
-    scored = {int(p) for p in ((info.get("scoring") or {}).get("events") or [])}
-    if not scored:
-        return
+    """Write what Meet Manager itself would have stored after running the meet:
+    - event status (Run screen): events MeetDeck scored show as Scored ('S'), not Seeded ('1');
+    - each result's timing letter (fin_adjuststat): A = final from the buttons/timers, K = touchpad kept with
+      no button agreeing (e.g. no backup press). Results reviewed in MeetDeck but left without a letter
+      show as '?' (needs adjusting) in Meet Manager's Run screen."""
+    import results as results_mod_
+    db = _dbfile(d)
+    ops = []
     try:
-        rows = meetdb.read(_dbfile(d), ["Event"])["Event"]["rows"]
-        ops = [{"op": "update", "table": "Event", "match": {"Event_ptr": r["Event_ptr"]}, "set": {"Event_stat": "S"}}
-               for r in rows if r["Event_ptr"] in scored and (r.get("Event_stat") or "").strip() != "S"]
+        scored = {int(p) for p in ((info.get("scoring") or {}).get("events") or [])}
+        if scored:
+            rows = meetdb.read(db, ["Event"])["Event"]["rows"]
+            ops += [{"op": "update", "table": "Event", "match": {"Event_ptr": r["Event_ptr"]}, "set": {"Event_stat": "S"}}
+                    for r in rows if r["Event_ptr"] in scored and (r.get("Event_stat") or "").strip() != "S"]
+        m = meetdb.load(db)
+        for e in m["entries"]:
+            if e["adj"] is not None or not e["time"] or e["stat"] in ("R", "F"):
+                continue
+            code = results_mod_.time_code({k: v for k, v in e.items() if k != "adj"})
+            if code in ("A", "K"):
+                ops.append({"op": "update", "table": meetdb._table(e), "match": meetdb._match(e), "set": {"fin_adjuststat": code}})
         if ops:
-            meetdb.apply(_dbfile(d), ops)
+            meetdb.apply(db, ops)
     except Exception as e:
-        print("event status:", e)
+        print("Meet Manager status sync:", e)
 
 
 @app.get("/api/meets/{mid}/db/backup")
@@ -2579,6 +2592,7 @@ def db_export(mid: str, fmt: str):
     db = _dbfile(d)
     if not db.exists():
         raise HTTPException(400, "No database yet")
+    _mm_event_status(d, _dbinfo(d))
     m = meetdb.load(db)
     _activity(d, f"export_{fmt}")
     if fmt == "hy3":

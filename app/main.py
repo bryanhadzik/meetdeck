@@ -228,11 +228,17 @@ def _state(d: Path) -> dict:
         else:                       # seeded meet (NFHS 5-3): by time only, no team lanes
             seed_lanes, seed_info = _standard_seed_meet(entries, removed, min_heat, set(combo_lanes))
     seed_moved = _apply_seed_moves(meta.get("seed_moves", {}), entries, removed, seed_lanes, combo_lanes)
+    nt = len(order)
+    if not nt and _dbfile(d).exists():       # meet opened from a Meet Manager file: count its teams
+        try:
+            nt = _db_teams(meetdb.load(_dbfile(d)))
+        except Exception:
+            pass
     host = next((h for h in _hosts() if h["id"] == meta.get("host", "THS")), None) or {"id": "THS", "team_codes": [], "short": "?"}
     st_lanes = {"order": order}
     auto_rt = _record_team({"lanes": st_lanes}, host, {})
     return {"id": d.name, "name": meta["name"], "kind": "invitational" if meta.get("kind") == "championship" else meta.get("kind", "dual"),
-            "championship": _is_champ(meta, len(order)), "champ_auto": _n_teams(meta, len(order)) >= CHAMP_TEAMS, "time_seeded": not plan,
+            "championship": _is_champ(meta, nt), "champ_auto": _n_teams(meta, nt) >= CHAMP_TEAMS, "time_seeded": not plan,
             "strict_lanes": bool(meta.get("strict_lanes")), "seed_why": seed_why, "lane_mode": meta.get("lane_mode", "teams"), "lane_draw": meta.get("lane_draw"),
             "lane_choice": table_has_open(order, POOL_LANES), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "start_time": meta.get("start_time", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),

@@ -137,12 +137,12 @@ def _state(d: Path) -> dict:
     valid_ids = {e["id"] for e in entries}
     removed = set(meta.get("removed", [])) & valid_ids
     rules = {**DEFAULT_RULES, **meta.get("rules", {})}
-    vrules = _champ_rules(meta, rules)
-    issues = validate(swimmers, entries, removed, vrules, {c: t.get("name", c) for c, t in teams.items()})
     lanes = meta.get("lanes", {})
     # Teams with no swimmers (e.g. a stray parent-team block) don't get lanes.
     racing = [t for t in teams if any(s["team"] == t for s in swimmers.values())] or list(teams)
     order = _lane_order(meta, racing)
+    vrules = _champ_rules(meta, rules, len(order))
+    issues = validate(swimmers, entries, removed, vrules, {c: t.get("name", c) for c, t in teams.items()})
     for t in teams:
         if t not in racing:
             n = sum(1 for e in entries if e["team"] == t and e["id"] not in removed)
@@ -232,7 +232,7 @@ def _state(d: Path) -> dict:
     st_lanes = {"order": order}
     auto_rt = _record_team({"lanes": st_lanes}, host, {})
     return {"id": d.name, "name": meta["name"], "kind": "invitational" if meta.get("kind") == "championship" else meta.get("kind", "dual"),
-            "championship": bool(meta.get("championship")) or meta.get("kind") == "championship", "time_seeded": not plan,
+            "championship": _is_champ(meta, len(order)), "champ_auto": _n_teams(meta, len(order)) >= CHAMP_TEAMS, "time_seeded": not plan,
             "strict_lanes": bool(meta.get("strict_lanes")), "seed_why": seed_why, "lane_mode": meta.get("lane_mode", "teams"), "lane_draw": meta.get("lane_draw"),
             "lane_choice": table_has_open(order, POOL_LANES), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "start_time": meta.get("start_time", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),
@@ -740,6 +740,13 @@ def put_state(mid: str, body: dict):
               "run", "ended", "contacts", "session_break", "kind", "championship", "lane_mode", "lane_draw"):
         if k in body:
             meta[k] = body[k]
+    if "championship" in body and bool(body["championship"]) != bool(before.get("championship")) and _dbfile(d).exists():
+        info = _dbinfo(d)                      # scoring follows championship rules until a race has been scored
+        sc = info.get("scoring") or {}
+        if sc.get("method") and not sc.get("events") and (sc["method"] == "champ") != bool(body["championship"]):
+            sc.pop("method", None)
+            info["scoring"] = sc
+            (_dbdir(d) / "info.json").write_text(json.dumps(info))
     if "start_time" in body:                   # meet start time: kept here and in the database's first session
         v = str(body["start_time"] or "").strip()
         if v:
@@ -927,8 +934,8 @@ def _table_view(d: Path) -> dict:
             entries.append({**base, "kind": "relay", "relay": e["ltr"] or "A", "legs": legs,
                             "swimmers": [legs[i] for i in sorted(legs) if i <= 4], "legs_changed": False})
     removed = {e["id"] for e in entries if e["removed"]}
-    issues = validate(swimmers, entries, removed, _champ_rules(meta, rules), {c: t["name"] for c, t in teams.items()})
     order = [abbr[no] for no in sorted(m["teams"]) if any(s["team"] == abbr[no] for s in swimmers.values())]
+    issues = validate(swimmers, entries, removed, _champ_rules(meta, rules, len(order)), {c: t["name"] for c, t in teams.items()})
     events = [{"no": evno(v), "name": v["label"], "gender": v["gender"], "kind": "relay" if v["ind_rel"] == "R" else "ind", "ptr": v["ptr"]}
               for v in m["events"]]
     return {"id": d.name, "source": "db", "teams": teams, "swimmers": swimmers, "entries": entries, "issues": issues,
@@ -1856,7 +1863,7 @@ def _adopt_scoring(d: Path):
                 ops, scored, _, _ = meetdb.score_events(m, k, *limits(k), set(done), False, fastest)
                 bad = sum(1 for o in ops if abs(o["set"]["Ev_score"] - have.get((o["table"], repr(sorted(o["match"].items()))), 0)) > 0.001)
                 return bad + 100 * len(set(done) - set(scored))
-            default = meetdb.default_scoring(m, _score_kind(d))
+            default = meetdb.default_scoring(m, _score_kind(d, m))
             method = min(meetdb.SCORING, key=lambda k: (misses(k), k != default))
             cfg = meetdb.SCORING[method]
             im, rm = limits(method)
@@ -1909,12 +1916,12 @@ def db_get(mid: str):
         missing = [t for t in _state(d)["lanes"]["order"] if t.upper() not in have]
     except Exception:
         missing = []
-    return {"exists": True, "started": _meet_started(m), "missing_teams": missing, "championship": bool(_meta(d).get("championship")), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
+    return {"exists": True, "started": _meet_started(m), "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
             "model": meetdb.json_safe(m), "problems": meetdb.check(m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
             "scoring_methods": {k: {"name": c["name"], "ind_max": c["ind_max"], "rel_max": c["rel_max"]} for k, c in meetdb.SCORING.items()},
-            "scoring_default": scoring.get("method") or meetdb.default_scoring(m, _score_kind(d)),
+            "scoring_default": scoring.get("method") or meetdb.default_scoring(m, _score_kind(d, m)),
             "versions": [{"id": v.name, "label": (v.with_name(v.name + ".txt").read_text() if v.with_name(v.name + ".txt").exists() else ""),
                           "when": datetime.strptime(v.name[:15], "%Y%m%d-%H%M%S").strftime("%Y-%m-%d %H:%M:%S")} for v in versions[:30]]}
 
@@ -2115,21 +2122,44 @@ def _jet3(db: Path) -> bool:
 
 
 # ---- last-minute changes: re-seeding and each team's "done" -----------------------------------------
-def _champ_rules(meta: dict, rules: dict) -> dict:
+CHAMP_TEAMS = 4       # 4+ teams: always championship rules (scoring, seeding by time, entry caps)
+
+
+def _n_teams(meta: dict, n: int) -> int:
+    return max(int(n or 0), len(meta.get("expected_teams") or []))
+
+
+def _is_champ(meta: dict, n_teams: int) -> bool:
+    """One switch for championship rules: scoring, seeding by time and entry caps all follow it.
+    4+ teams always; otherwise the meet's setting (saved by the checkbox or by picking championship scoring),
+    else on for an invitational."""
+    if _n_teams(meta, n_teams) >= CHAMP_TEAMS:
+        return True
+    if meta.get("championship") is not None:
+        return bool(meta["championship"])
+    return meta.get("kind") in ("invitational", "championship")
+
+
+def _db_teams(m: dict) -> int:
+    return len({e["team"] for e in m["entries"] if not e["scr"]}) or len(m.get("teams") or {})
+
+
+def _champ_rules(meta: dict, rules: dict, n_teams: int = 0) -> dict:
     """Championship meet rules (NFHS 3-1-1): 4 entries per team in an individual event, 1 relay per event."""
-    if not meta.get("championship"):
+    if not _is_champ(meta, n_teams):
         return rules
     return {**rules, "championship": True, "team_cap_per_event": rules.get("team_cap_per_event") or 4}
 
 
-def _score_kind(d: Path) -> str:
+def _score_kind(d: Path, m: dict | None = None) -> str:
     meta = _meta(d)
-    return "championship" if meta.get("championship") else meta.get("kind", "dual")
+    n = _db_teams(m) if m else 0
+    return "championship" if _is_champ(meta, n) else "dual"
 
 
 def _team_lanes(meta: dict, order: list):
     """NFHS 5-3 lane assignments for this meet -> (plan or None when seeded by time, why it's seeded)."""
-    if meta.get("championship") or meta.get("kind") == "championship":
+    if _is_champ(meta, len(order)):
         return None, "championship"
     if len(order) > 5 or (len(order) > 2 and not hy3_table(order)):
         return None, "teams"                 # more than five teams (or a count the table seeds) must be seeded
@@ -2401,9 +2431,16 @@ def db_score(mid: str, body: dict):
     info = _dbinfo(d)
     prev = info.get("scoring") or {}
     m = meetdb.load(db)
-    method = body.get("method") or prev.get("method") or meetdb.default_scoring(m, _score_kind(d))
+    method = body.get("method") or prev.get("method") or meetdb.default_scoring(m, _score_kind(d, m))
     if method not in meetdb.SCORING:
         raise HTTPException(400, "Unknown scoring method")
+    meta = _meta(d)
+    if body.get("method") and method != "champ" and _n_teams(meta, _db_teams(m)) >= CHAMP_TEAMS:
+        raise HTTPException(400, f"Meets with {CHAMP_TEAMS} or more teams use championship rules, so they're scored as a championship")
+    if body.get("method") and bool(meta.get("championship")) != (method == "champ") and _n_teams(meta, _db_teams(m)) < CHAMP_TEAMS:
+        meta["championship"] = method == "champ"      # championship scoring = championship rules (seeding by time, entry caps)
+        _save(d, meta)
+        _dblog(d, "Championship rules " + ("on" if meta["championship"] else "off") + " to match the scoring")
     cfg = meetdb.SCORING[method]
     ind_max = int(body["ind_max"]) if body.get("ind_max") is not None else prev.get("ind_max", cfg["ind_max"]) if prev.get("method") == method else cfg["ind_max"]
     rel_max = int(body["rel_max"]) if body.get("rel_max") is not None else prev.get("rel_max", cfg["rel_max"]) if prev.get("method") == method else cfg["rel_max"]

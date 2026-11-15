@@ -176,7 +176,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <div id="meetFields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 16px">
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Meet name <input id="mName"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px"><span>Meet type <span id="mKindTip" style="cursor:help;border:1px solid var(--line);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">?</span></span> <select id="mKind"></select>
-          <span id="mChampWrap" style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="mChamp" style="margin:0"> Championship rules
+          <span id="mChampWrap" style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="mChamp" style="margin:0"> Championship rules <span id="mChampAuto" class="muted" style="font-size:12px"></span>
           <span id="mChampTip" style="cursor:help;border:1px solid var(--line);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">?</span></span></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Date <input id="mDate" type="date"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Start time <input id="mTime" type="time" title="When the first event starts. Goes into the meet database (heat sheet, timeline) and the meet board's warm-up slide."></label>
@@ -1171,7 +1171,8 @@ function render() {
   $("#openDb").href = `/db?meet=${M.id}`;
   { const k = $("#mKind"), o = Object.entries(M.kinds || {}).map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("");
     if (k.dataset.k !== o) { k.innerHTML = o; k.dataset.k = o; } k.value = M.kind || "dual";
-    $("#mChamp").checked = !!M.championship;
+    $("#mChamp").checked = !!M.championship; $("#mChamp").disabled = !!M.champ_auto;
+    $("#mChampAuto").textContent = M.champ_auto ? "(always on with 4+ teams)" : "";
     $("#mChampWrap").dataset.tip = CHAMP_TIP; $("#mChampTip").dataset.tip = CHAMP_TIP; $("#mKindTip").dataset.tip = KIND_TIP; }
   [["#mName", M.name], ["#mDate", M.date || ""], ["#mTime", M.start_time || ""], ["#mLoc", M.location || ""]].forEach(([k, v]) => { if (document.activeElement !== $(k)) $(k).value = v; });
   $("#hostSel").value = M.host;
@@ -1334,7 +1335,8 @@ const CHAMP_TIP = "<b>Championship rules</b> (NFHS; usually region/state, but an
   "<ul style='margin:6px 0 0;padding-left:18px'>" +
   "<li><b>Entries:</b> up to 4 swimmers per team in each individual event and 1 relay per team per event (3-1-1, p. 14) &mdash; extras are flagged.</li>" +
   "<li><b>Seeding:</b> by time, not team lanes (5-3-3/5-3-4, p. 46&ndash;47).</li>" +
-  "<li><b>Scoring:</b> championship scoring (16 places, relays double) by default.</li>" +
+  "<li><b>Scoring:</b> championship scoring (16 places, relays double). Picking championship scoring on the Run meet page turns these rules on too, and picking dual scoring turns them off.</li>" +
+  "<li><b>Always on</b> for meets with 4 or more teams.</li>" +
   "<li><b>No show:</b> a swimmer who doesn't compete is out of the rest of the meet unless a doctor or the referee excuses them (3-2-2 penalty 3, p. 16) &mdash; MeetDeck offers to pull them.</li>" +
   "<li><b>False starts:</b> need written dual confirmation by the referee and starter (8-1-3, p. 59&ndash;60).</li>" +
   "<li><b>Officials:</b> a full crew &mdash; at least two stroke judges, turn and takeoff judges, dual confirmation on relay takeoffs (4-1-1, 4-4-1, 4-6-3).</li></ul>";

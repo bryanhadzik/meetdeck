@@ -69,6 +69,7 @@
     main("setup", "Set up meet", MD + "/#meets") +
     main("run", "Run meet", runHref) +
     main("music", "Music", MB + "/music") +
+    main("stream", "Stream", MB + "/stream") +
     '<span class="sp"></span>' +
     '<div class="menu" id="abScreens"><button class="ab" type="button">Screens <span class="hide-sm">&#9662;</span><span class="dot hidden" id="abScrOn" style="display:none;background:#ffd23f"></span></button><div class="pop">' +
       '<div class="lbl">Open</div>' +

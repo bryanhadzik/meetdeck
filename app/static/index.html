@@ -2093,7 +2093,7 @@ async function sendRender() {
   const file = (label, href, note = "") => `<div class="row" style="gap:8px;padding:5px 0;border-top:1px solid var(--line)"><span style="flex:1;min-width:220px">${label}${note ? `<div class="muted" style="font-size:12px">${note}</div>` : ""}</span>${href}</div>`;
   const dis = S.has_db ? "" : "disabled";
   const pdf = file("<b>Results</b> (PDF, laid out like Meet Manager's)", `<a class="small" href="${base}/db/report/results.pdf" target="_blank">Open</a> <button class="ghost small" ${dis} onclick="location='${base}/db/report/results.pdf?download=1'">Download</button>`);
-  const tm = file("<b>Utah Top 50 / Team Manager results</b> (.hy3 + .cl2 in a zip, same as Meet Manager's export)", `<button class="ghost small" ${dis} onclick="location='${base}/db/export/hy3'">Download</button>`, "Utah Top 50 takes this zip; coaches import it into Team Manager / SwimTopia");
+  const tm = file("<b>Team Manager results</b> (.hy3 + .cl2 in a zip, same as Meet Manager's export)", `<button class="ghost small" ${dis} onclick="location='${base}/db/export/hy3'">Download</button>`, "Utah Top 50 takes this zip; coaches import it into Team Manager / SwimTopia");
   const mark = (id, label) => `<label style="font-size:13.5px"><input type="checkbox" data-sendmark="${id}" ${sent[id] ? "checked" : ""}> ${label}</label>${sent[id] ? ` <span class="muted" style="font-size:12px">${esc(sent[id])}</span>` : ""}`;
   const card = (n, title, when, body, foot) => `<section style="${foot.includes("checked") ? "opacity:.75" : ""}"><h2><span class="n">${n}</span> ${title} <span class="muted" style="font-weight:400;font-size:13px">${when}</span></h2>${body}
     <div class="row" style="margin-top:8px;gap:10px">${foot}</div></section>`;
@@ -2109,7 +2109,7 @@ async function sendRender() {
     card(2, `Final Meet Report and results to ${esc(RESULTS_TO)}`, due ? `due ${fmt(due)}${due < new Date() && !sent.final ? ' <b style="color:var(--err)">overdue</b>' : ""}` : "within 48 hours",
       file("<b>Final Meet Report</b>, signed by both officials and the head coaches", S.fmr ? `<a class="small" href="${base}/store/docs/${encodeURIComponent(S.fmr)}" target="_blank">${esc(S.fmr)}</a> <button class="ghost small" data-fmrup="1">Replace</button>`
         : `<button class="small" data-fmrup="1">Add the signed report…</button>`, S.fmr ? "" : "Scan or photograph the signed form (PDF or picture)") + pdf + tm +
-      file("<b>Meet Manager backup</b> (Utah Top 50 restores it in Meet Manager)", `<button class="ghost small" ${dis} onclick="location='${base}/db/backup'">Download</button>`),
+      file("<b>Meet Manager backup</b> (send this one to Utah Top 50)", `<button class="ghost small" ${dis} onclick="location='${base}/db/backup'">Download</button>`),
       `<button ${dis} onclick="location='${base}/send/final.zip'">Download all (zip)</button>
        <a href="#" data-mailpick="final">Email ${esc(RESULTS_TO)}</a><span class="muted" style="font-size:12.5px">Cc ${cc.map(x => x[1] ? esc(x[0]) : `<s>${esc(x[0])}</s>`).join(", ")}${missCc.length ? ` &mdash; add ${missCc.join(", ")} on the <a href="#" data-gorun="1">Meet checklist</a>` : ""}</span>
        <span class="grow"></span>${mark("final", "Sent")}`) +

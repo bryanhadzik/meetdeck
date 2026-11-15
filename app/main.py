@@ -2612,7 +2612,7 @@ def db_export(mid: str, fmt: str, team: str | None = None):
         else:
             info["result_exports"] = seq
         (_dbdir(d) / "info.json").write_text(json.dumps(info))
-        _dblog(d, f"Exported results for Utah Top 50 / Team Manager ({name})", "export")
+        _dblog(d, f"Exported results for Team Manager ({name})", "export")
         return Response(data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{name}"'})
     if fmt == "csv":
         return Response(results_mod.results_csv(m), media_type="text/csv",

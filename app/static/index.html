@@ -1240,13 +1240,13 @@ function render() {
     ? (M.championship ? "Championship seeding:" : "Seeded meet:") + " by seed time only, fastest heat last and fastest swimmers in the middle lanes, with at least 3 swimmers in every heat."
     : $("#seedHow").dataset.dual;
   $("#strictRow").style.display = timeSeeded ? "none" : "";
-  $("#strictLanes").checked = !!M.strict_lanes; $("#strictLanes").disabled = !!M.started;
-  $("#strictMsg").textContent = M.started ? " The meet has started, so the heats are locked." : "";
+  $("#strictLanes").checked = !!M.strict_lanes; $("#strictLanes").disabled = !!M.started && !UNLOCK;
+  $("#strictMsg").innerHTML = M.started ? " " + LOCK_HTML() : "";
   $("#strictWrap").dataset.tip = $("#strictTip").dataset.tip = STRICT_TIP;
   if (!timeSeeded && M.strict_lanes) $("#seedHow").textContent = "Strict NFHS 5-3: every swimmer swims in their own team's lanes in every heat, even a heat with only one team in it. A team with more swimmers than lanes gets an extra heat instead of borrowing the other team's lanes. Every heat still gets at least 3 swimmers where the team's own lanes allow it.";
   const nT = M.lanes.order.length;
   const laneChoice = nT >= 2 && M.seed_why !== "championship" && M.seed_why !== "teams" ? `<div class="row" style="gap:14px;font-size:13.5px;margin:4px 0;flex-basis:100%" data-tip="Seeds every event by seed time (fastest heat last, fastest swimmers in the middle lanes) instead of giving each team its own lanes. NFHS 5-3-2 (p. 45) lets meet management seed a multi-team meet. Championship rules aren't needed for this.">
-      <label><input type="checkbox" id="seedByTime" ${M.lane_mode === "seed" ? "checked" : ""} ${M.started ? "disabled" : ""}> Seed by time, not team lanes</label>${M.started ? `<span class="muted" style="font-size:12.5px">The meet has started, so the heats are locked.</span>` : ""}</div>` : "";
+      <label><input type="checkbox" id="seedByTime" ${M.lane_mode === "seed" ? "checked" : ""} ${M.started && !UNLOCK ? "disabled" : ""}> Seed by time, not team lanes</label>${M.started ? `<span>${LOCK_HTML()}</span>` : ""}</div>` : "";
   if (timeSeeded) {
     const why = M.seed_why === "championship" ? "Championship rules: every event is seeded by time"
       : M.seed_why === "chosen" ? "Seeded by time instead of team lanes (your choice under NFHS 5-3-2; championship rules are off)"
@@ -1655,12 +1655,17 @@ $("#hpFind").addEventListener("input", renderHeatSheet);
 ["#rInd", "#rTot", "#rCap", "#rType"].forEach(s => $(s).addEventListener("change", () =>
   save({rules: {max_individual: +$("#rInd").value, max_total: +$("#rTot").value, team_cap_per_event: +$("#rCap").value, meet_type: $("#rType").value}})));
 const STRICT_TIP = `<b>Off</b> (the usual way, and how past Meet Manager meets here were seeded): a heat with only one team swims in the middle lanes, and a team's extra swimmers can use the other team's empty lanes.<br><br><b>On</b>: lanes follow the Rules Book exactly.<br><br><b>NFHS 5-3-1</b> (Rules Book p. 45): &ldquo;In dual meets, the visiting team shall have the choice of the odd or even numbered lanes for all swimming events. In pools with an odd number of lanes, a lane shall be voided and the lanes renumbered as necessary.&rdquo;<br><br><b>NFHS 5-3-2</b> (p. 45): &ldquo;In non-championship multi-team meets and double dual/triple dual meets, the lane assignments outlined in TABLE 5-1 shall be used. When the number of teams cannot be equally divided into the number of lanes, meet management shall have the option of seeding, or using these lane assignments and leaving lanes open.&rdquo;`;
+let UNLOCK = false;     // operator override of the seeding lock on a started meet (this page only)
+const LOCK_HTML = () => `<span class="lockNote" style="color:var(--err);font-size:13px;font-weight:600">${UNLOCK ? "Override on: changes only affect heats seeded from now on - races already in the database keep their heats." : "The meet has started, so the heats are locked."}</span> <a href="#" class="lockToggle" style="color:var(--err);font-size:13px">${UNLOCK ? "Lock again" : "Override"}</a>`;
+document.addEventListener("click", e => { const t = e.target.closest(".lockToggle"); if (!t) return; e.preventDefault();
+  if (!UNLOCK && !confirm("The meet has started. Change the seeding settings anyway?\n\nRaces already in the meet database keep their heats; the new setting is used for heats seeded from now on.")) return;
+  UNLOCK = !UNLOCK; render(); });
 $("#strictLanes").onchange = async e => {
   const on = e.target.checked;
-  try { await save({strict_lanes: on}); }
+  try { await save({strict_lanes: on, ...(UNLOCK ? {force: true} : {})}); }
   catch (x) { e.target.checked = !on; $("#strictMsg").textContent = " " + x.message; return; }
   $("#strictMsg").textContent = "";
-  if (M.has_db && (M.files || []).length && confirm(`The meet database was built with the ${on ? "usual" : "strict"} heats.\n\nRebuild it now with the new heats? (The current database is kept as a version you can go back to. Re-send the start list to meet-board afterwards.)`)) {
+  if (!M.started && M.has_db && (M.files || []).length && confirm(`The meet database was built with the ${on ? "usual" : "strict"} heats.\n\nRebuild it now with the new heats? (The current database is kept as a version you can go back to. Re-send the start list to meet-board afterwards.)`)) {
     try { await api(`/api/meets/${M.id}/db/create`, {method: "POST"}); $("#strictMsg").textContent = " Meet database rebuilt with the new heats - send the start list to meet-board again."; }
     catch (x) { $("#strictMsg").textContent = " " + x.message; }
   }
@@ -1678,7 +1683,7 @@ document.addEventListener("click", e => {
   const when = new Date().toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"});
   save({lanes: {...M.lanes, order: o}, lane_draw: {when, order: o}});
 });
-document.addEventListener("change", e => { if (e.target.id === "seedByTime") save({lane_mode: e.target.checked ? "seed" : "teams"}); });
+document.addEventListener("change", e => { if (e.target.id === "seedByTime") save({lane_mode: e.target.checked ? "seed" : "teams", ...(UNLOCK ? {force: true} : {})}).catch(x => { e.target.checked = !e.target.checked; alert(x.message); }); });
 document.addEventListener("change", e => { const k = e.target.dataset && e.target.dataset.oddeven; if (k === undefined) return;
   const o = [...M.lanes.order], i = +k, j = o.indexOf(e.target.value); if (j < 0 || j === i) return;
   [o[i], o[j]] = [o[j], o[i]]; save({lanes: {...M.lanes, order: o}}); });

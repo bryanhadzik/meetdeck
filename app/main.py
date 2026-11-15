@@ -741,10 +741,12 @@ def put_state(mid: str, body: dict):
     d = _dir(mid)
     meta = _meta(d)
     if (("strict_lanes" in body and bool(body["strict_lanes"]) != bool(meta.get("strict_lanes")))
-            or ("lane_mode" in body and body["lane_mode"] != meta.get("lane_mode", "teams"))) and (d / "db" / "meet.mdb").exists():
+            or ("lane_mode" in body and body["lane_mode"] != meta.get("lane_mode", "teams"))) and (d / "db" / "meet.mdb").exists() \
+            and not body.get("force"):       # force: the operator overrode the lock on a started meet
         if _meet_started(meetdb.load(d / "db" / "meet.mdb")):
             raise HTTPException(409, "The meet has started, so the heats can't be re-seeded now.")
     before = json.loads(json.dumps(meta))
+    body = {k: v for k, v in body.items() if k != "force"}
     for k in ("removed", "rules", "lanes", "name", "date", "location", "host", "combine", "combine_low", "expected_teams", "preseed", "min_heat", "strict_lanes",
               "run", "ended", "contacts", "session_break", "kind", "championship", "lane_mode", "lane_draw"):
         if k in body:

@@ -34,3 +34,29 @@ def test_coach_emails_match_school_names(monkeypatch):
     teams = [{"name": "Ben Lomond High School", "code": "BLHS", "email": "coach@ogden.org"},
              {"name": "Deseret Peak", "code": "DPHS"}]
     assert main._coach_emails(teams) == ["a@x.org", "b@x.org", "coach@ogden.org"]
+
+
+def _m(entries):
+    import meetdb
+    return {"events": [{"ptr": 1, "no": 1, "label": "Women 50 Free", "gender": "F", "dist": 50, "stroke": "A", "ind_rel": "I"}],
+            "athletes": {}, "teams": {}, "entries": entries}
+
+
+def _e(ath, heat, lane, time=0):
+    return {"key": f"E:1:{ath}", "kind": "I", "event": 1, "ath": ath, "team": 1, "heat": heat, "lane": lane, "time": time,
+            "stat": "", "scr": False, "pad": 0, "backup": 0}
+
+
+def test_insert_and_close_heats():
+    import meetdb
+    m = _m([_e(1, 1, 4), _e(2, 2, 4), _e(3, 2, 5)])
+    ops, msg = meetdb.op_insert_heat(m, 1, 1)
+    assert {o["match"]["Ath_no"]: o["set"]["Fin_heat"] for o in ops} == {1: 2, 2: 3, 3: 3}
+    m = _m([_e(1, 2, 4), _e(2, 4, 4)])
+    ops, _ = meetdb.op_close_heats(m, 1)
+    assert {o["match"]["Ath_no"]: o["set"]["Fin_heat"] for o in ops} == {1: 1, 2: 2}
+    m = _m([_e(1, 1, 4, 30.1), _e(2, 2, 4)])
+    import pytest
+    with pytest.raises(ValueError):
+        meetdb.op_insert_heat(m, 1, 1)
+    assert meetdb.op_insert_heat(m, 1, 2)[0]

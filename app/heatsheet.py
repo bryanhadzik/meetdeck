@@ -693,6 +693,9 @@ class _Results(_Sheet):
             tm = "DFS" if dfs else "DQ"
         else:
             tm = ("x" if e.get("exh") else "") + meetdb.fmt_time(e["time"])
+            flags = "".join(r.get("flag") or "*" for r in self.m.get("records_broken") or [] if r["key"] == e["key"])
+            if flags:
+                tm = f"{flags} {tm}"          # Meet Manager prints the record tag's flag by the time
         nm = lambda a: (f"{a.get('last', '')}, {a.get('first', '')}" + (f" {a['initial']}" if a.get("initial") else "")) if a else ""
         pts = f"{e['points']:g}" if self.has_pts and (e.get("points") or 0) > 0 and st == "" else ""
         if relay:
@@ -704,6 +707,10 @@ class _Results(_Sheet):
             lines.append((0, [(18.0, place, "r"), (24.0, nm(a), "l", 108), (138.0, a.get("yr", ""), "r"),
                               (150.0, teams.get(a.get("team"), {}).get("abbr", ""), "l", 54), (240.0, tm, "r"), (RW, pts, "r")]))
         y = 11.5
+        for r in [r for r in self.m.get("records_broken") or [] if r["key"] == e["key"]]:
+            old = f"{meetdb.fmt_time(r['old'])}" + (f" {r['old_year']}" if r.get("old_year") else "") + (f" {r['old_who']}" if r.get("old_who") else "")
+            lines.append((y, [(30.0, f"{'Ties' if r['tie'] else 'New'} {r['tag']}! (was {old})", "l", 240)]))
+            y += 11.5
         if st in ("Q", "F", "D") and e.get("dq"):
             # both infractions with their codes, e.g. "5A Stroke infraction - fly / 1B Kick - back"
             codes = [c for c in (e["dq"], e.get("dq2")) if c]

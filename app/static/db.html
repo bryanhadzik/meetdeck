@@ -142,7 +142,10 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
       <div class="prow"><span>Heat sheet</span><button class="small" data-pr="heatsheet">Print</button><button class="ghost small" data-pdf="heatsheet">PDF</button></div>
       <div class="prow"><span>Referee program</span><button class="small" data-pr="referee">Print</button><button class="ghost small" data-pdf="referee">PDF</button></div>
       <div class="prow"><span>Timeline <span class="muted" style="font-size:11px">(session report)</span></span><button class="small" data-pr="timeline">Print</button><button class="ghost small" data-pdf="timeline">PDF</button></div>
+      <div class="prow"><span>Psych sheet <span class="muted" style="font-size:11px">(entries ranked by seed time)</span></span><button class="small" data-pr="psych">Print</button><button class="ghost small" data-pdf="psych">PDF</button></div>
       <div class="prow"><span>Results</span><button class="small" data-pr="results">Print</button><button class="ghost small" data-pdf="results">PDF</button></div>
+      <div class="prow"><span>Team scores</span><button class="small" data-pr="scores">Print</button><button class="ghost small" data-pdf="scores">PDF</button></div>
+      <div class="prow"><span>DQ summary</span><button class="small" data-pr="dq">Print</button><button class="ghost small" data-pdf="dq">PDF</button></div>
       <div class="prow"><span>Watches needed <span class="muted" style="font-size:11px" id="watchCount">(lanes to get watch times for)</span></span><button class="small" data-pr="watches">Print</button><button class="ghost small" data-pdf="watches">PDF</button></div>
       <div class="prow"><span>Soft touch backup times <span class="muted" style="font-size:11px">(blank log)</span></span><button class="small" data-pr="softtouch">Print</button><button class="ghost small" data-pdf="softtouch">PDF</button></div>
       <div class="prow"><span>Lane assignments <span class="muted" style="font-size:11px">(NFHS 5-3, for the coaches)</span></span><button class="small" data-pr="lanes">Print</button><button class="ghost small" data-pdf="lanes">PDF</button></div>
@@ -348,7 +351,7 @@ function show() {
   wtShow();
   lastMinShow();
   missingTeamsShow();
-  $("#problems").innerHTML = scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "") + laneGapWarning();
+  $("#problems").innerHTML = recordsStrip() + scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "") + laneGapWarning();
   render();
 }
 // ---- teams added in meet setup after the database was built: a database can't take new teams, so offer a rebuild ----
@@ -575,6 +578,15 @@ function renderEvents() {
     }).join("");
   $("#evlist").scrollTop = listTop;
   renderEvent();
+}
+function recordsStrip() {
+  const rb = S.records_broken || [];
+  if (!rb.length) return "";
+  return `<div class="issue" style="background:var(--ok-bg, #e6f5ec);border-color:#2ea043;color:inherit"><b>🏆 ${rb.length === 1 ? "New record" : rb.length + " new records"}:</b> ` +
+    rb.map(r => `<a href="#" data-goev="${r.event}" style="color:inherit">#${r.no} ${esc(r.label)}</a> &ndash; ${esc(r.who)}${r.team ? " (" + esc(r.team) + ")" : ""} <b>${esc(fmt(r.time))}</b> ${r.tie ? "ties" : "breaks"} the ${esc(r.tag)} (${esc(fmt(r.old))}${r.old_year ? " " + esc(String(r.old_year)) : ""}${r.old_who ? ", " + esc(r.old_who) : ""})`).join(" &middot; ") + `</div>`;
+}
+function recBadge(e) {
+  return (S.records_broken || []).filter(r => r.key === e.key).map(r => ` <span class="badge ok" title="${r.tie ? "Ties" : "Breaks"} the ${esc(r.tag)} of ${esc(fmt(r.old))}">${r.tie ? "ties" : "new"} ${esc(r.tag)}</span>`).join("");
 }
 function nameCell(e) {
   if (e.kind === "I") { const a = M.athletes[e.ath] || {}; return `${esc(a.last)}, ${esc(a.first)} <span class="muted" style="font-size:12px">${esc(a.yr || "")}</span>`; }
@@ -807,7 +819,7 @@ function renderEvent() {
   const dto = (h, l) => MOVING && h && l ? ` data-dto="${h}|${l}"` : "";
   const grip = e => MOVING && !e.scr ? `<span class="grip" title="Drag to another lane or heat">&#10303;</span>` : "";
   const row = (e, lane, h) => !e ? `<tr class="empty"${dto(h, lane)}><td class="ln">${lane}</td><td colspan="${MOVING ? 9 : 8}" class="muted">${MOVING ? "empty &middot; drop here" : "empty"}</td></tr>` :
-    `<tr class="${e.scr ? "scr" : relayIssues(e).length ? "relaybad" : ""}"${MOVING && !e.scr ? ` draggable="true" data-dkey="${e.key}"` : ""}${e.scr ? "" : dto(e.heat, e.lane <= lanes ? e.lane : 0)}><td class="ln">${grip(e)}${e.lane || ""}</td><td class="nm">${nameCell(e)}${e.exh ? ' <span class="badge">exh</span>' : ""}</td><td>${esc(teamAbbr(e.team))}</td>
+    `<tr class="${e.scr ? "scr" : relayIssues(e).length ? "relaybad" : ""}"${MOVING && !e.scr ? ` draggable="true" data-dkey="${e.key}"` : ""}${e.scr ? "" : dto(e.heat, e.lane <= lanes ? e.lane : 0)}><td class="ln">${grip(e)}${e.lane || ""}</td><td class="nm">${nameCell(e)}${e.exh ? ' <span class="badge">exh</span>' : ""}${recBadge(e)}</td><td>${esc(teamAbbr(e.team))}</td>
       <td><input class="t" data-seed="${e.key}" value="${esc(fmt(e.seed) || "NT")}" title="Seed time"></td>
       ${MOVING ? `<td style="white-space:nowrap">${e.scr ? "" : hsel(e) + " " + lsel(e)}</td>` : ""}
       <td style="white-space:nowrap">${e.scr ? "" : timerCells(e)}</td>
@@ -824,11 +836,20 @@ function renderEvent() {
   let html = `<div class="row" style="justify-content:flex-end;margin-bottom:6px;font-size:13px"><label>Timers per lane <select id="timersSel" title="How many timers work each lane at this meet"><option value="1" ${TIMERS() === 1 ? "selected" : ""}>1 timer</option><option value="2" ${TIMERS() === 2 ? "selected" : ""}>2 timers</option></select></label></div>
     <div class="row" style="margin-bottom:4px"><h2 style="margin:0">Event ${v.no} &nbsp;${esc(v.label)}</h2><span class="pill ${eventState(v).status}">${eventState(v).label}</span><span class="muted">${act.length} entered${scr.length ? ` · ${scr.length} scratched` : ""}${v.day > 1 ? ` · day ${v.day}` : ""}</span>
     <span class="grow"></span>${scoreBtn(v)}<button class="ghost small${MOVING ? " on" : ""}" id="moveBtn" title="Heats and lanes are locked so they can't be changed by accident">${MOVING ? "Done moving" : "Move swimmers"}</button><button class="ghost small" id="addEntryBtn">Add entry</button></div><div id="addEntry" class="hidden"></div>`;
-  for (const h of heats.filter(h => h)) {
+  const topHeat = Math.max(0, ...heats);
+  const gaps = Array.from({length: topHeat}, (_, i) => i + 1).filter(h => !heats.includes(h));
+  if (gaps.length) html += `<div class="issue" style="margin:6px 0">Heat ${gaps.join(", ")} ${gaps.length > 1 ? "are" : "is"} empty. Move swimmers into ${gaps.length > 1 ? "them" : "it"}, or <button class="ghost small" data-closeheats="${v.ptr}">Remove empty heats</button> to renumber.</div>`;
+  const swumHeat = h => act.some(e => e.heat >= h && (e.time || (e.stat || "").trim() || +e.pad > 0 || +e.backup > 0));
+  for (const h of Array.from({length: topHeat}, (_, i) => i + 1)) {
     const inHeat = act.filter(e => e.heat === h);
+    const ins = MOVING && !swumHeat(h) ? ` <button class="ghost small" data-insheat="${v.ptr}|${h}" title="Meet Manager's Add Heat: open an empty heat here (heat ${h} and later move up one number) for late entries">+ Empty heat before</button>` : "";
+    if (!inHeat.length) {
+      html += `<div class="heat"><h3>Heat ${h} <span class="pill none">Empty</span>${ins}</h3><table>${head}${Array.from({length: lanes}, (_, i) => row(null, i + 1, h)).join("")}</table></div>`;
+      continue;
+    }
     const hs = heatState(act.filter(e => e.heat === h));
     const hpill = hs.cls === "done" ? `<span class="pill timed">Timed</span>` : hs.cls === "part" ? `<span class="pill prog">${hs.r} of ${hs.n} lanes</span>` : `<span class="pill none">Waiting</span>`;
-    html += `<div class="heat"><h3>Heat ${h} of ${heats.filter(x => x).length} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button>${act.some(e => e.heat === h && (+e.pad > 0 || +e.backup > 0)) ? ` <button class="ghost small" data-savedtimes="${h}" title="Open this heat's saved pad and backup button times again - to enter watch times or change which time counts - without asking the console">Enter watches</button>` : ""}</h3><div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1, h)).join("")}
+    html += `<div class="heat"><h3>Heat ${h} of ${topHeat} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button>${ins}${act.some(e => e.heat === h && (+e.pad > 0 || +e.backup > 0)) ? ` <button class="ghost small" data-savedtimes="${h}" title="Open this heat's saved pad and backup button times again - to enter watch times or change which time counts - without asking the console">Enter watches</button>` : ""}</h3><div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1, h)).join("")}
       ${inHeat.filter(e => !e.lane || e.lane > lanes).map(e => row(e)).join("")}</table>${finishOrder(inHeat)}</div>`;
   }
   if (MOVING) {   // an empty heat to drag swimmers into
@@ -1588,6 +1609,9 @@ function renderScores() {
 document.addEventListener("click", async ev => {
   const d = ev.target.dataset || {};
   if (ev.target.closest("#evlist") && ev.target.closest("button")) { EV = +ev.target.closest("button").dataset.ev; MOVING = false; renderEvents(); return; }   // no jumping: the list and the page stay where they are
+  if (d.goev) { ev.preventDefault(); EV = +d.goev; TAB = "events"; MOVING = false; render(); return; }
+  if (d.insheat) { const [ptr, h] = d.insheat.split("|").map(Number); change("insert_heat", {ptr, before: h}); return; }
+  if (d.closeheats) { change("close_heats", {ptr: +d.closeheats}); return; }
   if (d.tab || (ev.target.closest("[data-tab]") && ev.target.closest("#problems"))) { ev.preventDefault(); TAB = d.tab || ev.target.closest("[data-tab]").dataset.tab; render(); return; }
   if (d.scr) {
     const e = M.entries.find(x => x.key === d.scr), btn = ev.target.closest("button");

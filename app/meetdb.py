@@ -302,6 +302,38 @@ def op_move(m, key, heat, lane):
     return ops, msg
 
 
+def _swum_entry(e) -> bool:
+    return bool(e["time"] or (e["stat"] or "").strip() or e.get("pad") or e.get("backup"))
+
+
+def op_insert_heat(m, ptr, before):
+    """Meet Manager's Add Heat: open an empty heat at `before` (heat 1 = a new first, slowest heat for late
+    entries); the heats from there on move up one number. Heats already swum can't move."""
+    ptr, before = int(ptr), int(before)
+    ents = [e for e in m["entries"] if e["event"] == ptr and not e["scr"] and (e["heat"] or 0) >= before]
+    if any(_swum_entry(e) for e in ents):
+        raise ValueError(f"Heat {before} or a later heat has already been swum - an empty heat can only go in before unswum heats")
+    if not ents:
+        return [], ""
+    ops = [{"op": "update", "table": _table(e), "match": _match(e), "set": {"Fin_heat": e["heat"] + 1}}
+           for e in sorted(ents, key=lambda e: -e["heat"])]
+    return ops, f"Added an empty heat {before} in {ev_label(m, ptr)} (later heats renumbered)"
+
+
+def op_close_heats(m, ptr):
+    """Remove empty heats from an event by renumbering the heats after them (unswum heats only)."""
+    ptr = int(ptr)
+    ents = [e for e in m["entries"] if e["event"] == ptr and not e["scr"] and e["heat"]]
+    used = sorted({e["heat"] for e in ents})
+    new = {h: i + 1 for i, h in enumerate(used)}
+    moved = [e for e in ents if new[e["heat"]] != e["heat"]]
+    if any(_swum_entry(e) for e in moved):
+        raise ValueError("A heat after the empty one has already been swum, so the heats can't be renumbered")
+    ops = [{"op": "update", "table": _table(e), "match": _match(e), "set": {"Fin_heat": new[e["heat"]]}}
+           for e in sorted(moved, key=lambda e: e["heat"])]
+    return ops, (f"Removed empty heats in {ev_label(m, ptr)}" if ops else "")
+
+
 def op_seed(m, key, seed):
     e = find(m, key)
     t = parse_time(seed)

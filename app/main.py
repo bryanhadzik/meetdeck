@@ -1533,6 +1533,64 @@ def _program_records(d: Path) -> list:
     return out
 
 
+def _records_broken(d: Path, m: dict) -> list:
+    """Swims that beat (or tie) a record on the meet's record list - Meet Manager flags these as they happen.
+    Team records (e.g. "Varsity Rec") only count for their team; a tag can leave out exhibition swims.
+    -> [{key, event, no, label, tag, flag, old, old_who, old_year, time, who, team, tie}]"""
+    recs = []
+    try:
+        t = meetdb.read(_dbfile(d), ["Records", "RecordTags"])
+        tags = {r["tag_ptr"]: r for r in t.get("RecordTags", {}).get("rows", [])}
+        for r in t.get("Records", {}).get("rows", []):
+            tg = tags.get(r.get("tag_ptr")) or {}
+            tm = r.get("Record_Time") or r.get("Record_time") or 0
+            if not tm or (r.get("Record_course") or "Y").strip() not in ("Y", ""):
+                continue
+            relay = (r.get("tag_indrel") or "I").strip() == "R"
+            recs.append({"tag": (tg.get("tag_name") or "Record").strip(), "flag": (tg.get("tag_flag") or "").strip(),
+                         "order": tg.get("tag_order") or 99, "team_no": tg.get("team_no") or 0,
+                         "exh": tg.get("allow_exh") is not False, "gender": (r.get("tag_gender") or "").strip(),
+                         "dist": r.get("tag_dist"), "stroke": (r.get("tag_stroke") or "").strip(), "indrel": "R" if relay else "I",
+                         "time": round(tm, 2), "who": ((r.get("Relay_Names") or "").strip() or (r.get("Record_Holder") or "").strip()),
+                         "year": r.get("Record_year") or ""})
+    except Exception as x:
+        print("records broken:", x)
+    if not recs:                      # no records in the database: the host school's list (its team tags count for it only)
+        meta = _meta(d)
+        host = next((h for h in _hosts() if h["id"] == meta.get("host", "THS")), None) or {}
+        codes = {c.upper() for c in host.get("team_codes") or []}
+        host_nos = [no for no, tm in m["teams"].items() if (tm.get("abbr") or "").upper() in codes]
+        team_tags = set(host.get("team_tags") or [])
+        for r in _program_records(d):
+            recs.append({**r, "tag": r.get("name") or "Record", "flag": "", "exh": True, "who": r.get("holder") or r.get("relay_names") or "",
+                         "team_no": (host_nos[0] if len(host_nos) == 1 else -1) if r.get("tag_ptr") in team_tags else 0})
+    sexof = lambda g: {"G": "F", "W": "F", "B": "M"}.get((g or "").upper()[:1], (g or "").upper()[:1])
+    out = []
+    for v in m["events"]:
+        mine = [r for r in recs if sexof(r["gender"]) == sexof(v.get("gender")) and int(r["dist"] or 0) == int(v["dist"] or 0)
+                and r["stroke"] == v["stroke"] and r["indrel"] == (v.get("ind_rel") or "I")]
+        if not mine:
+            continue
+        ents = [e for e in m["entries"] if e["event"] == v["ptr"] and not e["scr"] and e["time"] and not (e["stat"] or "").strip()]
+        for r in mine:
+            ok = [e for e in ents if (r["exh"] or not e["exh"]) and (not r["team_no"] or e["team"] == r["team_no"])]
+            if not ok:
+                continue
+            best = min(ok, key=lambda e: e["time"])
+            if best["time"] > r["time"] + 1e-6:
+                continue
+            if best["kind"] == "I":
+                a = m["athletes"].get(best.get("ath"), {})
+                e_name = f"{a.get('first', '')} {a.get('last', '')}".strip()
+            else:
+                e_name = f"{m['teams'].get(best['team'], {}).get('abbr', '')} {best.get('ltr') or ''}".strip()
+            out.append({"key": best["key"], "event": v["ptr"], "no": v["no"], "label": v["label"], "tag": r["tag"], "flag": r["flag"],
+                        "order": r.get("order") or 99, "old": r["time"], "old_who": r.get("who") or "", "old_year": r.get("year") or "",
+                        "time": best["time"], "who": e_name, "team": m["teams"].get(best["team"], {}).get("abbr", ""),
+                        "tie": abs(best["time"] - r["time"]) < 1e-6})
+    return sorted(out, key=lambda x: (x["no"], x["order"]))
+
+
 def _record_team(st: dict, host: dict, meta: dict) -> str:
     if "record_team" in meta:
         return meta["record_team"]
@@ -1926,7 +1984,12 @@ def db_get(mid: str):
         missing = [t for t in _state(d)["lanes"]["order"] if t.upper() not in have]
     except Exception:
         missing = []
-    return {"exists": True, "started": _meet_started(m), "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
+    try:
+        broken = _records_broken(d, m)
+    except Exception as x:
+        print("records broken:", x)
+        broken = []
+    return {"exists": True, "started": _meet_started(m), "records_broken": broken, "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
             "model": meetdb.json_safe(m), "problems": meetdb.check(m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
@@ -2088,7 +2151,8 @@ def db_import_drive(mid: str, body: dict):
 OPS = {"dfs": meetdb.op_dfs, "scratch": meetdb.op_scratch, "scratch_athlete": meetdb.op_scratch_athlete, "move": meetdb.op_move,
        "seed": meetdb.op_seed, "result": meetdb.op_result, "delete": meetdb.op_delete, "add_entry": meetdb.op_add_entry,
        "athlete": meetdb.op_athlete, "add_athlete": meetdb.op_add_athlete, "team": meetdb.op_team, "legs": meetdb.op_legs,
-       "heat_results": meetdb.op_heat_results, "watches": meetdb.op_watches, "dq": meetdb.op_dq, "undq": meetdb.op_undq, "meet": meetdb.op_meet}
+       "heat_results": meetdb.op_heat_results, "watches": meetdb.op_watches, "dq": meetdb.op_dq, "undq": meetdb.op_undq, "meet": meetdb.op_meet,
+       "insert_heat": meetdb.op_insert_heat, "close_heats": meetdb.op_close_heats}
 
 
 _DQR = {}
@@ -2960,7 +3024,27 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
     elif kind == "referee":
         pdf, label = heatsheet.referee_pdf(m, licensee), "referee program"
     elif kind == "results":
+        try:
+            m["records_broken"] = _records_broken(d, m)
+        except Exception as x:
+            print("results records:", x)
         pdf, label = heatsheet.results_pdf(m, db, licensee), "results"
+    elif kind == "psych":
+        import reports
+        try:
+            m["records"] = _program_records(d)
+        except Exception as x:
+            print("psych records:", x)
+        pdf, label = reports.psych_pdf(m, licensee), "psych sheet"
+    elif kind == "dq":
+        import reports
+        pdf, label = reports.dq_summary_pdf(m, licensee), "DQ summary"
+    elif kind == "scores":
+        import reports
+        sc = _dbinfo(d).get("scoring") or {}
+        if sc.get("method"):
+            sc = {**sc, "host_teams": sc.get("host_teams") or _host_team_nos(d, m)}
+        pdf, label = reports.team_scores_pdf(m, sc, licensee=licensee), "team scores"
     elif kind == "timeline":
         gap = _meta(d).get("session_break")
         pdf, label = heatsheet.timeline_pdf(m, licensee, gap_min=gap if isinstance(gap, int) else None), "timeline"

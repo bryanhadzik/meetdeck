@@ -22,3 +22,15 @@ def test_small_meets_follow_setting():
     assert main._is_champ({"kind": "invitational"}, 3)
     assert not main._is_champ({"kind": "invitational", "championship": False}, 3)
     assert main._champ_rules({"championship": True}, {}, 2)["team_cap_per_event"] == 4
+
+
+def test_coach_emails_match_school_names(monkeypatch):
+    monkeypatch.setattr(main, "_contacts", lambda: [
+        {"role": "Head coach", "school": "Ben Lomond", "email": "a@x.org"},
+        {"role": "Meet referee", "school": "Ben Lomond", "email": "ref@x.org"},
+        {"role": "Head coach", "school": "Deseret Peak High School", "email": "b@x.org"},
+        {"role": "Head coach", "school": "Logan", "email": "c@x.org"}])
+    monkeypatch.setattr(main, "_hosts", lambda: [])
+    teams = [{"name": "Ben Lomond High School", "code": "BLHS", "email": "coach@ogden.org"},
+             {"name": "Deseret Peak", "code": "DPHS"}]
+    assert main._coach_emails(teams) == ["a@x.org", "b@x.org", "coach@ogden.org"]

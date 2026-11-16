@@ -228,10 +228,12 @@ def _state(d: Path) -> dict:
         else:                       # seeded meet (NFHS 5-3): by time only, no team lanes
             seed_lanes, seed_info = _standard_seed_meet(entries, removed, min_heat, set(combo_lanes))
     seed_moved = _apply_seed_moves(meta.get("seed_moves", {}), entries, removed, seed_lanes, combo_lanes)
-    nt, started = len(order), False
+    nt, started, db_teams = len(order), False, []
     if _dbfile(d).exists():
         try:
             mdb = meetdb.load(_dbfile(d))
+            db_teams = [{"name": t["name"], "code": t["abbr"], "short": t.get("short", ""), "email": t.get("email", "")}
+                        for t in mdb["teams"].values()]
             started = _meet_started(mdb)
             nt = nt or _db_teams(mdb)           # meet opened from a Meet Manager file: count its teams
         except Exception:
@@ -245,10 +247,7 @@ def _state(d: Path) -> dict:
             "lane_choice": table_has_open(order, POOL_LANES), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "start_time": meta.get("start_time", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),
             "run": meta.get("run", {}), "ended": meta.get("ended", ""), "contacts": meta.get("contacts", {}),
-            "coach_emails": sorted({e.lower() for x in [t.get("email", "") for t in teams.values()] + [f.get("source", "") for f in files]
-                                    + [c.get("email", "") for c in _contacts() if c.get("role", "").endswith("coach")
-                                       and c.get("school", "").lower() in {x.lower() for t in teams.values() for x in ((t.get("name") or ""), _school_of(t)) if x}]
-                                    for e in re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", x or "")}),
+            "coach_emails": _coach_emails(list(teams.values()) + db_teams, files),
             "drive_uploads": meta.get("drive_uploads", []),
             "has_db": (d / "db" / "meet.mdb").exists(),
             "host": host["id"], "host_name": host.get("name", ""),
@@ -3203,6 +3202,28 @@ def _save_contacts(cs: list):
 
 _SCHOOL_SUFFIX = re.compile(r"\s+(swim(ming)?(\s*(&|and)\s*div(e|ing))?(\s+team)?|swim\s+team)$", re.I)
 _SCHOOL_WORD = re.compile(r"\b(high|school|academy|prep|hs|college|district)\b", re.I)
+
+
+def _school_key(x: str) -> str:
+    x = re.sub(r"[^a-z0-9 ]", " ", (x or "").lower())
+    x = re.sub(r"\b(high school|high|school|hs|swim team|swimming|swim)\b", " ", x)
+    return " ".join(x.split())
+
+
+def _coach_emails(teams: list, files: list | None = None) -> list:
+    """Coach emails for a meet: the teams' emails (entry files and the meet database), who sent the entry files,
+    and coaches in Contacts whose school is one of the meet's teams ("Ben Lomond" matches "Ben Lomond High School")."""
+    hosts = _hosts()
+    keys = {k for t in teams for k in (_school_key(t.get("name")), _school_key(t.get("short")), _school_key(_school_of(t, hosts))) if k}
+    codes = {(t.get("code") or "").upper() for t in teams if t.get("code")}
+    src = [t.get("email", "") for t in teams] + [f.get("source", "") for f in files or []]
+    for c in _contacts():
+        if "coach" not in (c.get("role") or "").lower():
+            continue
+        sk = _school_key(c.get("school"))
+        if sk and (sk in keys or (c.get("school") or "").upper() in codes):
+            src.append(c.get("email", ""))
+    return sorted({e.lower() for x in src for e in re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", x or "")})
 
 
 def _school_of(team: dict, hosts: list | None = None) -> str:

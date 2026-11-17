@@ -190,6 +190,7 @@ function render() {
   $("#mname").textContent = m.name || "Swim results";
   $("#msub").textContent = sub();
   const lb = $("#liveBtn"), st = D.stream;
+  { const yt = $("#yt"); if (yt) yt.classList.toggle("hide", !!(st && st.off)); }    // streaming turned off
   lb.classList.toggle("hide", !(st && st.url && st.live));
   if (st && st.url) lb.href = st.url;
   const q = $("#q").value.trim().toLowerCase();

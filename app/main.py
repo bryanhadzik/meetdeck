@@ -2737,6 +2737,8 @@ def _stream_link() -> dict | None:
         import urllib.request
         with urllib.request.urlopen(url.rstrip("/") + "/api/stream_link", timeout=3) as r:
             j = json.loads(r.read())
+        if j.get("off"):
+            return {"off": True}             # meet-board: streaming turned off - no stream or YouTube on the page
         return {"url": j["url"], "live": bool(j.get("live"))} if j.get("url") else None
     except Exception:
         return None

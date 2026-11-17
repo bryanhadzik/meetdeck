@@ -52,6 +52,7 @@
     "@media (max-width:640px){#appbar{padding:4px 6px}#appbar a.ab,#appbar button.ab{padding:8px 8px}#appbar .main{font-size:14px}",
     "  #appbar .hide-sm{display:none}#appbar .pop{position:fixed;left:8px;right:8px;top:52px;min-width:0}}"
   ].join("\n");
+  css += "#appbar .abStream{display:contents}";
   var st = document.createElement("style"); st.textContent = css; document.head.appendChild(st);
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); }
@@ -69,13 +70,13 @@
     main("setup", "Set up meet", MD + "/#meets") +
     main("run", "Run meet", runHref) +
     main("music", "Music", MB + "/music") +
-    main("stream", "Stream", MB + "/stream") +
+    '<span class="abStream">' + main("stream", "Stream", MB + "/stream") + "</span>" +
     '<span class="sp"></span>' +
     '<div class="menu" id="abScreens"><button class="ab" type="button">Screens <span class="hide-sm">&#9662;</span><span class="dot hidden" id="abScrOn" style="display:none;background:#ffd23f"></span></button><div class="pop">' +
       '<div class="lbl">Open</div>' +
       item(MB + "/web/meetboard", "Meet board &#8599;", "", true) +
-      item(MB + "/overlay/race?layout=strip&test", "Lower Lanes (stream) &#8599;", "", true) +
-      item(MB + "/overlay/lanes?test&demo", "Lane rail (stream) &#8599;", "", true) +
+      '<span class="abStream">' + item(MB + "/overlay/race?layout=strip&test", "Lower Lanes (stream) &#8599;", "", true) +
+      item(MB + "/overlay/lanes?test&demo", "Lane rail (stream) &#8599;", "", true) + "</span>" +
       '<div id="abCtlBox"></div>' +
     "</div></div>" +
     '<div class="menu" id="abSetup"><button class="ab' + (A === "admin" ? " on" : "") + '" type="button">&#9881; <span class="hide-sm">Setup</span> &#9662;<span class="badge" id="abUpd" style="display:none">!</span></button><div class="pop">' +
@@ -95,11 +96,20 @@
     "</div></div>" +
     '<span class="st" id="abStatus" title="Checking…"><span class="dot" id="abDot"></span></span>';
 
+  // Settings -> Streaming turned off: hide the Stream tab and the stream pages (meet-board tells us; from MeetDeck, ask it)
+  function streamOff(off) {
+    [].forEach.call(document.querySelectorAll("#appbar .abStream"), function (x) { x.style.display = off ? "none" : ""; });
+  }
   var bar = document.createElement("div");
   bar.id = "appbar";
   bar.innerHTML = html;
   document.body.insertBefore(bar, document.body.firstChild);
   document.body.classList.add("hasAppbar");
+  if (typeof C.streamOff === "boolean") streamOff(C.streamOff);
+  else try {
+    fetch(MB + "/api/stream_link", {cache: "no-store"}).then(function (r) { return r.json(); })
+      .then(function (j) { streamOff(!!j.off); }).catch(function () {});
+  } catch (e) {}
   // pages with their own sticky header put it just under this bar: top: var(--abh)
   function setH() { document.documentElement.style.setProperty("--abh", bar.offsetHeight + "px"); }
   setH(); window.addEventListener("resize", setH);

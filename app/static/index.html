@@ -278,6 +278,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       </div>
       <div class="row" id="strictRow" style="margin-top:6px;font-size:13.5px"><label id="strictWrap" data-tipw="480"><input type="checkbox" id="strictLanes"> Keep every team in its own lanes in every heat (NFHS 5-3, to the letter)</label>
         <span class="muted" id="strictTip" data-tipw="480" style="cursor:help;border-bottom:1px dotted currentColor;font-size:12.5px">the rule</span><span class="muted" id="strictMsg" style="font-size:13px"></span></div>
+      <div class="row" style="margin-top:6px;font-size:13.5px"><label data-tip="Meet Manager's option of the same name. Exhibition swimmers are seeded after every scoring swimmer, so they swim in the slowest heats (and the outside lanes) whatever their seed time. NFHS leaves where exhibition swims go to meet management - settle it at the coaches' meeting."><input type="checkbox" id="seedExhLast"> Seed exhibition swimmers last</label><span class="muted" id="seedExhMsg" style="font-size:13px"></span></div>
       <div class="muted" id="seedHow" style="font-size:13px;margin-top:4px">Same team lanes and fastest-in-the-middle as Meet Manager's dual seeding, but every heat has at least 3 swimmers &mdash; when heat 1 would be short, the slowest swimmers of the next heat move down. Once seeded, the heats update by themselves when entries change, and go into the Meet Manager backup.</div>
       <div id="seedInfo" class="scroll" style="margin-top:6px"></div>
       <h3 style="margin-top:12px">Heats after seeding</h3>
@@ -1251,6 +1252,7 @@ function render() {
     : $("#seedHow").dataset.dual;
   $("#strictRow").style.display = timeSeeded ? "none" : "";
   $("#strictLanes").checked = !!M.strict_lanes; $("#strictLanes").disabled = !!M.started && !UNLOCK;
+  $("#seedExhLast").checked = !!M.seed_exh_last; $("#seedExhLast").disabled = !!M.started && !UNLOCK;
   $("#strictMsg").innerHTML = M.started ? " " + LOCK_HTML() : "";
   $("#strictWrap").dataset.tip = $("#strictTip").dataset.tip = STRICT_TIP;
   if (!timeSeeded && M.strict_lanes) $("#seedHow").textContent = "Strict NFHS 5-3: every swimmer swims in their own team's lanes in every heat, even a heat with only one team in it. A team with more swimmers than lanes gets an extra heat instead of borrowing the other team's lanes. Every heat still gets at least 3 swimmers where the team's own lanes allow it.";
@@ -1701,6 +1703,7 @@ document.addEventListener("click", e => {
   const when = new Date().toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"});
   save({lanes: {...M.lanes, order: o}, lane_draw: {when, order: o}});
 });
+document.addEventListener("change", e => { if (e.target.id === "seedExhLast") save({seed_exh_last: e.target.checked}).catch(x => { e.target.checked = !e.target.checked; alert(x.message); }); });
 document.addEventListener("change", e => { if (e.target.id === "seedByTime") save({lane_mode: e.target.checked ? "seed" : "teams", ...(UNLOCK ? {force: true} : {})}).catch(x => { e.target.checked = !e.target.checked; alert(x.message); }); });
 document.addEventListener("change", e => { const k = e.target.dataset && e.target.dataset.oddeven; if (k === undefined) return;
   const o = [...M.lanes.order], i = +k, j = o.indexOf(e.target.value); if (j < 0 || j === i) return;

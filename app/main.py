@@ -227,6 +227,8 @@ def _state(d: Path) -> dict:
             issues.append({"level": "error", "swimmer": None, "entries": [], "teams": [], "coach": "",
                            "msg": f"Combined {c['label']} no longer fits in one heat ({c.get('why', '')}) - it will be seeded normally"})
     plan, seed_why = _team_lanes(meta, order)
+    for e in entries:                       # option: exhibition swimmers go after every scoring swimmer when seeding
+        e["exh_last"] = bool(meta.get("seed_exh_last")) and bool(e.get("exhibition"))
     preseed = meta.get("preseed", bool(meta.get("seed_moves")))   # seeded only after "Seed heats" is clicked
     min_heat = 3          # fixed: every heat gets at least 3 swimmers
     seed_lanes, seed_info = ({}, [])
@@ -266,7 +268,7 @@ def _state(d: Path) -> dict:
             "combos": combos, "combine_low": meta.get("combine_low", "F"),
             "team_status": team_status, "expected_teams": expected, "coach_msgs": coach_msgs,
             "combo_lanes": {k: list(v) for k, v in combo_lanes.items()},
-            "preseed": preseed, "min_heat": min_heat, "seed_info": seed_info,
+            "preseed": preseed, "min_heat": min_heat, "seed_info": seed_info, "seed_exh_last": bool(meta.get("seed_exh_last")),
             "seed_lanes": {k: list(v) for k, v in seed_lanes.items()}, "seed_moved": sorted(seed_moved),
             "lane_plan": plan or []}
 
@@ -772,7 +774,7 @@ def put_state(mid: str, body: dict):
             raise HTTPException(409, "The meet has started, so the heats can't be re-seeded now.")
     before = json.loads(json.dumps(meta))
     body = {k: v for k, v in body.items() if k != "force"}
-    for k in ("removed", "rules", "lanes", "name", "date", "location", "host", "combine", "combine_low", "expected_teams", "preseed", "min_heat", "strict_lanes",
+    for k in ("removed", "rules", "lanes", "name", "date", "location", "host", "combine", "combine_low", "expected_teams", "preseed", "min_heat", "strict_lanes", "seed_exh_last",
               "run", "ended", "contacts", "session_break", "kind", "championship", "lane_mode", "lane_draw"):
         if k in body:
             meta[k] = body[k]
@@ -803,7 +805,7 @@ def put_state(mid: str, body: dict):
     if changed:
         _setup_history_push(d, before, changed)
     _save(d, meta)
-    if set(changed) & {"preseed", "min_heat", "strict_lanes", "lane_mode", "lane_draw", "lanes", "combine", "combine_low", "removed", "seed_moves"}:
+    if set(changed) & {"preseed", "min_heat", "strict_lanes", "seed_exh_last", "lane_mode", "lane_draw", "lanes", "combine", "combine_low", "removed", "seed_moves"}:
         try:                                    # seeding changed: the meet database follows (until the meet starts)
             _push_seeding(d, only_unplaced=False)
         except Exception as x:
@@ -2410,6 +2412,7 @@ MEET_KINDS = {"dual": "Regular season (dual / double dual)", "invitational": "In
 def _reseed_ctx(d: Path, m: dict):
     import reseed
     meta = _meta(d)
+    m["_exh_last"] = bool(meta.get("seed_exh_last"))        # read by reseed when it orders the swimmers
     codes = [(t or {}).get("abbr") for t in m["teams"].values() if (t or {}).get("abbr")]
     order = _lane_order(meta, codes)
     if _team_lanes(meta, order)[0] is None:

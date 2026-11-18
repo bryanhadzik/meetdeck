@@ -59,7 +59,9 @@ def standard_seed(ents: list[dict], lanes: list[int], min_heat: int = MIN_HEAT) 
 
 def _ents(m, ptr):
     teams = m["teams"]
-    return [{"id": e["key"], "team": (teams.get(e["team"]) or {}).get("abbr", ""), "seed": e["conv"] or e["seed"] or 0}
+    last = bool(m.get("_exh_last"))         # meet option: seed exhibition swimmers last
+    return [{"id": e["key"], "team": (teams.get(e["team"]) or {}).get("abbr", ""), "seed": e["conv"] or e["seed"] or 0,
+             "exh_last": last and bool(e.get("exh"))}
             for e in _active(m, ptr)]
 
 

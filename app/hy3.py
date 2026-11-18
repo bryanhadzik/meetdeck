@@ -388,7 +388,9 @@ GIRLS = {"F", "W", "G"}
 
 
 def _seed_key(e):
-    return (0, e["seed"]) if e.get("seed") else (1, 0)
+    """Fastest first, no-time last. With "seed exhibition swimmers last" (Meet Manager's option) exhibition entries
+    sort after every scoring entry, so they land in the slowest heats / outside lanes."""
+    return (2 if e.get("exh_last") else 0) + (0 if e.get("seed") else 1), e.get("seed") or 0
 
 
 def _place_block(ents, lanes, center):

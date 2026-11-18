@@ -467,6 +467,14 @@ def ingest(d: Path, filename: str, data: bytes, source: str = "upload", kind_hin
     if not out["added"] and kind_hint != "paste":
         (orig_dir / orig_name).unlink(missing_ok=True)
         _keep_as_doc(d, filename, data, out)
+    if out["added"] and _dbfile(d).exists():   # new entries go straight into the meet database (new teams too)
+        try:
+            if not _meet_started(meetdb.load(_dbfile(d))):
+                msg = _sync_db(d)
+                if msg:
+                    out["synced"] = msg
+        except Exception as x:
+            print("sync after upload:", x)
     return out
 
 
@@ -961,10 +969,16 @@ def _sync_db(d: Path) -> str | None:
     st = _state(d)
     msg = None
     try:
-        p = dbsync.plan(st, meetdb.load(_dbfile(d)), info.get("entries_base"))
-        if dbsync.count(p):
+        m = meetdb.load(_dbfile(d))
+        new_teams = dbsync.missing_teams(st, m)    # a team whose entries came in after the database was built
+        p = dbsync.plan(st, m, info.get("entries_base"))
+        if new_teams or dbsync.count(p):
             _snapshot(d, "before: bringing in entry changes")
-            done = dbsync.apply(_dbfile(d), p)
+            done = dbsync.add_teams(_dbfile(d), new_teams)
+            if new_teams:                          # plan again now the teams are there (their entries were skipped)
+                p = dbsync.plan(st, meetdb.load(_dbfile(d)),
+                                dbsync.base_without_teams(info.get("entries_base"), st, {t.get("code") for t in new_teams}))
+            done += dbsync.apply(_dbfile(d), p)
             if done:
                 msg = "Brought the latest entry changes into the meet database: " + ", ".join(done)
                 _dblog(d, msg)

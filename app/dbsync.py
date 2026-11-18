@@ -129,6 +129,50 @@ def plan(st: dict, m: dict, base: dict | None) -> dict:
     return out
 
 
+def missing_teams(st: dict, m: dict) -> list:
+    """Teams in the entry files that the meet database doesn't have yet (a team's entries came in after the
+    database was built) -> their entry-file team records."""
+    have = {(t["abbr"] or "").upper() for t in m["teams"].values()} | {f"{t['abbr']}{no}".upper() for no, t in m["teams"].items()}
+    used = {s.get("team") for s in st["swimmers"].values()} | {e.get("team") for e in st["entries"] if not e.get("removed")}
+    return [t for code, t in (st.get("teams") or {}).items() if code in used and code.upper() not in have]
+
+
+def add_teams(db, teams: list) -> list[str]:
+    """Add teams to the meet database, each a copy of the first team's row (so every column Meet Manager
+    expects is filled) with this team's name, code and address."""
+    if not teams:
+        return []
+    rows = meetdb.read(db, ["Team"])["Team"]["rows"]
+    tmpl = dict(rows[0]) if rows else {}
+    nxt = max([r["Team_no"] for r in rows] + [0]) + 1
+    ops = []
+    for t in teams:
+        r = {k: v for k, v in tmpl.items() if v is not None}
+        for k in ("Team_head", "Team_asst", "Team_email", "Team_daytele", "Team_evetele", "Team_cell", "Team_faxtele",
+                  "Team_addr1", "Team_addr2", "Team_city", "Team_statenew", "Team_zip", "Team_short", "Team_altabbr", "Team_altname"):
+            r.pop(k, None)
+        r.update({"Team_no": nxt, "Team_abbr": (t.get("code") or "")[:5], "Team_name": (t.get("name") or t.get("code") or "")[:30],
+                  "Team_lsc": (t.get("lsc") or "")[:2] or None, "Team_cntry": t.get("country") or "USA"})
+        for k, col, n in (("short", "Team_short", 16), ("addr1", "Team_addr1", 30), ("addr2", "Team_addr2", 30),
+                          ("city", "Team_city", 30), ("state", "Team_statenew", 3), ("zip", "Team_zip", 10),
+                          ("phone", "Team_daytele", 20), ("email", "Team_email", 36)):
+            if t.get(k):
+                r[col] = str(t[k])[:n]
+        ops.append({"op": "insert", "table": "Team", "row": r})
+        nxt += 1
+    meetdb.apply(db, ops)
+    return [f"{len(teams)} new team(s) ({', '.join(t.get('code') or '' for t in teams)})"]
+
+
+def base_without_teams(base: dict | None, st: dict, codes: set) -> dict | None:
+    """The last-synced baseline minus the given teams' entries, so they count as new and are added."""
+    if not base:
+        return base
+    whos = {_who(st["swimmers"], k) for k, sw in st["swimmers"].items() if sw.get("team") in codes}
+    return {"ind": [g for g in base["ind"] if g.split("|", 1)[1] not in whos],
+            "rel": {k: v for k, v in base["rel"].items() if k.split("|")[1] not in codes}}
+
+
 def count(p: dict) -> int:
     return len(p["add_ind"]) + len(p["scr"]) + len(p["add_rel"]) + len(p["legs"])
 

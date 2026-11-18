@@ -23,7 +23,7 @@ header h1{font-size:18px;margin:0}
 nav{display:flex;gap:4px;margin-right:auto}
 nav button{background:transparent;color:var(--muted);border:1px solid transparent}
 nav button.on{color:var(--accent);border-color:var(--line);background:var(--bg)}
-main{max-width:1100px;margin:0 auto;padding:16px}
+main{max-width:1500px;margin:0 auto;padding:16px}
 section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
 h2{font-size:16px;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 h3{font-size:15px;margin:14px 0 6px}
@@ -74,7 +74,7 @@ th{color:var(--muted);font-weight:600}
 #tableSec .evgrid label.on{background:var(--ok-bg)}
 #tableSec .evgrid input[type=text]{width:72px;margin-left:auto}
 #tableSec .evgrid .sd{margin-left:auto;font:13px ui-monospace,monospace;color:var(--muted)}
-#tableSec .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:10px}
+#tableSec .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr));gap:10px}
 #tableSec .rc{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--card)}
 #tableSec .rc.bad{border-color:var(--err);box-shadow:0 0 0 1px var(--err)}
 #tableSec .rc.gone{opacity:.5}

@@ -2254,7 +2254,8 @@ OPS = {"dfs": meetdb.op_dfs, "scratch": meetdb.op_scratch, "scratch_athlete": me
        "seed": meetdb.op_seed, "result": meetdb.op_result, "delete": meetdb.op_delete, "add_entry": meetdb.op_add_entry,
        "athlete": meetdb.op_athlete, "add_athlete": meetdb.op_add_athlete, "team": meetdb.op_team, "legs": meetdb.op_legs,
        "heat_results": meetdb.op_heat_results, "watches": meetdb.op_watches, "dq": meetdb.op_dq, "undq": meetdb.op_undq, "meet": meetdb.op_meet,
-       "insert_heat": meetdb.op_insert_heat, "close_heats": meetdb.op_close_heats}
+       "insert_heat": meetdb.op_insert_heat, "close_heats": meetdb.op_close_heats,
+       "exh": meetdb.op_exh, "exh_athlete": meetdb.op_exh_athlete}
 
 
 _DQR = {}

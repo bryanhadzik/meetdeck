@@ -94,6 +94,12 @@ main{padding:12px;max-width:720px;margin:0 auto}
 .player{max-width:720px;margin:10px auto 0;width:calc(100% - 24px);scroll-margin-top:8px}
 .player .vid{position:relative;padding-top:56.25%;background:#000;border-radius:12px;overflow:hidden}
 .player iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.player .tap{position:absolute;inset:0;width:100%;border:0;cursor:pointer;color:#fff;font:inherit;
+  background:radial-gradient(120% 120% at 30% 20%,#0f6f80 0%,#0a3f4a 50%,#06171b 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+.player .tap .pl{width:64px;height:64px;border-radius:50%;background:#e5252a;display:flex;align-items:center;justify-content:center}
+.player .tap .pl::after{content:"";border-style:solid;border-width:13px 0 13px 22px;border-color:transparent transparent transparent #fff;margin-left:6px}
+.player .tap b{font-size:17px}.player .tap small{color:#bfe6ec;font-size:13px}
+.player .stop{display:block;margin:6px 0 0 auto;background:none;border:0;color:var(--mute);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline}
 footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
 .hide{display:none!important}
 </style>
@@ -181,19 +187,38 @@ function legsHtml(r) {
   return r.legs.split(", ").map(x => on.has(x.trim().toLowerCase()) ? `<span class="on">★ ${esc(x)}</span>` : esc(x)).join(", ");
 }
 
-// the live stream player above the results while OBS is streaming (muted autoplay; the iframe stays put across refreshes)
+// the live stream above the results while OBS is streaming. The player only loads when someone taps it
+// (the stream is paid by the minute watched), and "Stop watching" unloads it again.
+let WATCH = false;
 function player(u) {
   const w = $("#watch"), box = w.querySelector(".vid");
-  if (!u) { w.classList.add("hide"); if (box.firstChild) box.innerHTML = ""; return; }
-  const src = u + (u.includes("?") ? "&" : "?") + "autoplay=true&muted=true";
-  if (!box.firstChild || box.firstChild.getAttribute("src") !== src) {
-    const f = document.createElement("iframe");
-    f.src = src; f.title = "Live stream";
-    f.allow = "autoplay; fullscreen; picture-in-picture"; f.allowFullscreen = true;
-    box.replaceChildren(f);
-  }
+  if (!u) { WATCH = false; w.classList.add("hide"); box.innerHTML = ""; w.dataset.u = ""; return; }
   w.classList.remove("hide");
+  const src = u + (u.includes("?") ? "&" : "?") + "autoplay=true";
+  if (WATCH) {
+    if (!box.querySelector("iframe") || box.querySelector("iframe").getAttribute("src") !== src) {
+      const f = document.createElement("iframe");
+      f.src = src; f.title = "Live stream";
+      f.allow = "autoplay; fullscreen; picture-in-picture"; f.allowFullscreen = true;
+      box.replaceChildren(f);
+    }
+    if (!w.querySelector(".stop")) { const b = document.createElement("button"); b.className = "stop"; b.textContent = "Stop watching"; w.appendChild(b); }
+  } else if (!box.querySelector(".tap")) {
+    box.innerHTML = `<button class="tap" aria-label="Watch the live stream"><span class="pl"></span><b>Watch the live stream</b><small>Tap to start the video</small></button>`;
+    w.querySelector(".stop")?.remove();
+  }
+  w.dataset.u = u;
 }
+function watch(on) {
+  const w = $("#watch"); if (!w.dataset.u) return;
+  WATCH = on; player(w.dataset.u);
+  if (on) w.scrollIntoView({behavior: "smooth", block: "start"});
+}
+document.addEventListener("click", e => {
+  if (e.target.closest("#watch .tap")) { track("stream/watch-tap", "Watch the stream (player)"); watch(true); }
+  else if (e.target.closest("#watch .stop")) { track("stream/stop", "Stopped watching"); watch(false); }
+  else if (e.target.closest("#liveBtn")) { e.preventDefault(); watch(true); }
+});
 function render() {
   const m = D.meet || {};
   document.title = (m.name || "Swim") + " – results";
@@ -356,7 +381,7 @@ $("#share").addEventListener("click", () => {
     const h = a.getAttribute("href") || "";
     track(h.startsWith("sms:") ? (h.includes(encodeURIComponent("Watch")) ? "share/text-stream" : "share/text-results")
           : h.startsWith("mailto:") ? "share/email" : "stream/watch-from-share");
-    if (a.dataset.watch) el.remove();
+    if (a.dataset.watch) { ev.preventDefault(); el.remove(); watch(true); }
   });
   el.addEventListener("click", async ev => {
     const t = ev.target.closest("button"); if (!t) return;

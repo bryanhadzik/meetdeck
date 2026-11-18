@@ -931,22 +931,27 @@ function renderSwimmers() {
   const q = $("#swFind").value.trim().toLowerCase(), tf = +sel.value || 0;
   const list = Object.values(M.athletes).filter(a => (!tf || a.team === tf) && (!q || `${a.first} ${a.last} ${a.pref}`.toLowerCase().includes(q))).sort((a, b) => a.last.localeCompare(b.last) || a.first.localeCompare(b.first));
   const evs = no => M.entries.filter(e => (e.kind === "I" && e.ath === no) || (e.kind === "R" && e.legs.includes(no)));
-  $("#swList").innerHTML = `<table><tr><th>Swimmer</th><th>Team</th><th>Sex</th><th>Age</th><th>Yr</th><th>Events</th><th></th></tr>` + list.map(a => {
+  $("#swList").innerHTML = `<table><tr><th>Swimmer</th><th>Team</th><th>Sex</th><th>Age</th><th>Yr</th><th title="Exhibition: swims and gets a time and place, but scores no points (Meet Manager's Exh box on each of their entries)">Exh</th><th>Events</th><th></th></tr>` + list.map(a => {
     const es = evs(a.no), live = es.filter(e => !e.scr);
-    if (EDIT_SW === a.no) return `<tr class="edit"><td colspan="7"><div class="grid2">
+    const ind = es.filter(e => e.kind === "I" && !e.scr), nx = ind.filter(e => e.exh).length;
+    if (EDIT_SW === a.no) return `<tr class="edit"><td colspan="8"><div class="grid2">
       <label>First<input id="eFirst" value="${esc(a.first)}"></label><label>Last<input id="eLast" value="${esc(a.last)}"></label><label>Preferred<input id="ePref" value="${esc(a.pref)}"></label>
       <label>Team<select id="eTeam">${Object.values(M.teams).map(t => `<option value="${t.no}" ${t.no === a.team ? "selected" : ""}>${esc(t.abbr)}</option>`).join("")}</select></label>
       <label>Sex<select id="eSex"><option value="F" ${a.sex === "F" ? "selected" : ""}>F</option><option value="M" ${a.sex === "M" ? "selected" : ""}>M</option></select></label>
       <label>Age<input id="eAge" value="${a.age || ""}" size="3"></label><label>Year<select id="eYr">${["", "FR", "SO", "JR", "SR"].map(y => `<option ${y === a.yr ? "selected" : ""}>${y}</option>`).join("")}</select></label></div>
       <div class="row" style="margin-top:6px"><button class="small" id="eSave">Save</button><button class="ghost small" id="eCancel">Cancel</button></div></td></tr>`;
     return `<tr><td><b>${esc(a.last)}, ${esc(a.first)}</b>${a.pref ? ` <span class="muted">(${esc(a.pref)})</span>` : ""}</td><td>${esc(teamAbbr(a.team))}</td><td>${esc(a.sex)}</td><td>${a.age || ""}</td><td>${esc(a.yr)}</td>
-      <td>${es.map(e => `<span class="chip ${e.scr ? "x" : ""}">#${evOf(e.event)?.no}${e.kind === "R" ? " relay" : ""}</span>`).join("") || `<span class="muted">none</span>`}</td>
+      <td><input type="checkbox" data-exhsw="${a.no}" ${ind.length && nx === ind.length ? "checked" : ""} ${nx && nx < ind.length ? 'data-mixed="1"' : ""} ${ind.length ? "" : "disabled"}
+        title="Exhibition in all of their events: they swim and get a time, but score no points"></td>
+      <td>${es.map(e => `<span class="chip ${e.scr ? "x" : ""}"${e.exh ? ' title="exhibition"' : ""}>#${evOf(e.event)?.no}${e.kind === "R" ? " relay" : ""}${e.exh ? " exh" : ""}</span>`).join("") || `<span class="muted">none</span>`}</td>
       <td style="white-space:nowrap"><button class="ghost small" data-editsw="${a.no}">Edit</button>
         <button class="ghost small" data-relaysw="${a.no}" title="Put this swimmer on one of their team's relays">+ Relay</button>
         ${live.length ? `<button class="ghost small danger" data-scrsw="${a.no}" data-on="1" data-tip="${S.started ? TIP.pull : TIP.pullPre}">Pull from meet</button>`
           : es.length ? `<button class="ghost small" data-scrsw="${a.no}" data-on="0" data-tip="Put the swimmer back in the events they were pulled from (relay legs have to be put back by hand).">Put back</button>` : ""}</td></tr>`;
   }).map((row, i) => row + (RELAY_SW && list[i] && list[i].no === RELAY_SW ? relayPicker(list[i]) : "")).join("") + `</table>${list.length ? "" : `<div class="muted">No swimmers match.</div>`}`;
   relayPickerWire();
+  document.querySelectorAll("[data-exhsw][data-mixed]").forEach(x => { x.indeterminate = true; });   // some events exhibition, some not
+  document.querySelectorAll("[data-exhsw]").forEach(x => x.onchange = () => change("exh_athlete", {ath: +x.dataset.exhsw, on: x.checked}));
   if (EDIT_SW && $("#eSave")) {
     $("#eCancel").onclick = () => { EDIT_SW = null; renderSwimmers(); };
     $("#eSave").onclick = () => {

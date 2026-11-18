@@ -286,6 +286,39 @@ def op_scratch_athlete(m, ath, on=True):
     return ops, msg
 
 
+def _exh_set(m, e, on):
+    """Meet Manager keeps exhibition on each entry: Fin_exh (and Pre_exh for prelims) = "X"."""
+    ev = next((v for v in m["events"] if v["ptr"] == e["event"]), {}) or {}
+    s = {"Fin_exh": "X" if on else None}
+    if int(ev.get("rounds") or 1) > 1 or not on:
+        s["Pre_exh"] = "X" if on and int(ev.get("rounds") or 1) > 1 else None
+    return {"op": "update", "table": _table(e), "match": _match(e), "set": s}
+
+
+def op_exh(m, key, on=True):
+    """One entry swims exhibition (or not): it gets a time and a place in the heat but no points."""
+    e = find(m, key)
+    ops = [_exh_set(m, e, on)] + places_ops(m, e["event"], override={key: {**e, "exh": bool(on)}})
+    return ops, f"{who(m, e)} in {ev_label(m, e['event'])}: {'exhibition' if on else 'not exhibition'}"
+
+
+def op_exh_athlete(m, ath, on=True):
+    """A swimmer swims exhibition: every individual entry they have (Meet Manager has no swimmer-level flag;
+    it's the exhibition box on each of their entries). Relays keep their own setting."""
+    ath = int(ath)
+    ops, n, evs = [], 0, set()
+    for e in m["entries"]:
+        if e["kind"] == "I" and e["ath"] == ath and bool(e["exh"]) != bool(on):
+            ops.append(_exh_set(m, e, on))
+            n += 1
+            evs.add(e["event"])
+    over = {e["key"]: {**e, "exh": bool(on)} for e in m["entries"] if e["kind"] == "I" and e["ath"] == ath}
+    for ptr in evs:                           # places in races already swum follow
+        ops += places_ops(m, ptr, override=over)
+    a = m["athletes"][ath]
+    return ops, f"{a['first']} {a['last']}: {'exhibition' if on else 'not exhibition'} in {n} event(s)"
+
+
 def op_move(m, key, heat, lane):
     e = find(m, key)
     heat, lane = int(heat), int(lane)

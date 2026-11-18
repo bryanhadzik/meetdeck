@@ -1446,8 +1446,9 @@ function renderTable() {
   const evs = tbEvents("ind");
   $("#tbSwimmers").innerHTML = `<table><tr><th>Swimmer</th><th>Yr</th><th>Events</th><th title="individual / total (limits ${TD().rules.max_individual} / ${TD().rules.max_total})">Ind / total</th></tr>` + sws.map(s => {
     const es = swEntries(s.key), c = swCounts(s.key), open = TB.open === s.key;
-    const chips = es.map(e => `<span class="chip ${e.removed ? "x" : ""}">#${esc(e.event_no)}${e.kind === "relay" ? ` relay ${esc(e.relay)}` : ""}</span>`).join("") || `<span class="muted">no events</span>`;
-    let row = `<tr class="sw${badSw.has(s.key) ? " bad" : ""}${open ? " open" : ""}" data-tbsw="${esc(s.key)}" draggable="true" title="Click to change events, or drag onto a relay leg"><td><b>${esc(s.last)}, ${esc(s.pref || s.first)}</b> <span class="muted" style="font-size:12px">${esc(s.gender)}</span></td><td>${esc(s.class || s.age || "")}</td><td>${chips}</td>
+    const chips = es.map(e => `<span class="chip ${e.removed ? "x" : ""}"${e.exhibition ? ' title="exhibition"' : ""}>#${esc(e.event_no)}${e.kind === "relay" ? ` relay ${esc(e.relay)}` : ""}${e.exhibition && e.kind === "ind" ? " exh" : ""}</span>`).join("") || `<span class="muted">no events</span>`;
+    const ind = es.filter(e => e.kind === "ind" && !e.removed), nx = ind.filter(e => e.exhibition).length, exhAll = ind.length && nx === ind.length;
+    let row = `<tr class="sw${badSw.has(s.key) ? " bad" : ""}${open ? " open" : ""}" data-tbsw="${esc(s.key)}" draggable="true" title="Click to change events, or drag onto a relay leg"><td><b>${esc(s.last)}, ${esc(s.pref || s.first)}</b> <span class="muted" style="font-size:12px">${esc(s.gender)}</span>${exhAll ? ' <span class="chip" title="Exhibition swimmer: swims, gets a time, scores no points">exh</span>' : ""}</td><td>${esc(s.class || s.age || "")}</td><td>${chips}</td>
       <td class="cnt ${c.over ? "over" : ""}">${c.ind} / ${c.tot}</td></tr>`;
     if (!open) return row;
     const mineEv = evs.filter(v => !s.gender || gNorm(v.gender) === s.gender);
@@ -1462,12 +1463,15 @@ function renderTable() {
       return `<div class="leg"><span>#${esc(e.event_no)} ${esc(e.event)} <b>${esc(e.relay)}</b>, leg ${pos}</span> <button class="ghost small" data-tboff="${esc(e.id)}" data-sw="${esc(s.key)}">Remove from relay</button> <a href="#" data-tbrel="${esc(e.id)}" style="font-size:13px">open relay</a></div>`;
     }).join("");
     return row + `<tr><td colspan="4"><div class="ed">
+      <label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin-bottom:10px"><input type="checkbox" data-tbexh="${esc(s.key)}" ${exhAll ? "checked" : ""} ${nx && !exhAll ? 'data-mixed="1"' : ""} ${ind.length ? "" : "disabled"}>
+        <b>Exhibition swimmer</b> <span class="muted" style="font-size:12.5px">all of their events: they swim and get a time and place in the heat, but score no points (Meet Manager's Exh)</span></label>
       <div class="muted" style="font-size:12px;margin-bottom:4px">INDIVIDUAL EVENTS &mdash; check to enter, uncheck to drop</div><div class="evgrid">${grid || `<span class="muted">No individual events in this meet yet.</span>`}</div>
       <div class="muted" style="font-size:12px;margin:10px 0 4px">RELAYS</div>${rels || `<span class="muted" style="font-size:13px">Not on a relay yet.</span>`}${tbRelayPick(s, es)}
       <div class="row" style="margin-top:10px"><button class="ghost small danger" data-tbpull="${esc(s.key)}" data-tip="${TBTIP.pullPre}">Pull from the meet</button><span class="muted" style="font-size:12px">drops every event and takes them off their relays</span><span class="grow"></span>${M.has_db ? `<button class="ghost small" data-tbundo="1">Undo last change</button>` : ""}<button class="ghost small" data-tbclose="1">Close</button></div>
     </div></td></tr>`;
   }).join("") + `</table>` + (sws.length ? "" : `<div class="muted">No swimmers match.</div>`);
   tbRelayPickFill();
+  document.querySelectorAll("#tbSwimmers [data-tbexh][data-mixed]").forEach(x => { x.indeterminate = true; });
   // relays
   const allRels = TD().entries.filter(e => e.kind === "relay" && e.team === TB.team).sort((a, b) => (+a.event_no) - (+b.event_no) || (a.relay || "").localeCompare(b.relay || ""));
   // filter: one relay event, girls / boys, or relays with a problem / with an empty leg
@@ -1628,6 +1632,10 @@ document.addEventListener("change", async ev => {
     legs[+d.i] = t.value;
     if (TD() !== M) return tbDb("legs", {id: rel.id, legs}, rel.id);
     return tbCall(`/api/meets/${M.id}/relay-legs`, J("PUT", {id: rel.id, legs}), rel.id);
+  }
+  if (d.tbexh) {                    // exhibition swimmer: every individual event they swim
+    if (TD() !== M) return tbDb("exh", {swimmer: d.tbexh, on: t.checked});
+    return tbCall(`/api/meets/${M.id}/exhibition`, J("POST", {swimmer: d.tbexh, on: t.checked}));
   }
   if (d.tbev && TD() !== M) {
     const seed = document.querySelector(`#tableSec [data-tbseed="${CSS.escape(d.tbev)}"]`)?.value || "";

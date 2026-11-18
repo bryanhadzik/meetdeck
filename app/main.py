@@ -140,6 +140,9 @@ def _state(d: Path) -> dict:
                       "warnings": sc.get("warnings", [])})
     entries.extend(_added_entries(meta, swimmers))
     _apply_legs(meta, entries)
+    for e in entries:                       # Changes at the table: a swimmer marked exhibition (or not) for all their events
+        if e["kind"] == "ind" and e["swimmers"] and e["swimmers"][0] in meta.get("exh", {}):
+            e["exhibition"] = bool(meta["exh"][e["swimmers"][0]])
     valid_ids = {e["id"] for e in entries}
     removed = set(meta.get("removed", [])) & valid_ids
     rules = {**DEFAULT_RULES, **meta.get("rules", {})}
@@ -1149,6 +1152,8 @@ def table_op(mid: str, body: dict):
             ops, msg = meetdb.op_legs(m, body["id"], [ath_of(k) if k else None for k in (list(body.get("legs") or []) + [None] * 4)[:4]])
         elif op == "pull":
             ops, msg = meetdb.op_scratch_athlete(m, ath_of(body["swimmer"]), True)
+        elif op == "exh":
+            ops, msg = meetdb.op_exh_athlete(m, ath_of(body["swimmer"]), bool(body.get("on")))
         elif op == "relay_scratch":
             ops, msg = meetdb.op_scratch(m, body["id"], bool(body.get("on")))
         elif op == "add_relay":
@@ -1167,6 +1172,20 @@ def table_op(mid: str, body: dict):
         raise HTTPException(400, str(e).strip("'"))
     _db_apply(d, ops, msg)
     return _table_view(d)
+
+
+@app.post("/api/meets/{mid}/exhibition")
+def set_exhibition(mid: str, body: dict):
+    """Changes at the table (entry files): a swimmer swims exhibition in all their individual events, or not.
+    Goes into the meet database as Meet Manager's exhibition flag on each entry when it's built."""
+    d = _dir(mid)
+    key = body.get("swimmer", "")
+    if key not in _state(d)["swimmers"]:
+        raise HTTPException(400, "Unknown swimmer")
+    meta = _meta(d)
+    meta.setdefault("exh", {})[key] = bool(body.get("on"))
+    _save(d, meta)
+    return _state(d)
 
 
 @app.post("/api/meets/{mid}/pull-swimmer")

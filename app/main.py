@@ -2866,14 +2866,24 @@ def _stream_link() -> dict | None:
     return out
 
 
-def _public_doc(mid: str) -> dict:
+def _doc_sig(doc: dict, drop=()) -> str:
+    """What a page shows, as a short hash (times and the like that change on every build left out)."""
+    import hashlib
+    return hashlib.sha1(json.dumps({k: v for k, v in doc.items() if k not in drop}, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+
+PUB_VOLATILE = ("updated", "stream", "stats", "state_src")
+
+
+def _public_doc(mid: str, stream: bool = True) -> dict:
     d = _dir(mid)
     db = _dbfile(d)
     if not db.exists():
         raise HTTPException(400, "No meet database yet - open Run the meet first")
     _usc.refresh()
     doc = public_results.build(meetdb.load(db), _dbinfo(d).get("scoring"), _usc if _settings().get("usc_on", True) else None)
-    doc["stream"] = _stream_link()
+    if stream:
+        doc["stream"] = _stream_link()
     if _settings().get("goatcounter"):
         doc["stats"] = {"goatcounter": _settings()["goatcounter"]}
     doc["meet"]["id"] = mid
@@ -2889,6 +2899,9 @@ def _public_job(mid: str):
         raise RuntimeError("Add a GitHub token in Setup > Phone results first")
     doc = _public_doc(mid)
     out = public_results.publish(doc, st.get("public_repo") or public_results.DEFAULT_REPO, st["public_token"], st.get("public_domain", public_results.DEFAULT_DOMAIN))
+    meta = _meta(_dir(mid))                 # what went out, so Run the meet can say when the page is behind
+    meta["pub_sig"] = _doc_sig(doc, PUB_VOLATILE)
+    _save(_dir(mid), meta)
     _dblog(_dir(mid), f"Published phone results ({sum(1 for e in doc['events'] if e['rows'])} events) to {out['url']}", "export")
     return out
 
@@ -2966,8 +2979,15 @@ def public_status(mid: str):
     last = public_results.PUBLISHER.status.get(mid) or {}
     just = last.get("ok") and time.time() - last.get("ts", 0) < 180     # GitHub is still deploying it
     other = not just and bool(live) and (live.get("id") != mid if live.get("id") else (mine is not None and live.get("name", "") != mine))
+    changed = False
+    sent = _meta(_dir(mid)).get("pub_sig")
+    if sent and not other and not t:
+        try:
+            changed = _doc_sig(_public_doc(mid, stream=False), PUB_VOLATILE) != sent
+        except HTTPException:
+            pass
     return {"last": public_results.PUBLISHER.status.get(mid), "queued": bool(t), "auto": bool(st.get("public_auto")),
-            "token": bool(st.get("public_token")), "url": url, "live": live, "other_meet": other}
+            "token": bool(st.get("public_token")), "url": url, "live": live, "other_meet": other, "changed": changed}
 
 
 # ---- rules library ----
@@ -3341,7 +3361,28 @@ def meetboard_json(mid: str):
     """The start lists in meet-board's format. The database page posts this to the meet-board from the
     browser (the timing laptop is on the pool network even when MeetDeck runs on the server)."""
     doc = _meetboard_doc(mid)
-    return {**doc, "summary": meetboard.summary(doc)}
+    return {**doc, "summary": meetboard.summary(doc), "sig": _doc_sig(doc)}
+
+
+@app.post("/api/meets/{mid}/meetboard/sent")
+def meetboard_sent(mid: str, body: dict):
+    """The browser sent these start lists to the meet board: remember what went out."""
+    d = _dir(mid)
+    meta = _meta(d)
+    meta["mb_sig"] = str(body.get("sig") or "")[:32]
+    _save(d, meta)
+    return {"ok": True}
+
+
+@app.get("/api/meets/{mid}/meetboard/changed")
+def meetboard_changed(mid: str):
+    """Whether the start lists changed since they were last sent to the meet board."""
+    sent = _meta(_dir(mid)).get("mb_sig")
+    try:
+        now = _doc_sig(_meetboard_doc(mid))
+    except HTTPException:
+        return {"changed": False}
+    return {"changed": bool(sent) and sent != now, "sent": bool(sent)}
 
 
 @app.post("/api/meets/{mid}/meetboard/send")
@@ -3360,6 +3401,9 @@ def meetboard_send(mid: str):
         raise HTTPException(502, f"Can't reach the meet-board at {url} ({getattr(e, 'reason', e)})")
     except RuntimeError as e:
         raise HTTPException(502, f"meet-board: {e}")
+    meta = _meta(_dir(mid))
+    meta["mb_sig"] = _doc_sig(doc)
+    _save(_dir(mid), meta)
     return {**got, "summary": meetboard.summary(doc), "via": "server"}
 
 

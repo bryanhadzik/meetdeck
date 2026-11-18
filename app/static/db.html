@@ -88,6 +88,7 @@ tr.relaybad td{background:rgba(248,81,73,.10)} tr.relaybad td:first-child{box-sh
 .scr td.act{opacity:1;text-decoration:none}
 .badge{display:inline-block;font-size:11px;border-radius:9px;padding:0 6px;background:var(--bg);border:1px solid var(--line)}
 .badge.dq{background:var(--err-bg);color:var(--err);border-color:transparent}
+.badge.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn);font-weight:700}
 .badge.ok{color:#2ea043;border-color:#2ea043}.badge.bad{background:var(--err-bg);color:var(--err);border-color:transparent}
 .prow{display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:13px}.menu .pop .prow button{width:auto;flex:none;margin:0}.prow span{flex:1;white-space:nowrap}.prow select{font-size:12px}
 .mf{display:flex;flex-direction:column;gap:3px;font-size:13px;min-width:0}.mf span{color:var(--muted)}
@@ -468,7 +469,7 @@ async function mbSend(auto) {
   let doc, got, via = "";
   try {
     doc = await api(`/api/meets/${MID}/meetboard.json`);
-    const sum = doc.summary; delete doc.summary;
+    const sum = doc.summary, sig = doc.sig; delete doc.summary; delete doc.sig;
     if (!sum.events) throw new Error("no event has heats yet - seed the heats first (the yellow Not seeded note on each event), then send again");
     try {   // straight from this browser: it's the one on the pool network
       const r = await fetch(MB.url + "/api/startlists", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(doc)});
@@ -478,6 +479,8 @@ async function mbSend(auto) {
       if (e.fromBoard) throw e;
       got = await api(`/api/meets/${MID}/meetboard/send`, {method: "POST"}); via = " (sent by MeetDeck)";
     }
+    if (!via) api(`/api/meets/${MID}/meetboard/sent`, J({sig})).catch(() => {});
+    staleMark("mb", false);
     st.className = "badge ok"; st.textContent = "sent " + new Date().toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
     msg.textContent = `${sum.events} events, ${sum.heats} heats` + (sum.relays ? `, ${sum.relays_with_swimmers} of ${sum.relays} relays with swimmers' names` : "") + via +
       (sum.relays > sum.relays_with_swimmers ? " · relays without swimmers show the team name only" : "");
@@ -1215,7 +1218,9 @@ async function pubStatus() {
     st.className = "badge " + (p.last && !p.last.ok ? "no" : "ok");
     st.textContent = p.queued ? "update queued" : p.last ? (p.last.ok ? "published " + p.last.at : "failed") : p.auto ? "auto" : "manual";
     $("#pubMsg").textContent = p.last && !p.last.ok ? p.last.error : p.queued ? "The next update goes out within a minute." : p.auto ? "Publishes by itself after each scored race." : "";
-    staleMark("pub", p.other_meet && !p.queued, p.live ? `Phones are showing another meet: ${p.live.name || "?"}${p.live.date ? " (" + p.live.date + ")" : ""}. Publish to switch them to this one.` : "");
+    if (p.other_meet && !p.queued) staleMark("pub", true, p.live ? `Phones are showing another meet: ${p.live.name || "?"}${p.live.date ? " (" + p.live.date + ")" : ""}. Publish to switch them to this one.` : "");
+    else staleMark("pub", p.changed, "Something changed since the last publish (entries, heats, teams or results) - phones still show the old version. Press Publish now.");
+    if (p.changed) { st.className = "badge warn"; st.textContent = "out of date"; }
   } catch (e) {}
 }
 // red box + pulsing button when the board / phone page still has an older meet
@@ -1233,7 +1238,11 @@ async function mbCheck() {
     const name = (M && M.meet && M.meet.name) || "";
     const other = g.meet && g.meet.id ? g.meet.id !== MID
       : !!g.schedule && !(name && g.schedule.includes(name));
-    staleMark("mb", other, `The meet board has another meet loaded${g.meet && g.meet.name ? ": " + g.meet.name : g.schedule ? " (" + g.schedule + ")" : ""}. Send start lists to switch it to this one.`);
+    if (other) return staleMark("mb", true, `The meet board has another meet loaded${g.meet && g.meet.name ? ": " + g.meet.name : g.schedule ? " (" + g.schedule + ")" : ""}. Send start lists to switch it to this one.`);
+    const c = await api(`/api/meets/${MID}/meetboard/changed`);
+    if (c.changed && MB.auto) { staleMark("mb", false); return mbSend(true); }      // auto: just send the new start lists
+    staleMark("mb", c.changed, "The start lists changed since they were sent (entries, heats or teams) - the meet board still shows the old ones. Press Send start lists.");
+    if (c.changed) { $("#mbState").className = "badge warn"; $("#mbState").textContent = "out of date"; }
   } catch (e) { /* can't reach the board from here: leave it */ }
 }
 $("#pubSend").onclick = async () => {

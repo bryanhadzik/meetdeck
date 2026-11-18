@@ -1008,8 +1008,8 @@ def _sync_db(d: Path) -> str | None:
     info = _dbinfo(d)
     info["entries_base"] = dbsync.baseline(dbsync.entry_sigs(st))
     (_dbdir(d) / "info.json").write_text(json.dumps(info))
-    try:
-        placed = _push_seeding(d)             # new entries (and a database built before seeding) get their heats
+    try:                                   # new entries (and a database built before seeding) get their heats; when
+        placed = _push_seeding(d, only_unplaced=not msg)   # entries came in, Seeding re-did the heats: follow it
     except Exception as x:
         print("seeding to db:", x)
         placed = None

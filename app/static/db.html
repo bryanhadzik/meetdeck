@@ -112,6 +112,9 @@ tr.relaybad td{background:rgba(248,81,73,.10)} tr.relaybad td:first-child{box-sh
 .pill{display:inline-block;font-size:11px;font-weight:600;border-radius:9px;padding:0 7px;line-height:17px;white-space:nowrap}
 .pill.none{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
 .pill.prog{background:var(--warn-bg);color:var(--warn)}
+.pill.unseeded{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn)}
+.unseeded-note{border:1px solid var(--warn);border-left-width:4px;border-radius:8px;padding:10px 12px;margin:8px 0;background:var(--warn-bg);color:var(--warn)}
+.unseeded-note b{color:var(--warn)}
 .pill.timed{background:var(--ok-bg);color:var(--ok)}
 .pill.scored{background:var(--accent);color:var(--accent-ink)}
 .pill.stale{background:var(--err-bg);color:var(--err)}
@@ -466,6 +469,7 @@ async function mbSend(auto) {
   try {
     doc = await api(`/api/meets/${MID}/meetboard.json`);
     const sum = doc.summary; delete doc.summary;
+    if (!sum.events) throw new Error("no event has heats yet - seed the heats first (the yellow Not seeded note on each event), then send again");
     try {   // straight from this browser: it's the one on the pool network
       const r = await fetch(MB.url + "/api/startlists", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(doc)});
       got = await r.json().catch(() => ({}));
@@ -485,6 +489,12 @@ async function mbSend(auto) {
   } finally { MB.busy = false; mbShow(); }
 }
 $("#mbSend").onclick = () => mbSend(false);
+document.addEventListener("click", async e => {        // "Not seeded" note: take the heats from Setup > Seeding
+  const b = e.target.closest("[data-applyseed]"); if (!b) return;
+  b.disabled = true;
+  try { S = await api(`/api/meets/${MID}/db/apply-seeding`, J(b.dataset.applyseed === "all" ? {} : {ptrs: [+b.dataset.applyseed]})); toast(S.applied); show(); }
+  catch (x) { toast(x.message); b.disabled = false; }
+});
 $("#mbAuto").onchange = async () => {
   try { const st = await api("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({meetboard_auto: $("#mbAuto").checked})}); MB.auto = !!st.meetboard_auto; MB.sig = mbSig(); }
   catch (e) { toast(e.message); }
@@ -556,9 +566,11 @@ function eventState(v) {
   const any = act.some(resolved);
   const sc = S.scoring || {}, sig = (sc.sigs || {})[v.ptr], scoredNow = sig && sig === (S.event_sigs || {})[v.ptr];
   const status = timed && scoredNow ? "scored" : timed && sig ? "stale" : timed ? "timed" : any ? "prog" : "none";
-  const label = {scored: "Scored", stale: "Rescore", timed: "Timed", prog: `${doneHeats} of ${heats.length} heat${heats.length > 1 ? "s" : ""}`, none: "Not started"}[status];
+  const unseeded = evEntries(v.ptr).filter(e => !e.scr && (!e.heat || !e.lane)).length;
+  const label = status === "none" && unseeded ? (heats.length ? `${unseeded} not in a heat` : "Not seeded")
+    : {scored: "Scored", stale: "Rescore", timed: "Timed", prog: `${doneHeats} of ${heats.length} heat${heats.length > 1 ? "s" : ""}`, none: "Not started"}[status];
   const bad = evEntries(v.ptr).filter(e => relayIssues(e).length).length;
-  return {heats, doneHeats, status, label, dq, ns, placed, pts, entered: act.length, bad};
+  return {heats, doneHeats, status: status === "none" && unseeded ? "unseeded" : status, label, dq, ns, placed, pts, entered: act.length + unseeded, bad, unseeded};
 }
 function renderEvents() {
   if (!EV || !evOf(EV)) EV = M.events[0]?.ptr;
@@ -567,7 +579,7 @@ function renderEvents() {
   const listTop = $("#evlist").scrollTop;           // keep the event list where it was
   $("#evlist").innerHTML = `<div class="legend"><span><span class="pill timed">${tally("timed") + tally("scored") + tally("stale")}</span> timed</span>
       <span><span class="pill scored">${tally("scored")}</span> scored</span><span><span class="pill prog">${tally("prog")}</span> in progress</span>
-      <span><span class="pill none">${tally("none")}</span> not started</span>${tally("stale") ? `<span><span class="pill stale">${tally("stale")}</span> changed since scoring</span>` : ""}</div>` +
+      <span><span class="pill none">${tally("none")}</span> not started</span>${tally("unseeded") ? `<span><span class="pill unseeded">${tally("unseeded")}</span> not seeded</span>` : ""}${tally("stale") ? `<span><span class="pill stale">${tally("stale")}</span> changed since scoring</span>` : ""}</div>` +
     M.events.map((v, i) => {
       const st = states[i];
       const extra = [st.bad ? `<b style="color:var(--err)" title="A relay has a scratched swimmer or an open leg">&#9888; relay</b>` : "", st.dq ? `${st.dq} DQ` : "", st.ns ? `${st.ns} NS` : ""].filter(Boolean).join(" · ");
@@ -836,6 +848,14 @@ function renderEvent() {
   let html = `<div class="row" style="justify-content:flex-end;margin-bottom:6px;font-size:13px"><label>Timers per lane <select id="timersSel" title="How many timers work each lane at this meet"><option value="1" ${TIMERS() === 1 ? "selected" : ""}>1 timer</option><option value="2" ${TIMERS() === 2 ? "selected" : ""}>2 timers</option></select></label></div>
     <div class="row" style="margin-bottom:4px"><h2 style="margin:0">Event ${v.no} &nbsp;${esc(v.label)}</h2><span class="pill ${eventState(v).status}">${eventState(v).label}</span><span class="muted">${act.length} entered${scr.length ? ` · ${scr.length} scratched` : ""}${v.day > 1 ? ` · day ${v.day}` : ""}</span>
     <span class="grow"></span>${scoreBtn(v)}<button class="ghost small${MOVING ? " on" : ""}" id="moveBtn" title="Heats and lanes are locked so they can't be changed by accident">${MOVING ? "Done moving" : "Move swimmers"}</button><button class="ghost small" id="addEntryBtn">Add entry</button></div><div id="addEntry" class="hidden"></div>`;
+  if (unseeded.length && !S.started) {
+    const n = unseeded.filter(e => !e.heat).length, what = v.ind_rel === "R" ? `relay${n !== 1 ? "s" : ""}` : `swimmer${n !== 1 ? "s" : ""}`;
+    const all = M.events.filter(x => evEntries(x.ptr).some(e => !e.scr && (!e.heat || !e.lane))).length;
+    html += `<div class="unseeded-note">&#9888; <b>${heats.length ? `${n} ${what} not in a heat` : "Not seeded"}</b> &mdash;
+      ${heats.length ? `they have no heat or lane yet` : `the ${what} below ${n !== 1 ? "have" : "has"} no heat or lane yet`}, so ${heats.length ? "they" : "this event"} can't be raced or sent to the meet board.
+      <div class="row" style="margin-top:8px;gap:6px"><button class="small" data-applyseed="${v.ptr}">Use the heats from Seeding</button>${all > 1 ? `<button class="small" data-applyseed="all">Use them for all ${all} events</button>` : ""}
+      <span class="muted" style="font-size:12.5px">or place them by hand with Move swimmers</span></div></div>`;
+  }
   const topHeat = Math.max(0, ...heats);
   const gaps = Array.from({length: topHeat}, (_, i) => i + 1).filter(h => !heats.includes(h));
   if (gaps.length) html += `<div class="issue" style="margin:6px 0">Heat ${gaps.join(", ")} ${gaps.length > 1 ? "are" : "is"} empty. Move swimmers into ${gaps.length > 1 ? "them" : "it"}, or <button class="ghost small" data-closeheats="${v.ptr}">Remove empty heats</button> to renumber.</div>`;
@@ -856,7 +876,7 @@ function renderEvent() {
     const nh = Math.max(0, ...heats) + 1;
     html += `<div class="heat newheat"><h3>New heat ${nh} <span class="muted" style="font-weight:400;font-size:12.5px">&middot; drag a swimmer here to start another heat</span></h3><table>${head}${Array.from({length: lanes}, (_, i) => row(null, i + 1, nh)).join("")}</table></div>`;
   }
-  if (unseeded.length) html += `<div class="heat"><h3>Not in a heat yet ${MOVING ? "" : '<span class="muted" style="font-weight:400;font-size:12.5px">&middot; press Move swimmers to place them</span>'}</h3><table>${head}${unseeded.filter(e => !e.heat).map(e => row(e)).join("")}</table></div>`;
+  if (unseeded.length) html += `<div class="heat"><h3 style="color:var(--warn)">&#9888; Not in a heat yet ${MOVING ? "" : '<span class="muted" style="font-weight:400;font-size:12.5px">&middot; press Move swimmers to place them</span>'}</h3><table>${head}${unseeded.filter(e => !e.heat).map(e => row(e)).join("")}</table></div>`;
   if (scr.length) html += `<div class="heat"><h3>Dropped / pulled from the meet</h3><table>${head}${scr.map(e => row(e)).join("")}</table></div>`;
   $("#evDetail").innerHTML = html;
   $("#addEntryBtn").onclick = () => addEntryForm(v);

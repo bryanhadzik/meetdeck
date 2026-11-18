@@ -751,6 +751,10 @@ def seed_move(mid: str, body: dict):
                 moves.pop(other, None)
     meta["seed_moves"] = moves
     _save(d, meta)
+    try:
+        _push_seeding(d, only_unplaced=False)
+    except Exception as x:
+        print("seeding to db:", x)
     return _state(d)
 
 
@@ -796,6 +800,11 @@ def put_state(mid: str, body: dict):
     if changed:
         _setup_history_push(d, before, changed)
     _save(d, meta)
+    if set(changed) & {"preseed", "min_heat", "strict_lanes", "lane_mode", "lane_draw", "lanes", "combine", "combine_low", "removed", "seed_moves"}:
+        try:                                    # seeding changed: the meet database follows (until the meet starts)
+            _push_seeding(d, only_unplaced=False)
+        except Exception as x:
+            print("seeding to db:", x)
     return _state(d)
 
 
@@ -998,6 +1007,74 @@ def _sync_db(d: Path) -> str | None:
         return None
     info = _dbinfo(d)
     info["entries_base"] = dbsync.baseline(dbsync.entry_sigs(st))
+    (_dbdir(d) / "info.json").write_text(json.dumps(info))
+    try:
+        placed = _push_seeding(d)             # new entries (and a database built before seeding) get their heats
+    except Exception as x:
+        print("seeding to db:", x)
+        placed = None
+    return "; ".join(x for x in (msg, placed) if x) or None
+
+
+def _push_seeding(d: Path, ptrs=None, only_unplaced=True) -> str | None:
+    """Put the heats and lanes from Setup > Seeding into the meet database.
+    only_unplaced: just the entries with no heat or lane yet (e.g. added by the entries sync, or a database built
+    before Seed heats was clicked). Otherwise every entry of the given events (all when ptrs is None) moves to its
+    Seeding heat and lane. Events that have results are never touched; neither is a meet that has started."""
+    import dbsync, reseed
+    db = _dbfile(d)
+    if not db.exists() or _jet3(db):
+        return None
+    m = meetdb.load(db)
+    if _meet_started(m):
+        return None
+    st = _state(d)
+    if not st.get("preseed"):
+        return None
+    cl = {**st.get("seed_lanes", {}), **st.get("combo_lanes", {})}
+    sw = st["swimmers"]
+    want = {}                                   # (event no, who | team|ltr) -> (heat, lane)
+    for e in st["entries"]:
+        if e.get("removed") or e["id"] not in cl:
+            continue
+        if e["kind"] == "ind":
+            if e["swimmers"]:
+                want[(str(e["event_no"]), dbsync._who(sw, e["swimmers"][0]))] = tuple(cl[e["id"]])
+        else:
+            want[(str(e["event_no"]), "%s|%s" % (e["team"], e.get("relay") or "A"))] = tuple(cl[e["id"]])
+    evno = {v["ptr"]: f"{v['no']}{v.get('ltr') or ''}" for v in m["events"]}
+    abbr = {no: (t or {}).get("abbr", "") for no, t in m["teams"].items()}
+    ath = {no: "%s|%s" % ((a["last"] or "").strip().lower(), (a["first"] or "").strip().lower()) for no, a in m["athletes"].items()}
+    ops, moved, events = [], 0, set()
+    for v in m["events"]:
+        ptr = v["ptr"]
+        if (ptrs is not None and ptr not in ptrs) or reseed.swum(m, ptr):
+            continue
+        act = [e for e in m["entries"] if e["event"] == ptr and not e["scr"]]
+        key = lambda e: (evno[ptr], ath.get(e.get("ath"), "") if e["kind"] == "I" else "%s|%s" % (abbr.get(e.get("team"), ""), e.get("ltr") or "A"))
+        todo = [e for e in act if key(e) in want and (not only_unplaced or not e.get("heat") or not e.get("lane"))]
+        movers = {e["key"] for e in todo}
+        taken = {(e["heat"], e["lane"]) for e in act if e["key"] not in movers and e.get("heat") and e.get("lane")}
+        for e in todo:
+            hl = want[key(e)]
+            if hl in taken or (e.get("heat"), e.get("lane")) == hl:
+                continue
+            taken.add(hl)
+            ops.append({"op": "update", "table": meetdb._table(e), "match": meetdb._match(e), "set": {"Fin_heat": hl[0], "Fin_lane": hl[1]}})
+            moved += 1
+            events.add(ptr)
+    if not ops:
+        return None
+    msg = f"Heats and lanes from Seeding put into the meet database: {moved} entr{'ies' if moved != 1 else 'y'} in {len(events)} event{'s' if len(events) != 1 else ''}"
+    _snapshot(d, "before: " + msg)
+    meetdb.apply(db, ops)
+    _dblog(d, msg)
+    m = meetdb.load(db)
+    info = _dbinfo(d)
+    base = info.get("seed_base") or {}
+    for ptr in events:                          # these heats count as seeded (no re-seed prompt)
+        base[str(ptr)] = reseed.sig(m, ptr)
+    info["seed_base"] = base
     (_dbdir(d) / "info.json").write_text(json.dumps(info))
     return msg
 
@@ -2381,6 +2458,21 @@ def db_reseed(mid: str, body: dict):
     return db_get(mid)
 
 
+@app.post("/api/meets/{mid}/db/apply-seeding")
+def db_apply_seeding(mid: str, body: dict):
+    """Use the heats and lanes from Setup > Seeding for these events (ptrs; all when left out)."""
+    d = _dir(mid)
+    if not _state(d).get("preseed"):
+        raise HTTPException(400, "The heats aren't seeded yet: open Set up meet > Seeding and click Seed heats")
+    if _meet_started(meetdb.load(_dbfile(d))):
+        raise HTTPException(409, STARTED_MSG)
+    ptrs = body.get("ptrs")
+    msg = _push_seeding(d, [int(x) for x in ptrs] if ptrs else None, only_unplaced=False)
+    out = db_get(mid)
+    out["applied"] = msg or "Already matches Seeding"
+    return out
+
+
 @app.post("/api/meets/{mid}/db/reseed/ok")
 def db_reseed_ok(mid: str, body: dict):
     """Leave an event as it is: its current heats count as seeded."""
@@ -3258,6 +3350,9 @@ def meetboard_send(mid: str):
     if not url:
         raise HTTPException(400, "Set the meet-board address in Setup first")
     doc = _meetboard_doc(mid)
+    if not doc.get("events"):
+        raise HTTPException(400, "No event has heats yet, so there's nothing to send. Seed the heats first (Run the meet: "
+                                 "the yellow Not seeded note on an event), then send again.")
     try:
         got = meetboard.send(url, doc)
     except OSError as e:

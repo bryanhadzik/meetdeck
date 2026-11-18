@@ -425,9 +425,13 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <button class="small" id="sPubSave">Save</button><span class="muted" id="sPubMsg" style="font-size:13px"></span></div>
     <div class="muted" style="font-size:12.5px;margin-top:4px">Token: GitHub &rarr; Settings &rarr; Developer settings &rarr; Fine-grained tokens &rarr; only this repository,
       permission <b>Contents: read and write</b>. It stays on this computer.</div>
+    <div class="row" style="margin-top:8px"><label>Live stream player <input id="sStream" placeholder="https://…/iframe" style="width:420px" autocomplete="off"></label>
+      <button class="small" id="sStreamSave">Save</button><span class="muted" id="sStreamMsg" style="font-size:13px"></span></div>
+    <div class="muted" style="font-size:12.5px;margin-top:4px">The embed (iframe) address of the stream player. The phone page shows it above the results while OBS is streaming.
+      Blank = the Pratt Cloudflare Stream player. Never paste a stream key here.</div>
     <div class="row" style="margin-top:8px"><label>Visit stats (GoatCounter code) <input id="sGc" placeholder="prattswim" style="width:160px" autocomplete="off"></label>
       <button class="small" id="sGcSave">Save</button><a id="sGcLink" target="_blank" rel="noopener" style="font-size:13px"></a><span class="muted" id="sGcMsg" style="font-size:13px"></span></div>
-    <div class="muted" style="font-size:12.5px;margin-top:4px">Counts visits, stars (per swimmer), opened events, searches, shares and stream/YouTube taps on the phone page.
+    <div class="muted" style="font-size:12.5px;margin-top:4px">Counts visits, stars (per swimmer), opened events, searches, shares and stream taps on the phone page.
       No cookies or personal details. Free account at goatcounter.com; takes effect at the next publish.</div>
     <label class="row" style="margin-top:6px;font-size:13.5px"><input type="checkbox" id="sPubAuto"> Publish automatically after each scored race</label>
     <div class="row" style="margin-top:4px;font-size:13.5px">Spectators go to: <a id="sPubUrl" target="_blank" rel="noopener"></a></div>
@@ -668,6 +672,7 @@ async function loadSetup() {
   $("#sPubAuto").checked = !!SET.public_auto;
   $("#sDbg").checked = !!SET.debug_tools;
   $("#sGc").value = SET.goatcounter || "";
+  $("#sStream").value = SET.stream_url || "";
   $("#sGcLink").textContent = SET.goatcounter ? " open stats" : ""; $("#sGcLink").href = SET.goatcounter ? `https://${SET.goatcounter}.goatcounter.com` : "#";
   $("#sPubUrl").textContent = $("#sPubUrl").href = SET.public_url || "";
   $("#sWriteState").innerHTML = !SET.drive_folder ? `<span class="muted">Save the folder first.</span>` : SET.drive_write ? `<span class="badge ok">Set up</span> <span class="muted" style="font-size:13px">Backups you download are also filed into Drive.</span>` : `<span class="badge no">Not set up</span>`;
@@ -959,6 +964,11 @@ $("#sMbAuto").onchange = async () => {
 $("#sDbg").onchange = async e => {
   try { SET = await api("/api/settings", J("PUT", {debug_tools: e.target.checked})); $("#sDbgMsg").textContent = SET.debug_tools ? "On - reload the meet page to see them" : "Off"; }
   catch (x) { $("#sDbgMsg").textContent = x.message; }
+};
+$("#sStreamSave").onclick = async () => {
+  try { SET = await api("/api/settings", J("PUT", {stream_url: $("#sStream").value})); $("#sStream").value = SET.stream_url || "";
+    $("#sStreamMsg").textContent = " Saved - phones get it at the next publish"; }
+  catch (e) { $("#sStreamMsg").textContent = e.message; }
 };
 $("#sGcSave").onclick = async () => {
   try { SET = await api("/api/settings", J("PUT", {goatcounter: $("#sGc").value})); $("#sGcMsg").textContent = " Saved - phones count from the next publish";

@@ -63,12 +63,18 @@ def _write_settings(st: dict):
     os.replace(tmp, SETTINGS)        # all-or-nothing, so a crash can't leave an empty file
 
 
+# The live stream player shown on the phone page while OBS is streaming (one setting: change it in Setup to switch platforms)
+DEFAULT_STREAM_URL = "https://customer-1zhj64jhwa95o9th.cloudflarestream.com/1ffbfff5a9a1afdf13e1c17059eb5a65/iframe"
+
+
 def _settings() -> dict:
     try:
         s = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
     except ValueError:          # half-written file (PC switched off mid-save): start from defaults
         s = {}
     s.setdefault("season", season_of())
+    if not s.get("stream_url"):
+        s["stream_url"] = DEFAULT_STREAM_URL
     s.setdefault("time_tolerance", 0.30)   # seconds: pad / backup / timers differing by more than this is highlighted
     return s
 
@@ -337,6 +343,11 @@ def put_settings(body: dict):
         st["public_auto"] = bool(body["public_auto"])
     if "debug_tools" in body:
         st["debug_tools"] = bool(body["debug_tools"])
+    if "stream_url" in body:             # the stream player's address (blank = the default Cloudflare Stream player)
+        su = str(body["stream_url"] or "").strip()
+        if su and not re.fullmatch(r"https://[^\s\"'<>]+", su):
+            raise HTTPException(400, "Enter the stream player's https:// address")
+        st["stream_url"] = su or DEFAULT_STREAM_URL
     if "goatcounter" in body:
         # GoatCounter site code for the phone page's visit stats: "prattswim" or its whole address
         gc = (body["goatcounter"] or "").strip().lower().removeprefix("https://").removeprefix("http://").split(".goatcounter.com")[0].strip("/")
@@ -2743,19 +2754,23 @@ def statecoach_set(body: dict):
 
 
 def _stream_link() -> dict | None:
-    """The meet's live stream (YouTube channel /live link + whether OBS is streaming), from the meet-board."""
-    url = _settings().get("meetboard_url")
+    """The meet's live stream for the phone page: the player address (the stream_url setting) and whether
+    OBS is streaming right now (from the meet-board). Off when the meet-board has streaming turned off."""
+    st = _settings()
+    out = {"url": st.get("stream_url") or DEFAULT_STREAM_URL, "live": False}
+    url = st.get("meetboard_url")
     if not url:
-        return None
+        return out
     try:
         import urllib.request
         with urllib.request.urlopen(url.rstrip("/") + "/api/stream_link", timeout=3) as r:
             j = json.loads(r.read())
         if j.get("off"):
-            return {"off": True}             # meet-board: streaming turned off - no stream or YouTube on the page
-        return {"url": j["url"], "live": bool(j.get("live"))} if j.get("url") else None
+            return {"off": True}             # meet-board: streaming turned off - no stream on the page
+        out["live"] = bool(j.get("live"))
     except Exception:
-        return None
+        pass
+    return out
 
 
 def _public_doc(mid: str) -> dict:
@@ -2792,6 +2807,36 @@ def _public_auto(mid: str):
             public_results.PUBLISHER.request(mid, lambda: _public_job(mid))
         except Exception as x:
             print("public results:", x)
+
+
+def _stream_watch():
+    """Re-publish the phone page when OBS starts or stops streaming, so the player shows up (or goes away)
+    without waiting for the next scored race. Uses the meet published most recently (or the one on the site)."""
+    prev = None
+    while True:
+        time.sleep(30)
+        try:
+            st = _settings()
+            if not (st.get("public_auto") and st.get("public_token") and st.get("meetboard_url")):
+                prev = None
+                continue
+            s = _stream_link() or {}
+            now = bool(s.get("live")) and not s.get("off")
+            if prev is not None and now != prev:
+                last = public_results.PUBLISHER.last
+                mid = max(last, key=last.get) if last and time.time() - max(last.values()) < 12 * 3600 else None
+                if not mid:
+                    url = public_results.site_url(st.get("public_repo") or public_results.DEFAULT_REPO, st.get("public_domain", public_results.DEFAULT_DOMAIN))
+                    mid = (public_results.live_meet(url) or {}).get("id")
+                if mid and _dir(mid).exists():
+                    print("stream", "started" if now else "stopped", "- publishing phone results")
+                    _public_auto(mid)
+            prev = now
+        except Exception as x:
+            print("stream watch:", x)
+
+
+threading.Thread(target=_stream_watch, daemon=True).start()
 
 
 @app.get("/api/meets/{mid}/public/results.json")

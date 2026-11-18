@@ -91,10 +91,9 @@ main{padding:12px;max-width:720px;margin:0 auto}
 .sl b{color:var(--ink);font-variant-numeric:tabular-nums}
 .sl div+div{margin-top:3px}
 .empty{padding:28px 16px;text-align:center;color:var(--mute)}
-.ytl a{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--line);color:var(--ink);text-decoration:none}
-.ytl .dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto}
-.ytl .nm{flex:1;font-weight:600}.ytl .nm small{display:block;font-weight:400;color:var(--mute)}
-.ytl .sub{background:#e5252a;color:#fff;border-radius:99px;padding:4px 12px;font-size:13px;font-weight:700}
+.player{max-width:720px;margin:10px auto 0;width:calc(100% - 24px);scroll-margin-top:8px}
+.player .vid{position:relative;padding-top:56.25%;background:#000;border-radius:12px;overflow:hidden}
+.player iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
 .hide{display:none!important}
 </style>
@@ -104,14 +103,12 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
   <button class="share" id="share" aria-label="Send this page to someone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 3v13"/><path d="m7 8 5-5 5 5"/></svg>Share</button>
   <h1 id="mname">Swim results</h1>
   <div class="sub" id="msub">Loading…</div>
-  <a class="live hide" id="liveBtn" target="_blank" rel="noopener">LIVE &middot; Watch the stream</a>
+  <a class="live hide" id="liveBtn" href="#watch">LIVE &middot; Watch the stream</a>
   <div class="bar"><input id="q" type="search" placeholder="Find a swimmer or team" autocomplete="off" enterkeyhint="search"><button id="mine" title="Show only swimmers you starred">★ Mine</button></div>
 </header>
 <div class="hint" id="hint" hidden><span class="big">☆</span><span><b>Follow your swimmer</b>Tap the ☆ next to their name. Then ★ Mine shows just their events, relays included.</span><button id="hintX" aria-label="close">✕</button></div>
+<section class="player hide" id="watch" aria-label="Live stream"><div class="vid"></div></section>
 <main id="main"><div class="empty">Loading results…</div></main>
-<section class="card" id="yt" style="max-width:720px;margin:0 auto 10px;width:calc(100% - 24px)"><h2>Watch &amp; follow on YouTube</h2>
-  <div style="padding:2px 14px 12px;font-size:14px;color:var(--mute)">Every meet streams on the pool's channel. Each school has a playlist of its meets there.</div>
-  <div class="ytl"></div></section>
 <footer id="foot">Updates on its own every 30 seconds. ▼ = time dropped from the seed time, ▲ = added.</footer>
 <script>
 const $ = s => document.querySelector(s);
@@ -184,15 +181,28 @@ function legsHtml(r) {
   return r.legs.split(", ").map(x => on.has(x.trim().toLowerCase()) ? `<span class="on">★ ${esc(x)}</span>` : esc(x)).join(", ");
 }
 
+// the live stream player above the results while OBS is streaming (muted autoplay; the iframe stays put across refreshes)
+function player(u) {
+  const w = $("#watch"), box = w.querySelector(".vid");
+  if (!u) { w.classList.add("hide"); if (box.firstChild) box.innerHTML = ""; return; }
+  const src = u + (u.includes("?") ? "&" : "?") + "autoplay=true&muted=true";
+  if (!box.firstChild || box.firstChild.getAttribute("src") !== src) {
+    const f = document.createElement("iframe");
+    f.src = src; f.title = "Live stream";
+    f.allow = "autoplay; fullscreen; picture-in-picture"; f.allowFullscreen = true;
+    box.replaceChildren(f);
+  }
+  w.classList.remove("hide");
+}
 function render() {
   const m = D.meet || {};
   document.title = (m.name || "Swim") + " – results";
   $("#mname").textContent = m.name || "Swim results";
   $("#msub").textContent = sub();
   const lb = $("#liveBtn"), st = D.stream;
-  { const yt = $("#yt"); if (yt) yt.classList.toggle("hide", !!(st && st.off)); }    // streaming turned off
-  lb.classList.toggle("hide", !(st && st.url && st.live));
-  if (st && st.url) lb.href = st.url;
+  const live = !!(st && st.url && st.live && !st.off);
+  lb.classList.toggle("hide", !live);
+  player(live ? st.url : "");
   const q = $("#q").value.trim().toLowerCase();
   const out = [];
   // meet order: event 1, 2, 3 ... (the latest one is marked LATEST and opened)
@@ -320,12 +330,13 @@ hint();
 $("#mine").addEventListener("click", () => { MINE = !MINE; if (MINE) track("mine", "★ Mine filter"); $("#mine").classList.toggle("on", MINE); D && render(); });
 // Share: the phone's own share sheet (Messages, email, ...) when it has one; otherwise text / copy
 $("#share").addEventListener("click", () => {
-  const url = location.href.split("#")[0].split("?")[0], st = D && D.stream && D.stream.url ? D.stream : null;
+  const url = location.href.split("#")[0].split("?")[0], st = D && D.stream && D.stream.url && !D.stream.off ? D.stream : null;
+  const watchUrl = location.origin + "/";       // parents only ever see our address; the page shows the player when live
   const old = document.getElementById("sheet"); if (old) old.remove();
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent), sms = t => `sms:${ios ? "&" : "?"}body=${encodeURIComponent(t)}`;
   const name = D && D.meet && D.meet.name ? D.meet.name : "";
   const resText = "Live results" + (name ? " for " + name : "") + ": " + url;
-  const strText = "Watch " + (name || "the meet") + " live: " + (st ? st.url : "");
+  const strText = "Watch " + (name || "the meet") + " live: " + watchUrl;
   const el = document.createElement("div");
   el.className = "sheet"; el.id = "sheet";
   el.innerHTML = `<h3>Results</h3>
@@ -333,10 +344,10 @@ $("#share").addEventListener("click", () => {
     ${navigator.share ? `<button data-native="res">📤 More ways to send it…</button>` : `<a href="mailto:?subject=${encodeURIComponent(document.title)}&body=${encodeURIComponent(resText)}">✉️ Email it</a>`}
     <button data-copy="${esc(url)}">🔗 Copy the results link</button>
     ${st ? `<h3 style="margin-top:12px">Live stream${st.live ? " &middot; on now" : ""}</h3>
-    <a href="${esc(st.url)}" target="_blank" rel="noopener">▶️ Watch the stream</a>
+    ${st.live ? `<a href="#watch" data-watch="1">▶️ Watch the stream</a>` : ""}
     <a href="${sms(strText)}">💬 Text the stream link</a>
     ${navigator.share ? `<button data-native="str">📤 More ways to send it…</button>` : ""}
-    <button data-copy="${esc(st.url)}">🔗 Copy the stream link</button>` : ""}
+    <button data-copy="${esc(watchUrl)}" data-str="1">🔗 Copy the stream link</button>` : ""}
     <button class="x" id="closeSheet">Close</button>`;
   document.body.appendChild(el);
   track("share/open", "Opened share");
@@ -345,15 +356,16 @@ $("#share").addEventListener("click", () => {
     const h = a.getAttribute("href") || "";
     track(h.startsWith("sms:") ? (h.includes(encodeURIComponent("Watch")) ? "share/text-stream" : "share/text-results")
           : h.startsWith("mailto:") ? "share/email" : "stream/watch-from-share");
+    if (a.dataset.watch) el.remove();
   });
   el.addEventListener("click", async ev => {
     const t = ev.target.closest("button"); if (!t) return;
     if (t.dataset.native) track(`share/native-${t.dataset.native === "str" ? "stream" : "results"}`);
-    if (t.dataset.copy) track(`share/copy-${st && t.dataset.copy === st.url ? "stream" : "results"}`);
+    if (t.dataset.copy) track(`share/copy-${t.dataset.str ? "stream" : "results"}`);
     if (t.id === "closeSheet") return el.remove();
     if (t.dataset.native) {
       const isStr = t.dataset.native === "str";
-      try { await navigator.share({title: isStr ? "Live stream" + (name ? ": " + name : "") : document.title, url: isStr ? st.url : url}); el.remove(); } catch (e) {}
+      try { await navigator.share({title: isStr ? "Live stream" + (name ? ": " + name : "") : document.title, url: isStr ? watchUrl : url}); el.remove(); } catch (e) {}
       return;
     }
     if (t.dataset.copy) {
@@ -363,21 +375,11 @@ $("#share").addEventListener("click", () => {
     }
   });
 });
-// one channel for every meet, plus a playlist per school on it
-const CHANNELS = [["https://www.youtube.com/@PrattAquaticCenter?sub_confirmation=1", "Tooele County Pratt Aquatic Center", "Every meet at the pool \u00b7 @PrattAquaticCenter", "#0b5cab", "Subscribe"],
-  ["https://www.youtube.com/playlist?list=PLPJ9Iplo8Mks", "Tooele High Swimming", "Buffaloes \u00b7 this season's meets", "#9B5DE5", "Playlist"],
-  ["https://www.youtube.com/playlist?list=PLbamkCWBGuA8", "Stansbury High Swimming", "Stallions \u00b7 this season's meets", "#3D7FF0", "Playlist"],
-  ["https://www.youtube.com/playlist?list=PLV1401o6lJEg", "Grantsville High Swimming", "Cowboys \u00b7 this season's meets", "#E5383B", "Playlist"],
-  ["https://www.youtube.com/playlist?list=PLUt1eDeuyxoc", "Deseret Peak Swimming", "Golden Eagles \u00b7 this season's meets", "#C9B45C", "Playlist"]];
-document.querySelector(".ytl").innerHTML = CHANNELS.map(([u, n, s, c, b]) => `<a href="${u}" target="_blank" rel="noopener">
-  <span class="dot" style="background:${c}"></span><span class="nm">${esc(n)}<small>${esc(s)}</small></span><span class="sub">${b}</span></a>`).join("");
-// YouTube channel / playlist taps, and any other outside link (the stream link on the page)
+// outside links on the page, and the LIVE button
 document.addEventListener("click", e => {
-  const a = e.target.closest("a[href^='http']"); if (!a || a.closest("#sheet")) return;
-  const yt = a.closest(".ytl");
+  const a = e.target.closest("a"); if (!a || a.closest("#sheet")) return;
   if (a.id === "liveBtn") return track("stream/watch", "Watch the stream (LIVE button)");
-  track(yt ? `youtube/${slug(a.querySelector(".nm") ? a.querySelector(".nm").firstChild.textContent : a.href)}` : `link/${slug(new URL(a.href).hostname)}`,
-        yt ? `YouTube: ${(a.querySelector(".nm") || a).firstChild.textContent}` : `Link: ${a.href}`);
+  if (/^https?:/.test(a.getAttribute("href") || "")) track(`link/${slug(new URL(a.href).hostname)}`, `Link: ${a.href}`);
 });
 load();
 setInterval(load, 30000);

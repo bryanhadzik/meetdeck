@@ -7,9 +7,12 @@
 
      {app: "meetdeck" | "meetboard",   which program this page belongs to
       active: "setup" | "run" | "music" | "admin",
-      debug: true,                     meet-board only: show Debug in the Setup menu
-      screenControls: element}         meet-board only: the warm-up / break / black buttons,
-                                       moved into the Screens menu
+      debug: true}                     meet-board only: show Debug in the Setup menu
+
+   The Screens menu has the TV controls (warm-up slide, need timers, break slide, go black,
+   refresh all screens) on every page of both programs; they talk to meet-board's API.
+   Pages that show the same state elsewhere get it through window.wuShow / ntShow / brShow /
+   bkShow, and can push a change back with window.wuNavShow / ntNavShow / brNavShow.
 
    MeetDeck runs on port 8001 and meet-board on 5000 of the same computer, so links to the
    other program use this page's host name with the other port. Nothing here changes either
@@ -23,6 +26,12 @@
   var MB = C.app === "meetboard" && location.port === "5000" ? location.origin : "http://" + host + ":5000";
 
   var css = [
+    "#appbar .rl{font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#0b1618;background:#d9a441;border:0;border-radius:7px;padding:9px 11px;cursor:pointer}",
+    "#appbar .rl.done{background:#7fe0ab}",
+    "#appbar .bk,#appbar .wu,#appbar .nt,#appbar .brk{background:#2a3a3d;color:#e6eef0}",
+    "#appbar .wu.on{background:#3ddc84;color:#0b1618}#appbar .nt.on{background:#ffd23f;color:#0b1618}",
+    "#appbar .brk.on{background:#ffd60a;color:#0b1618}#appbar .bk.on{background:#000;color:#ffd479;box-shadow:0 0 0 1px #ffd479 inset}",
+    "#appbar .rl[disabled]{opacity:.45;cursor:default}",
     "body.hasAppbar{margin-top:0}",
     "#appbar{position:sticky;top:0;z-index:1000;display:flex;align-items:center;gap:4px;flex-wrap:wrap;",
     "  background:#0b1618;color:#d9e8eb;padding:6px 12px;font:600 14px/1.2 'Segoe UI',system-ui,sans-serif;",
@@ -114,22 +123,65 @@
   function setH() { document.documentElement.style.setProperty("--abh", bar.offsetHeight + "px"); }
   setH(); window.addEventListener("resize", setH);
 
-  // the page's own screen buttons (meet-board: warm-up, need timers, break, go black, refresh) live in Screens
-  if (C.screenControls) {
+  // TV controls in Screens (the same on every page of both programs): they work meet-board's API
+  (function () {
     var box = document.getElementById("abCtlBox");
-    box.innerHTML = '<hr><div class="lbl">On the TVs now</div>';
-    var ctl = document.createElement("div"); ctl.className = "ctl";
-    while (C.screenControls.firstChild) ctl.appendChild(C.screenControls.firstChild);
-    box.appendChild(ctl);
-    var flag = document.getElementById("abScrOn");
-    var check = function () {
+    box.innerHTML = '<hr><div class="lbl">On the TVs now</div><div class="ctl">' +
+      '<button class="rl wu" type="button" data-k="wu" title="Show the warm-up slide (meet, teams, start time) on the meet boards and the stream">Warm-up slide</button>' +
+      '<button class="rl nt" type="button" data-k="nt" title="Full-screen &quot;We need timers&quot; slide on the meet board TVs (change the words in Settings &gt; Screens)">Need timers</button>' +
+      '<button class="rl brk" type="button" data-k="br" title="Break slide on the meet board TVs: team scores, results so far and the events still to come">Break slide</button>' +
+      '<button class="rl bk" type="button" data-k="bk" title="Blank the meet board and scoreboard TVs (the OBS overlay is not affected)">Go black</button>' +
+      '<button class="rl" type="button" data-k="rl" title="Reload every meet board, scoreboard and overlay page (TVs, OBS)">Refresh all screens</button>' +
+      '</div><div class="lbl" id="abCtlMsg" style="display:none;text-transform:none;letter-spacing:0"></div>';
+    var ctl = box.querySelector(".ctl"), msg = document.getElementById("abCtlMsg"), flag = document.getElementById("abScrOn");
+    var B = function (k) { return ctl.querySelector('[data-k="' + k + '"]'); };
+    var st = {wu: null, nt: null, br: null, bk: null};
+    function api(path, body) {
+      return fetch(MB + path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {cache: "no-store"})
+        .then(function (r) { return r.json(); })
+        .then(function (d) { msg.style.display = "none"; [].forEach.call(ctl.children, function (b) { b.disabled = false; }); return d; },
+              function (e) { msg.textContent = "Can't reach the meet board"; msg.style.display = ""; throw e; });
+    }
+    function check() {
       var on = ctl.querySelectorAll(".on").length;
       flag.style.display = on ? "inline-block" : "none";
       flag.title = on ? on + " screen slide(s) on" : "";
+    }
+    var show = {
+      wu: function (d) { st.wu = d; var b = B("wu"), on = !!(d && d.on); b.classList.toggle("on", on);
+        b.textContent = on ? "Warm-up: ON" : "Warm-up slide"; if (window.wuShow) window.wuShow(d); check(); },
+      nt: function (d) { st.nt = d; var b = B("nt"), on = !!(d && d.on); b.classList.toggle("on", on);
+        b.textContent = on ? "Timers slide: ON" : "Need timers"; if (window.ntShow) window.ntShow(d); check(); },
+      br: function (d) { st.br = d; var b = B("br"), on = !!(d && d.on); b.classList.toggle("on", on);
+        b.textContent = on ? (d.final ? "Final results: ON" : "Break slide: ON") : (d && d.pending ? "Results slide soon\u2026" : "Break slide");
+        if (window.brShow) window.brShow(d); check(); },
+      bk: function (d) { st.bk = d; var b = B("bk"); if (window.bkShow) window.bkShow(d); b.classList.toggle("on", !!d.black);
+        b.textContent = d.black ? (d.reason === "auto" ? "Screens black (idle) \u2014 wake" : "Screens black \u2014 wake") : "Go black";
+        b.title = d.black ? "TVs are black. Click to wake them." :
+          (d.auto && d.black_in_seconds != null ? "Blank the TVs now. Otherwise they go black by themselves in " +
+            Math.ceil(d.black_in_seconds / 60) + " min with no meet activity." : "Blank the meet board and scoreboard TVs"); check(); }
     };
-    new MutationObserver(check).observe(ctl, {subtree: true, attributes: true, attributeFilter: ["class"]});
-    check();
-  }
+    var path = {wu: "/api/warmup_slide", nt: "/api/notice", br: "/api/break_slide", bk: "/api/blackout"};
+    window.wuNavShow = show.wu; window.ntNavShow = show.nt; window.brNavShow = show.br;
+    ctl.addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (!b || b.disabled) return;
+      var k = b.dataset.k;
+      if (k === "rl") {
+        fetch(MB + "/screens/reload?json=1", {method: "POST"}).then(function () {
+          b.textContent = "Screens refreshing\u2026"; b.classList.add("done");
+          setTimeout(function () { b.textContent = "Refresh all screens"; b.classList.remove("done"); }, 4000);
+        }).catch(function () { msg.textContent = "Can't reach the meet board"; msg.style.display = ""; });
+        return;
+      }
+      var body = k === "bk" ? {black: !(st.bk && st.bk.black)} : {on: !(st[k] && st[k].on)};
+      api(path[k], body).then(show[k]).catch(function () {});
+    });
+    function load() {
+      if (document.hidden) return;
+      Object.keys(path).forEach(function (k) { api(path[k]).then(show[k]).catch(function () {}); });
+    }
+    load(); setInterval(load, 15000);
+  })();
 
   // menus: click to open, click elsewhere to close
   [].forEach.call(bar.querySelectorAll(".menu"), function (m) {

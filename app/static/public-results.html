@@ -267,7 +267,12 @@ function seeWatch() {                    // scroll only when the player isn't al
     const w = $("#watch"), r = w.getBoundingClientRect();
     const top = ($("header")?.getBoundingClientRect().bottom || 0) + 8;    // below the sticky title bar
     if (r.top >= top && r.bottom <= innerHeight) return;
-    scrollTo({top: scrollY + r.top - top, behavior: "smooth"});
+    w.style.scrollMarginTop = top + "px";
+    w.scrollIntoView({behavior: "smooth", block: "start"});
+    setTimeout(() => {                   // iPhone: the address bar shrinking mid-scroll can leave it under the title bar
+      const t2 = ($("header")?.getBoundingClientRect().bottom || 0) + 8, r2 = w.getBoundingClientRect();
+      if (Math.abs(r2.top - t2) > 4) scrollTo({top: scrollY + r2.top - t2});
+    }, 900);
   });
 }
 document.addEventListener("click", e => {

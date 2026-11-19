@@ -1717,7 +1717,7 @@ def _program_records(d: Path) -> list:
             if (r.get("Record_course") or "Y").strip() not in ("Y", ""):
                 continue                      # short course yards only (our pool)
             relay = (r.get("tag_indrel") or "I").strip() == "R"
-            out.append({"name": (tg.get("tag_name") or "").strip(), "order": tg.get("tag_order") or 99,
+            out.append({"tag_ptr": r.get("tag_ptr"), "name": (tg.get("tag_name") or "").strip(), "order": tg.get("tag_order") or 99,
                         "gender": (r.get("tag_gender") or "").strip(), "dist": r.get("tag_dist"),
                         "stroke": (r.get("tag_stroke") or "").strip(), "indrel": "R" if relay else "I",
                         "time": tm, "holder": "" if relay else (r.get("Record_Holder") or "").strip(),
@@ -1726,13 +1726,24 @@ def _program_records(d: Path) -> list:
     except Exception as x:
         print("meet program records (database):", x)
     if out:
-        return out
+        return _team_rec_names(d, out, "name")
     info = _read_master(_meta(d).get("host", "THS"))
     tags = {t["tag_ptr"]: t for t in info.get("tags") or []}
     for r in info.get("records") or []:
         tg = tags.get(r.get("tag_ptr")) or {}
         out.append({**r, "name": tg.get("name", ""), "order": tg.get("order") or 99})
-    return out
+    return _team_rec_names(d, out, "name")
+
+
+def _team_rec_names(d: Path, recs: list, key: str) -> list:
+    """A school's own records (its team tags, e.g. "Varsity Rec") say whose they are: "Tooele Varsity Rec"."""
+    host = next((h for h in _hosts() if h["id"] == _meta(d).get("host", "THS")), None) or {}
+    who = (host.get("short") or host.get("name") or "").strip()
+    tags = set(host.get("team_tags") or [])
+    for r in recs:
+        if who and r.get("tag_ptr") in tags and who.lower() not in (r.get(key) or "").lower():
+            r[key] = f"{who} {r.get(key) or 'Record'}"
+    return recs
 
 
 def _records_broken(d: Path, m: dict) -> list:
@@ -1805,6 +1816,7 @@ def _records_broken(d: Path, m: dict) -> list:
                         "tag_ptr": r.get("tag_ptr"), "rec": {"gender": r["gender"], "indrel": r["indrel"], "dist": int(r["dist"] or 0),
                                                             "stroke": r["stroke"], "holder": holder[:30], "relay_names": rnames[:50],
                                                             "school": "" if best["kind"] != "I" else (tm_.get("short") or tm_.get("name") or tm_.get("abbr") or "")[:16]}})
+    _team_rec_names(d, out, "tag")
     saved = {(x["key"], x["tag_ptr"]): x for x in _meta(d).get("records_saved") or []}
     for o in out:
         o["saved"] = bool(saved.get((o["key"], o["tag_ptr"])))

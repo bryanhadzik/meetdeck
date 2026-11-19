@@ -24,3 +24,13 @@ def test_break_moves_later_sessions_to_previous_finish_plus_gap():
     assert tl[0]["start"] == 15 * 3600
     assert tl[1]["start"] == tl[0]["finish"] + 15 * 60
     assert tl[1]["rows"][0]["start"] == tl[1]["start"]
+
+
+def test_nt_swimmer_adds_time_to_their_heat():
+    m = model()
+    base = heatsheet.timeline(m)[0]["finish"]
+    m["entries"][0]["seed"] = 0                      # one first-time swimmer in event 1's heat
+    tl = heatsheet.timeline(m)[0]
+    assert tl["finish"] >= base                      # the heat lasts at least as long as an NT swim
+    nt = max(heatsheet._nt_estimate(m["events"][0], "Y"), 30.0 * heatsheet.NT_PAD)
+    assert tl["finish"] == 15 * 3600 + -(-(nt + 30) // 60) * 60

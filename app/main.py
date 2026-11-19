@@ -2977,6 +2977,15 @@ def _public_doc(mid: str, stream: bool = True) -> dict:
     doc = public_results.build(meetdb.load(db), _dbinfo(d).get("scoring"), _usc if _settings().get("usc_on", True) else None)
     if stream:
         doc["stream"] = _stream_link()
+    try:
+        rp = _replays(_settings(), meetdb.load(db)["meet"])
+    except Exception as x:
+        print("replays:", x)
+        rp = {}
+    for ev in doc["events"]:
+        w = {str(h): rp[(str(ev["no"]), h)] for h in sorted({r.get("heat") for r in ev["rows"] if r.get("heat")}) if (str(ev["no"]), h) in rp}
+        if w:
+            ev["watch"] = w
     if _settings().get("goatcounter"):
         doc["stats"] = {"goatcounter": _settings()["goatcounter"]}
     doc["meet"]["id"] = mid
@@ -3010,6 +3019,105 @@ def _public_auto(mid: str):
             print("public results:", x)
 
 
+# ---- race replays: each finished heat links to its moment in the stream recording ----
+REPLAY_LEAD = 10            # seconds before the start beep: swimmers on the blocks
+
+
+def _videos_file() -> Path:
+    return DATA / "stream_videos.json"
+
+
+def _videos() -> list:
+    try:
+        return json.loads(_videos_file().read_text())
+    except (OSError, ValueError):
+        return []
+
+
+def _lifecycle_url(player: str) -> str | None:
+    """https://customer-x.cloudflarestream.com/<input>/iframe -> .../<input>/lifecycle (public, no key needed)."""
+    m = re.match(r"(https://customer-[\w-]+\.cloudflarestream\.com/[\w-]+)(?:/iframe)?/?$", player or "")
+    return m.group(1) + "/lifecycle" if m else None
+
+
+def _note_video(st: dict):
+    """While the stream is live, note the recording's video id and when it was first and last seen."""
+    url = _lifecycle_url(st.get("stream_url") or "")
+    if not url:
+        return
+    import urllib.request
+    try:
+        with urllib.request.urlopen(url, timeout=8) as r:
+            j = json.loads(r.read())
+    except Exception:
+        return
+    uid = j.get("videoUID")
+    if not (j.get("live") and uid):
+        return
+    vs, now = _videos(), round(time.time(), 1)
+    v = next((x for x in vs if x["uid"] == uid), None)
+    if v:
+        v["last"] = now
+    else:
+        vs.append({"uid": uid, "first": now, "last": now})
+    vs = [x for x in vs if now - x["last"] < 400 * 86400][-500:]
+    tmp = _videos_file().with_suffix(".tmp")
+    tmp.write_text(json.dumps(vs))
+    os.replace(tmp, _videos_file())
+
+
+_SLOG = {"at": 0, "val": None}
+
+
+def _stream_log(st: dict) -> dict | None:
+    """meet-board's stream / race-start log (cached 20 s)."""
+    if time.time() - _SLOG["at"] < 20:
+        return _SLOG["val"]
+    val = None
+    try:
+        import urllib.request
+        with urllib.request.urlopen(st["meetboard_url"].rstrip("/") + "/api/stream/log", timeout=3) as r:
+            val = json.loads(r.read())
+    except Exception:
+        val = None
+    _SLOG.update(at=time.time(), val=val)
+    return val
+
+
+def _replays(st: dict, meet: dict) -> dict:
+    """{(event no, heat): [video id, seconds into the recording]} for this meet's races that were streamed."""
+    import datetime as _dt
+    if not (_pool(st) and st.get("meetboard_url") and _lifecycle_url(st.get("stream_url") or "")):
+        return {}
+    log, vids = _stream_log(st), _videos()
+    if not log or not vids:
+        return {}
+    try:
+        d0 = _dt.date.fromisoformat(meet.get("start") or "")
+        d1 = _dt.date.fromisoformat(meet.get("end") or meet.get("start") or "")
+    except ValueError:
+        return {}
+    out = {}
+    for r in log.get("races") or []:
+        day = _dt.datetime.fromtimestamp(r["t"]).date()
+        if not d0 <= day <= d1:
+            continue
+        s = next((x for x in log.get("streams") or [] if x["start"] - 5 <= r["t"] <= x.get("end", x["start"]) + 5), None)
+        if not s:
+            continue
+        # the recording Cloudflare made of that broadcast: first seen live after OBS started streaming
+        v = min((x for x in vids if s["start"] - 120 <= x["first"] <= s.get("end", s["start"]) + 60),
+                key=lambda x: abs(x["first"] - s["start"]), default=None)
+        if not v:
+            continue
+        try:
+            heat = int(r["heat"])
+        except (TypeError, ValueError):
+            continue
+        out[(str(r["event"]).strip(), heat)] = [v["uid"], max(0, int(r["t"] - s["start"] - REPLAY_LEAD))]
+    return out
+
+
 def _stream_watch():
     """Re-publish the phone page when OBS starts or stops streaming, so the player shows up (or goes away)
     without waiting for the next scored race. Uses the meet published most recently (or the one on the site)."""
@@ -3018,6 +3126,8 @@ def _stream_watch():
         time.sleep(30)
         try:
             st = _settings()
+            if _pool(st) and st.get("stream_url"):
+                _note_video(st)               # which recording this broadcast is (race replay links)
             if not (_pool(st) and st.get("public_auto") and st.get("public_token") and st.get("meetboard_url")):
                 prev = None
                 continue

@@ -81,6 +81,7 @@ def build(m: dict, scoring: dict | None = None, store=None) -> dict:
             out.append({"place": r["place"], "name": r["name"], "yr": r["yr"], "team": r["team"], "team_name": names.get(r["team"], ""),
                         "result": r["result"], "points": r["points"], "legs": r["legs"], "dqtxt": r["dqtxt"], "exh": bool(r["exh"]),
                         "seed": seed, "drop": round(r["seed_v"] - r["time_v"], 2) if ok else None,   # + = faster than seed
+                        "heat": r.get("heat") or 0,
                         "st": state_row(store, k, r)})
         sig = hashlib.sha1(json.dumps(out, sort_keys=True).encode()).hexdigest()[:10] if out else ""
         if out:

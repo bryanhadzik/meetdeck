@@ -102,6 +102,11 @@ main{padding:12px;max-width:720px;margin:0 auto}
 .player .tap.off{cursor:default;background:linear-gradient(160deg,#2a3236,#151a1c)}
 .player .tap.off .pl{background:#5b6468}
 .player .tap.off small{color:#c7cfd2}
+.player .rcap{display:flex;align-items:center;gap:10px;justify-content:space-between;margin-top:6px;font-size:13.5px;font-weight:600}
+.player .rcap .rpx{background:none;border:0;color:var(--mute);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline}
+.rpl{padding:8px 14px 2px;font-size:13.5px;color:var(--mute);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.rp{border:1px solid var(--line);background:none;color:var(--ink);border-radius:99px;padding:3px 10px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.rp.sm{margin-top:4px;padding:1px 8px;font-size:12px}
 .player .stop{display:block;margin:6px 0 0 auto;background:none;border:0;color:var(--mute);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline}
 footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
 .hide{display:none!important}
@@ -193,18 +198,35 @@ function legsHtml(r) {
 // the live stream above the results while OBS is streaming. The player only loads when someone taps it
 // (the stream is paid by the minute watched), and "Stop watching" unloads it again.
 let WATCH = false;
+let REPLAY = null, LAST_P = ["", true];            // {src, label}: a finished race in the recording
 function player(u, offline) {
   const w = $("#watch"), box = w.querySelector(".vid");
-  if (!u) { WATCH = false; w.classList.add("hide"); box.innerHTML = ""; w.dataset.u = ""; return; }
+  if (REPLAY) { w.classList.remove("hide"); }
+  if (!u && !REPLAY) { WATCH = false; w.classList.add("hide"); box.innerHTML = ""; w.dataset.u = ""; return; }
   w.classList.remove("hide");
-  if (offline) {                  // a stream is set up but not on right now: keep its spot, say it's offline
+  if (offline && !REPLAY) {       // a stream is set up but not on right now: keep its spot, say it's offline
     WATCH = false; w.dataset.u = "";
     w.querySelector(".stop")?.remove();
     if (!box.querySelector(".off")) box.innerHTML = `<div class="tap off" role="status"><span class="pl"></span><b>Live stream is offline</b><small>It starts when the meet does &mdash; this page shows it then.</small></div>`;
     return;
   }
   if (box.querySelector(".off")) box.innerHTML = "";
-  const src = u + (u.includes("?") ? "&" : "?") + "autoplay=true";
+  if (REPLAY) {                    // a race replay is playing: keep it until they go back to live
+    if (!box.querySelector("iframe") || box.querySelector("iframe").getAttribute("src") !== REPLAY.src) {
+      const f = document.createElement("iframe");
+      f.src = REPLAY.src; f.title = "Race replay";
+      f.allow = "autoplay; fullscreen; picture-in-picture"; f.allowFullscreen = true;
+      box.replaceChildren(f);
+    }
+    let cap = w.querySelector(".rcap");
+    if (!cap) { cap = document.createElement("div"); cap.className = "rcap"; w.appendChild(cap); }
+    cap.innerHTML = `<span>&#9654; Replay &middot; ${esc(REPLAY.label)}</span><button class="rpx" data-rpclose="1">${u && !offline ? "Back to live" : "Close"}</button>`;
+    w.querySelector(".stop")?.remove();
+    w.dataset.u = u || "";
+    return;
+  }
+  w.querySelector(".rcap")?.remove();
+  const src = u + (u.includes("?") ? "&" : "?") + "autoplay=true&dvrEnabled=true";   // DVR: rewind the live stream
   if (WATCH) {
     if (!box.querySelector("iframe") || box.querySelector("iframe").getAttribute("src") !== src) {
       const f = document.createElement("iframe");
@@ -237,7 +259,8 @@ function render() {
   const lb = $("#liveBtn"), st = D.stream;
   const live = !!(st && st.url && st.live && !st.off);
   lb.classList.toggle("hide", !live);
-  player(st && st.url && !st.off ? st.url : "", !live);
+  LAST_P = [st && st.url && !st.off ? st.url : "", !live];
+  player(...LAST_P);
   const q = $("#q").value.trim().toLowerCase();
   const out = [];
   // meet order: event 1, 2, 3 ... (the latest one is marked LATEST and opened)
@@ -266,7 +289,7 @@ function render() {
       <button class="ev" data-tog="${esc(v.no)}"><span class="no">${esc(v.no)}</span>
         <span class="t"><div>${esc(v.label)}${isNew ? `<span class="pill new">${D.latest == v.no ? "LATEST" : "NEW"}</span>` : done ? "" : `<span class="pill wait">upcoming</span>`}</div><div class="meta">${meta}</div>${mineTxt ? `<div class="mine">${mineTxt}</div>` : ""}</span>
         <span class="chev">›</span></button>
-      <div class="rows">${done ? stateLines(v) + rows.map(r => rowHtml(r)).join("")
+      <div class="rows">${done ? stateLines(v) + watchLine(v) + rows.map(r => rowHtml(r, v)).join("")
         : rows.length ? heatsHtml(rows) : `<div class="empty" style="padding:14px">No results yet.</div>`}</div></div>`);
   }
   // team scores at the bottom
@@ -319,15 +342,34 @@ function heatsHtml(lanes) {
   return out;
 }
 function ordinal(n) { n = +n; const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
-function rowHtml(r) {
+// finished heats that were streamed: watch that race in the recording
+function watchLine(v) {
+  const hs = Object.keys(v.watch || {}).sort((a, b) => a - b);
+  if (!hs.length) return "";
+  return `<div class="rpl">&#9654; Watch the race: ${hs.map(h => `<button class="rp" data-rp="${esc(v.no)}|${h}">${hs.length > 1 ? "Heat " + h : "Replay"}</button>`).join("")}</div>`;
+}
+function rowHtml(r, v) {
   const k = starKey(r), on = STARS.has(k), dq = /^(DQ|NS)/.test(r.result || "");
   return `<div class="r ${starredIn(r) ? "me" : ""}"><div class="pl">${esc(r.place || "–")}</div>
     <div><div class="nm">${esc(r.name)}${r.yr ? ` <small>${esc(r.yr)}</small>` : ""}${r.exh ? ` <small>(exh)</small>` : ""}${r.legs ? "" : `<button class="star ${on ? "on" : ""}" data-star="${esc(k)}" aria-label="follow">${on ? "★" : "☆"}</button>`}</div>
       <div class="tm">${esc(r.team_name || r.team)}</div>${r.legs ? `<div class="legs">${legsHtml(r)}</div>` : ""}${r.dqtxt ? `<div class="legs dq">${esc(r.dqtxt)}</div>` : ""}${stateRow(r)}</div>
-    <div><div class="res ${dq ? "dq" : ""}">${esc(r.result || "")}</div>${seedLine(r)}${r.points ? `<div class="pts">${esc(r.points)} pts</div>` : ""}</div></div>`;
+    <div><div class="res ${dq ? "dq" : ""}">${esc(r.result || "")}</div>${seedLine(r)}${r.points ? `<div class="pts">${esc(r.points)} pts</div>` : ""}${v && v.watch && v.watch[r.heat] ? `<button class="rp sm" data-rp="${esc(v.no)}|${r.heat}" title="Watch this race">&#9654; Watch</button>` : ""}</div></div>`;
 }
 
 document.addEventListener("click", e => {
+  const rp = e.target.closest("[data-rp]");
+  if (rp) {
+    const [no, h] = rp.dataset.rp.split("|"), v = (D.events || []).find(x => String(x.no) === no), w = v && v.watch && v.watch[h];
+    const base = D.stream && D.stream.url ? new URL(D.stream.url).origin : "";
+    if (!w || !base) return;
+    REPLAY = {src: `${base}/${w[0]}/iframe?startTime=${w[1]}&autoplay=true&dvrEnabled=true`,
+              label: `Event ${v.no} ${v.label}${Object.keys(v.watch).length > 1 ? " · Heat " + h : ""}`};
+    player(...LAST_P);
+    $("#watch").scrollIntoView({behavior: "smooth", block: "start"});
+    track(`replay/event-${no}-heat-${h}`, `Replay: event ${no} heat ${h}`);
+    return;
+  }
+  if (e.target.closest("[data-rpclose]")) { REPLAY = null; $("#watch .vid").innerHTML = ""; WATCH = !!(LAST_P[0] && !LAST_P[1]); player(...LAST_P); return; }
   const s = e.target.closest("[data-star]");
   if (s) {
     const k = s.dataset.star, adding = !STARS.has(k);

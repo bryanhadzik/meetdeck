@@ -1044,7 +1044,7 @@ function renderMeet() {
         <option value="">Meet Manager's session start times</option>
         ${[5, 10, 15, 20, 30].map(n => `<option value="${n}" ${S.session_break === n ? "selected" : ""}>${n} minutes</option>`).join("")}</select></label>
       <span class="muted" style="font-size:12.5px">With a break picked, each later session starts that long after the one before is projected to finish (Timeline report and below).</span></div>
-    <div id="sessList" style="font-size:13.5px;margin:6px 0 4px">${(S.timeline || []).map(s => `<div>Session ${esc(s.no)}${s.name && s.name != s.no ? " &middot; " + esc(s.name) : ""}: <b>${clockOf(s.start)}</b> &ndash; about ${clockOf(s.finish)} (${s.heats} heats)</div>`).join("")}</div>
+    <div id="sessList" style="font-size:13.5px;margin:6px 0 4px">${(S.timeline || []).map(s => `<div>Session ${esc(s.no)}${s.name && s.name != s.no ? " &middot; " + esc(s.name) : ""}: <b>${clockOf(s.start)}</b> &ndash; about ${clockOf(s.finish)} (${s.heats} heats)${s.clash != null ? ` <span style="color:var(--warn);font-weight:600">&#9888; Meet Manager has it starting at ${clockOf(s.clash)}, before the session before it is projected to finish. Pick a break between sessions above, or change the start time in Meet Manager.</span>` : ""}</div>`).join("")}</div>
     <h3>Address</h3>
     <div class="mgrid">${inp("addr1", "Address", mt.addr1, 'maxlength="30" style="width:100%"')}${inp("addr2", "Address line 2", mt.addr2, 'maxlength="30" style="width:100%"')}</div>
     <div class="mgrid4">${inp("city", "City", mt.city, 'maxlength="30"')}${inp("state", "State", mt.state, 'maxlength="3" size="4"')}${inp("zip", "Zip", mt.zip, 'maxlength="10" size="10"')}${inp("country", "Country", mt.country, 'maxlength="3" size="4"')}</div>`;

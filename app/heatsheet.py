@@ -851,14 +851,20 @@ def timeline(m, gap_min=None) -> list:
     start in the water (backstroke and medley relays). Unseeded events use the average entry time and a
     projected heat count. Start times are rounded up to the minute.
     gap_min: break between sessions (minutes). When set, a later session on the same day starts that long after
-    the one before it is projected to finish, instead of at its Meet Manager start time."""
+    the one before it is projected to finish, instead of at its Meet Manager start time. Without it, a session whose
+    Meet Manager start time comes before the previous session's projected finish starts at that finish instead
+    ("clash" holds the Meet Manager time) - a session can't start before the one before it is done."""
     import math
     evs = {v["ptr"]: v for v in m["events"]}
     lanes = m["meet"].get("lanes") or 8
     out = []
     for s in m.get("sessions", []):
+        clash = None
         if gap_min is not None and out and out[-1]["day"] == s["day"]:
             s = {**s, "start": out[-1]["finish"] + int(gap_min) * 60}
+        elif out and out[-1]["day"] == s["day"] and s["start"] < out[-1]["finish"]:
+            clash = s["start"]
+            s = {**s, "start": out[-1]["finish"]}
         t, rows, swimmers, n_ent, n_heat = 0.0, [], set(), 0, 0
         for it in s["items"]:
             v = evs.get(it["event"])
@@ -893,7 +899,7 @@ def timeline(m, gap_min=None) -> list:
                          "entries": len(ents), "heats": nh, "projected": proj, "start": s["start"] + math.ceil(start / 60 - 1e-9) * 60,
                          "break": it["delay_desc"] if it["delay"] else ""})
         out.append({**{k: s[k] for k in ("no", "ltr", "name", "day", "start", "interval", "back")}, "rows": rows,
-                    "swimmers": len(swimmers), "entries": n_ent, "heats": n_heat,
+                    "swimmers": len(swimmers), "entries": n_ent, "heats": n_heat, "clash": clash,
                     "finish": s["start"] + math.ceil(t / 60 - 1e-9) * 60})
     return out
 
@@ -934,6 +940,9 @@ def timeline_pdf(m, licensee="", printed=None, gap_min=None) -> bytes:
         sh.text(PAGE_W / 2, 90.0, f"Session: {s['no']}{s['ltr'] or ''}   {s['name']}", size=HSZ, align="c")
         sh.text(PAGE_W / 2, 101.5, f"Day of Meet: {s['day']}   Starts at {_clock(s['start'])}   Heat Interval: {s['interval']} Seconds"
                 + (f" / Back +{s['back']} Seconds" if s["back"] else ""), size=HSZ, align="c")
+        if s.get("clash") is not None:
+            sh.text(PAGE_W / 2, 112.5, f"Meet Manager has this session starting at {_clock(s['clash'])}, before the session before it is "
+                    f"projected to finish - shown starting at {_clock(s['start'])}.", bold=True, size=HSZ - 0.5, align="c")
         y = 126.0
         for x, lab, al in ((X_RND, "Round", "l"), (X_EV, "Event", "l"), (X_ENT, "Entries", "r"), (X_HT, "Heats", "r"), (X_ST + 66, "Starts at", "r")):
             sh.text(S(x), y, lab, bold=True, size=SZ + 0.5, align=al)

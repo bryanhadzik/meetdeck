@@ -2115,7 +2115,7 @@ def db_get(mid: str):
     gap = gap if isinstance(gap, int) else None
     try:
         import heatsheet
-        tl = [{"no": s["no"], "name": s["name"], "day": s["day"], "start": s["start"], "finish": s["finish"], "heats": s["heats"]}
+        tl = [{"no": s["no"], "name": s["name"], "day": s["day"], "start": s["start"], "finish": s["finish"], "heats": s["heats"], "clash": s.get("clash")}
               for s in heatsheet.timeline(m, gap)]
     except Exception:
         tl = []

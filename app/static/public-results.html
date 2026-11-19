@@ -244,7 +244,14 @@ function player(u, offline) {
 function watch(on) {
   const w = $("#watch"); if (!w.dataset.u) return;
   WATCH = on; player(w.dataset.u);
-  if (on) w.scrollIntoView({behavior: "smooth", block: "start"});
+  if (on) seeWatch();
+}
+function seeWatch() {                    // scroll only when the player isn't already fully on screen
+  requestAnimationFrame(() => {
+    const w = $("#watch"), r = w.getBoundingClientRect();
+    if (r.top >= 0 && r.bottom <= innerHeight) return;
+    w.scrollIntoView({behavior: "smooth", block: r.height > innerHeight ? "start" : "nearest"});
+  });
 }
 document.addEventListener("click", e => {
   if (e.target.closest("#watch .tap")) { track("stream/watch-tap", "Watch the stream (player)"); watch(true); }
@@ -365,7 +372,7 @@ document.addEventListener("click", e => {
     REPLAY = {src: `${base}/${w[0]}/iframe?startTime=${w[1]}&autoplay=true&dvrEnabled=true`,
               label: `Event ${v.no} ${v.label}${Object.keys(v.watch).length > 1 ? " · Heat " + h : ""}`};
     player(...LAST_P);
-    $("#watch").scrollIntoView({behavior: "smooth", block: "start"});
+    seeWatch();
     track(`replay/event-${no}-heat-${h}`, `Replay: event ${no} heat ${h}`);
     return;
   }

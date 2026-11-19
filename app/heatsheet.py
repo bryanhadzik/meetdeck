@@ -499,7 +499,6 @@ class _Referee2(_Sheet):
         self.text(self.X_LANE, top, "Lane", bold=True, size=HSZ, align="c")
         self.text(self.X_NAME, top, "Team" if relay else "Name", bold=True, size=HSZ)
         self.text(self.X_SCH, top, "Relay" if relay else "School", bold=True, size=HSZ)
-        self.text(self.X_SEED, top, "Seed", bold=True, size=HSZ, align="r")
         self.text(self.X_DQ + 6.0, top, "DQ", bold=True, size=HSZ, align="c")
         self.text(self.X_CODE, top, "Codes" if self.codes(v) == 2 else "Code", bold=True, size=HSZ)
         self.text(self._inf_x(v), top, "Infraction", bold=True, size=HSZ)
@@ -546,7 +545,6 @@ class _Referee2(_Sheet):
                     self.text(self.X_NAME, y + 4.0, "(empty)", size=SZ)
                     y += rh
                     continue
-                self.text(self.X_SEED, y + 4.0, _seed(e), size=HSZ, align="r")
                 if relay:
                     tm = teams.get(e["team"], {})
                     self.text(self.X_NAME, y + 3.0, self.team_label(tm, 140, 10.5), size=10.5, w=140)
@@ -559,7 +557,7 @@ class _Referee2(_Sheet):
                     a_ = aths.get(e["ath"], {})
                     nm = _name(a_) + (f" ({a_['yr']})" if a_.get("yr") else "")
                     self.text(self.X_NAME, y + 3.0, nm, size=10.5, w=142)
-                    self.text(self.X_SCH, y + 4.0, self.team_label(teams.get(a_.get("team"), {}), 120, HSZ), size=HSZ, w=120)
+                    self.text(self.X_SCH, y + 4.0, self.team_label(teams.get(a_.get("team"), {}), 145, HSZ), size=HSZ, w=145)
                 y += rh
             # order of finish: one box per place, the referee writes the lane
             y += 6.0

@@ -510,7 +510,7 @@ class _Referee2(_Sheet):
         return self.X_CODE + (2 * 30.0 + 4.0 if self.codes(v) == 2 else 34.0) + 6.0
 
     def row_h(self, relay):
-        return 34.0 if relay else 23.0
+        return 42.0 if relay else 31.0       # 2 individual heats or 1 relay heat a page: room to write
 
     def heat_h(self, lanes, relay):
         return 16.0 + len(lanes) * self.row_h(relay) + 46.0
@@ -538,9 +538,10 @@ class _Referee2(_Sheet):
                 self.c.setStrokeGray(0)
                 self.text(self.X_LANE, y + 3.0, str(j + 1), bold=True, size=12.0, align="c")
                 self.box(self.X_DQ, bt + 3.0, 12.0, 12.0)
+                bh = rh - 4.0                                   # tall boxes: the infraction gets written in by hand
                 for k in range(nc):
-                    self.box(self.X_CODE + k * 34.0, bt, 30.0, self.BOX)
-                self.box(xi, bt, self.X_END - xi, self.BOX)
+                    self.box(self.X_CODE + k * 34.0, bt, 30.0, bh)
+                self.box(xi, bt, self.X_END - xi, bh)
                 if not e:
                     self.text(self.X_NAME, y + 4.0, "(empty)", size=SZ)
                     y += rh

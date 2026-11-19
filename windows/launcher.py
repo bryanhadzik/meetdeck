@@ -5,6 +5,8 @@
 - A tray icon (bottom-right) has Open MeetDeck, Open data folder and Quit.
 """
 import os
+import re
+import subprocess
 import shutil
 import socket
 import sys
@@ -208,6 +210,36 @@ def lan_urls() -> list:
     return [f"http://{ip}:{PORT}/" for ip in ips]
 
 
+def lan_open() -> bool | None:
+    """Can phones / other laptops reach MeetDeck through Windows Firewall? True: an inbound Allow rule for this
+    MeetDeck's Python (or the firewall is off). False: none, or a Block rule - typical when the first-start
+    firewall prompt needed an administrator and was cancelled. None: couldn't tell."""
+    py = str(ROOT / "python").lower()
+    try:
+        run = lambda *a: subprocess.run(["netsh", "advfirewall", *a], capture_output=True, text=True,
+                                        creationflags=0x08000000, timeout=20).stdout
+        prof = run("show", "currentprofile")
+        if re.search(r"^State\s+OFF\s*$", prof, re.M | re.I):
+            return True
+        out = run("firewall", "show", "rule", "name=all", "dir=in", "verbose")
+        if "Rule Name" not in out:
+            return None
+        allow = block = False
+        for blk in out.split("Rule Name:")[1:]:
+            f = dict((k.strip().lower(), v.strip()) for k, _, v in (ln.partition(":") for ln in blk.splitlines()) if _)
+            prog = (f.get("program") or "").lower()
+            if not prog.startswith(py) or f.get("enabled", "").lower() != "yes":
+                continue
+            if f.get("action", "").lower() == "block":
+                block = True
+            elif f.get("action", "").lower() == "allow":
+                allow = True
+        return allow and not block
+    except Exception:
+        log("firewall check: " + traceback.format_exc())
+        return None
+
+
 def tray(stop):
     try:
         import pystray
@@ -218,8 +250,15 @@ def tray(stop):
         else:
             img = Image.new("RGB", (64, 64), (31, 111, 235))
             ImageDraw.Draw(img).text((14, 20), "MD", fill="white")
-        others = [pystray.MenuItem(f"Other devices: {u}", (lambda u: lambda: webbrowser.open(u))(u))
-                  for u in (lan_urls() if os.environ.get("MEETDECK_HOST", "0.0.0.0") != "127.0.0.1" else [])]
+        lan = os.environ.get("MEETDECK_HOST", "0.0.0.0") != "127.0.0.1"
+        ok = lan_open() if lan else False
+        if lan and ok is False:      # the firewall keeps other devices out: don't offer an address that won't work
+            log("Windows Firewall has no Allow rule for MeetDeck: only this PC can open it")
+            others = [pystray.MenuItem("Only this PC can open MeetDeck (Windows Firewall blocks other devices; "
+                                       "an administrator can allow it)", None, enabled=False)]
+        else:
+            others = [pystray.MenuItem(f"Other devices: {u}", (lambda u: lambda: webbrowser.open(u))(u))
+                      for u in (lan_urls() if lan else [])]
         menu = pystray.Menu(pystray.MenuItem("Open MeetDeck", lambda: webbrowser.open(URL), default=True),
                             *others,
                             pystray.MenuItem("Open data folder", lambda: os.startfile(DATA)),

@@ -1,6 +1,21 @@
 MeetDeck for Windows
 ====================
 
+First time (no administrator rights needed)
+-------------------------------------------
+1. Unzip MeetDeck-Windows.zip into your Documents or Desktop - NOT Program Files. MeetDeck updates
+   itself by replacing files in its own folder, and a normal Windows account can't change
+   Program Files. (If it's there, MeetDeck says so and tells you to move it.)
+2. Double-click MeetDeck.exe. If Windows says "Windows protected your PC", click More info >
+   Run anyway (MeetDeck isn't signed by a paid certificate yet). If your school's IT blocks
+   programs it hasn't approved, ask them to allow the MeetDeck folder.
+3. Windows Firewall may ask about Python. Allow it on private networks if you can. Without an
+   administrator you can't - that's fine: MeetDeck still works on this PC, only phones and other
+   laptops can't open it. The tray icon says "Only this PC can open MeetDeck" when that's the case.
+4. Timing console: the USB-to-serial cable needs its driver. Most get it from Windows Update by
+   themselves; if Windows says the device has no driver, the cable maker's installer needs an
+   administrator.
+
 Start:   double-click MeetDeck.exe (or MeetDeck.bat). The first start also puts MeetDeck and
          MeetDeck Launcher shortcuts on the desktop. MeetDeck Launcher.exe opens the start / stop /
          update / console-tools window.

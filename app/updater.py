@@ -36,6 +36,24 @@ def supported() -> bool:
     return os.name == "nt" and (ROOT / "start.py").exists()
 
 
+def writable() -> bool:
+    """Whether this user can change the MeetDeck folder (no: it's under Program Files or another protected
+    place, so updates can't be unpacked there without administrator rights)."""
+    try:
+        t = ROOT / ".meetdeck-write-test"
+        t.write_text("x")
+        t.unlink()
+        return True
+    except OSError:
+        return False
+
+
+NOT_WRITABLE = ("MeetDeck is in a folder this Windows account can't change ({root}), so updates can't install "
+                "there without administrator rights. Quit MeetDeck (tray icon > Quit), move the whole MeetDeck "
+                "folder to your Documents or Desktop, and start it from there. Your meets are in Documents\\MeetDeck "
+                "and aren't affected.")
+
+
 def _key(v: str):
     """Sort key for versions. Builds before 1.0 were dated (2026.11.10.6); release numbers (1.0, 1.0.1, 1.1)
     come after every dated build."""
@@ -75,6 +93,9 @@ def check(fresh=False) -> dict:
     """Asks GitHub at most every 30 minutes unless asked fresh (Check for updates button)."""
     cur = version()
     out = {"current": cur, "supported": supported(), "repo": REPO, "pending": (ROOT / "app.new").exists()}
+    if out["supported"] and not writable():
+        out["writable"] = False
+        out["fix"] = NOT_WRITABLE.format(root=ROOT)
     try:
         if fresh or not _CACHE["val"] or time.time() - _CACHE["at"] > 1800:
             _CACHE.update(val=latest(), at=time.time())
@@ -96,6 +117,8 @@ def install() -> dict:
         raise RuntimeError("Updates install only in MeetDeck for Windows")
     if STATE["busy"]:
         raise RuntimeError("An update is already running")
+    if not writable():
+        raise RuntimeError(NOT_WRITABLE.format(root=ROOT))
     STATE.update(busy=True, msg="Downloading")
     try:
         lt = latest()

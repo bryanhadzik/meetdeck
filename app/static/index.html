@@ -2248,9 +2248,15 @@ function showUpdate(u) {
   $("#updStatus").innerHTML = `This version: <b>${esc(u.current)}</b>` + (u.error ? ` &middot; <span class="muted">${esc(u.error)}</span>`
     : av ? ` &middot; <b>${esc(u.latest.version)}</b> is available (${esc(u.latest.published)})` : ` &middot; up to date`)
     + ` <span class="muted">&middot; from github.com/${esc(u.repo)}</span>`;
-  $("#updGo").classList.toggle("hidden", !av);
+  $("#updGo").classList.toggle("hidden", !av || u.writable === false);
   $("#updNotes").textContent = av ? (u.latest.notes || "") : "";
   const b = $("#updBanner");
+  if (u.writable === false) {        // in Program Files (or similar): updates need the folder moved first
+    $("#updStatus").innerHTML += `<div class="issue warn" style="margin-top:6px;font-size:13px">${esc(u.fix)}</div>`;
+    b.classList.remove("hidden");
+    b.innerHTML = `<b>${av ? `MeetDeck ${esc(u.latest.version)} is available, but` : "Updates"} can't install here.</b> <span>${esc(u.fix)}</span>`;
+    return;
+  }
   b.classList.toggle("hidden", !av);
   if (av) b.innerHTML = `<b>MeetDeck ${esc(u.latest.version)} is available.</b> <span>${esc((u.latest.notes || "").split("\n")[0])}</span><span style="flex:1"></span>
     <button class="small" id="updBanGo" style="background:#fff;color:#111">Install update</button><button class="ghost small" id="updBanLater" style="color:inherit;border-color:currentColor">Later</button>`;

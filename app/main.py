@@ -3103,10 +3103,12 @@ def _note_video(st: dict):
     if not url:
         return
     import urllib.request
-    try:
-        with urllib.request.urlopen(url, timeout=8) as r:
+    try:                       # Cloudflare turns away Python's default user agent (403), so look like the updater
+        req = urllib.request.Request(url, headers={"User-Agent": "MeetDeck"})
+        with urllib.request.urlopen(req, timeout=8, context=updater._ctx()) as r:
             j = json.loads(r.read())
-    except Exception:
+    except Exception as x:
+        print("stream lifecycle:", x)
         return
     uid = j.get("videoUID")
     if not (j.get("live") and uid):

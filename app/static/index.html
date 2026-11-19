@@ -130,10 +130,15 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   #ctForm input,#ctForm select{width:100%;box-sizing:border-box}
   #meetFields input,#meetFields select{width:100%;box-sizing:border-box}
 #tableSec.tbLocked #tbSwimmers, #tableSec.tbLocked #tbRelays, #tableSec.tbLocked #tbAddRelay { pointer-events: none; opacity: .55; }
-#miSec table.miSess td{vertical-align:top}
-#miSec .miGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 14px}
-#miSec .mf{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted)}
-#miSec .mf input,#miSec .mf select{width:100%}
+#miWrap table.miSess td{vertical-align:top}
+#miWrap .miGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 14px}
+#miWrap .mf{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted)}
+#miWrap .mf input,#miWrap .mf select{width:100%}
+#setupHead{cursor:pointer;user-select:none}
+#setupHead .setupTw{display:inline-block;color:var(--muted);font-size:15px;transition:transform .15s;margin-right:2px}
+#setupSec.setupShut #setupHead .setupTw{transform:rotate(-90deg)}
+#setupSec.setupShut #meetFields,#setupSec.setupShut #hostNote,#setupSec.setupShut #miWrap{display:none !important}
+#setupSec:not(.setupShut) #setupSum{display:none}
 </style>
 <script src="/static/ao.js"></script>
 <script src="/static/utah-rules.js"></script>
@@ -171,9 +176,9 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   </section>
 
   <div id="meet" class="hidden">
-    <section>
+    <section id="setupSec">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-        <h2 style="margin:0">Meet setup <span class="muted" id="mSaved" style="font-size:13px;font-weight:normal"></span>
+        <h2 style="margin:0" id="setupHead" title="Click to fold or unfold"><span class="setupTw">&#9662;</span> Meet setup <span class="muted" id="mSaved" style="font-size:13px;font-weight:normal"></span>
           <button class="ghost small" id="setupUndo" disabled style="margin-left:8px;vertical-align:2px" title="Nothing to undo">Undo</button></h2>
         <a id="openDb" href="#" style="background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:12px 26px;font-size:17px;font-weight:600;text-decoration:none;white-space:nowrap" title="Open the meet: timing console, times, DQs, scratches, scoring, printing and results">Run the meet</a>
       </div>
@@ -188,11 +193,8 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Host school <select id="hostSel"></select></label>
       </div>
       <div class="muted" id="hostNote" style="margin-top:6px"></div>
-    </section>
-
-    <section id="miSec" class="hidden">
-      <h2>Meet info &amp; sessions <span class="muted" style="font-weight:400;font-size:13px">the meet header and Meet Manager's sessions &mdash; which events swim on which day, and when</span></h2>
-      <div id="miBody"></div>
+      <div id="miWrap" class="hidden" style="margin-top:12px;border-top:1px solid var(--line);padding-top:4px"><div id="miBody"></div></div>
+      <div class="muted" id="setupSum" style="font-size:13.5px"></div>
     </section>
 
     <section>
@@ -1196,13 +1198,35 @@ document.addEventListener("toggle", ev => {
   const c = ev.target.dataset && ev.target.dataset.teamopen;
   if (c) ev.target.open ? TEAM_OPEN.add(c) : TEAM_OPEN.delete(c);
 }, true);
+// ---------------- Meet setup folds up to one line (remembered on this computer) ----------------
+function setupSum() {
+  const el = $("#setupSum"); if (!el || !M) return;
+  const day = MI && MI.has_db ? [...new Set(MI.sessions.map(s => s.day))].length : 0;
+  const sess = MI && MI.has_db ? MI.sessions.map(s => `S${s.no} day ${s.day} ${miClock(s.shown_start)}${s.finish ? "–" + miClock(s.finish) : ""}`).join(" · ") : "";
+  const dt = M.date ? new Date(M.date + "T12:00").toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric"}) : "no date";
+  el.innerHTML = `<b>${esc(M.name || "")}</b> &middot; ${esc(dt)}${M.start_time ? " &middot; " + miClock((+M.start_time.split(":")[0] * 60 + +M.start_time.split(":")[1]) * 60) : ""}${M.location ? " &middot; " + esc(M.location) : ""}` +
+    (sess ? ` &middot; ${day > 1 ? day + " days &middot; " : ""}<span title="Sessions">${esc(sess)}</span>` : "") +
+    (MI && MI.sessions && MI.sessions.some(s => s.clash != null) ? ` <span style="color:var(--warn)">&#9888; a session overlaps the one before it</span>` : "");
+}
+(function () {
+  let shut = false;
+  try { shut = localStorage.getItem("setupShut") === "1"; } catch (e) {}
+  const apply = () => { $("#setupSec").classList.toggle("setupShut", shut); setupSum(); };
+  apply();
+  $("#setupHead").addEventListener("click", e => {
+    if (e.target.closest("button,a,input,select,label")) return;
+    shut = !shut; apply();
+    try { localStorage.setItem("setupShut", shut ? "1" : "0"); } catch (x) {}
+  });
+})();
+
 // ---------------- Meet info & sessions (the meet database's header and Meet Manager's sessions) ----------------
 let MI = null, MI_T = null;
 const miClock = sec => { const t = Math.round((sec || 0) / 60), h = Math.floor(t / 60) % 24, mi = t % 60; return `${(h + 11) % 12 + 1}:${String(mi).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
 const miHHMM = sec => { const t = Math.round((sec || 0) / 60); return `${String(Math.floor(t / 60) % 24).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`; };
 function miLoad(now) {                  // the timeline follows entries and heats, so it reloads after changes
   clearTimeout(MI_T);
-  if (!M || !M.has_db) { $("#miSec").classList.add("hidden"); MI = null; return; }
+  if (!M || !M.has_db) { $("#miWrap").classList.add("hidden"); MI = null; setupSum(); return; }
   const id = M.id;
   MI_T = setTimeout(async () => { try { const r = await api(`/api/meets/${id}/meetinfo`); if (M && M.id === id) { MI = r; miRender(); } } catch (e) {} }, now ? 0 : 800);
 }
@@ -1212,7 +1236,8 @@ async function miOp(op, args) {
   miRender();
 }
 function miRender() {
-  const sec = $("#miSec");
+  const sec = $("#miWrap");
+  setupSum();
   if (!MI || !MI.has_db || document.activeElement && sec.contains(document.activeElement) && document.activeElement.matches("input[type=text],input:not([type])")) { sec.classList.toggle("hidden", !MI || !MI.has_db); return; }
   sec.classList.remove("hidden");
   const mt = MI.meet, lock = MI.started, dis = lock ? "disabled" : "";
@@ -1256,7 +1281,7 @@ function miRender() {
 }
 document.addEventListener("change", async e => {
   const t = e.target, d = t.dataset || {};
-  if (!t.closest || !t.closest("#miSec")) return;
+  if (!t.closest || !t.closest("#miWrap")) return;
   if (d.mi) return miOp("meet", {fields: {[d.mi]: t.value.trim()}});
   if (d.ms) return miOp("session", {ptr: +d.ms, fields: {[d.f]: d.f === "day" ? +t.value : t.value}});
   if (d.split && t.value) {
@@ -1277,7 +1302,7 @@ document.addEventListener("click", e => {
 });
 
 function render() {
-  miLoad();
+  miLoad(); setupSum();
   $("#meet").classList.remove("hidden");
   $("#newBox").classList.add("hidden");
   $("#openDb").href = `/db?meet=${M.id}`;

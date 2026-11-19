@@ -130,6 +130,10 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
   #ctForm input,#ctForm select{width:100%;box-sizing:border-box}
   #meetFields input,#meetFields select{width:100%;box-sizing:border-box}
 #tableSec.tbLocked #tbSwimmers, #tableSec.tbLocked #tbRelays, #tableSec.tbLocked #tbAddRelay { pointer-events: none; opacity: .55; }
+#miSec table.miSess td{vertical-align:top}
+#miSec .miGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 14px}
+#miSec .mf{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted)}
+#miSec .mf input,#miSec .mf select{width:100%}
 </style>
 <script src="/static/ao.js"></script>
 <script src="/static/utah-rules.js"></script>
@@ -184,6 +188,11 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Host school <select id="hostSel"></select></label>
       </div>
       <div class="muted" id="hostNote" style="margin-top:6px"></div>
+    </section>
+
+    <section id="miSec" class="hidden">
+      <h2>Meet info &amp; sessions <span class="muted" style="font-weight:400;font-size:13px">the meet header and Meet Manager's sessions &mdash; which events swim on which day, and when</span></h2>
+      <div id="miBody"></div>
     </section>
 
     <section>
@@ -1187,7 +1196,88 @@ document.addEventListener("toggle", ev => {
   const c = ev.target.dataset && ev.target.dataset.teamopen;
   if (c) ev.target.open ? TEAM_OPEN.add(c) : TEAM_OPEN.delete(c);
 }, true);
+// ---------------- Meet info & sessions (the meet database's header and Meet Manager's sessions) ----------------
+let MI = null, MI_T = null;
+const miClock = sec => { const t = Math.round((sec || 0) / 60), h = Math.floor(t / 60) % 24, mi = t % 60; return `${(h + 11) % 12 + 1}:${String(mi).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
+const miHHMM = sec => { const t = Math.round((sec || 0) / 60); return `${String(Math.floor(t / 60) % 24).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`; };
+function miLoad(now) {                  // the timeline follows entries and heats, so it reloads after changes
+  clearTimeout(MI_T);
+  if (!M || !M.has_db) { $("#miSec").classList.add("hidden"); MI = null; return; }
+  const id = M.id;
+  MI_T = setTimeout(async () => { try { const r = await api(`/api/meets/${id}/meetinfo`); if (M && M.id === id) { MI = r; miRender(); } } catch (e) {} }, now ? 0 : 800);
+}
+async function miOp(op, args) {
+  try { MI = await api(`/api/meets/${M.id}/meetinfo/op`, J("POST", {op, args})); }
+  catch (x) { alert(x.message); }
+  miRender();
+}
+function miRender() {
+  const sec = $("#miSec");
+  if (!MI || !MI.has_db || document.activeElement && sec.contains(document.activeElement) && document.activeElement.matches("input[type=text],input:not([type])")) { sec.classList.toggle("hidden", !MI || !MI.has_db); return; }
+  sec.classList.remove("hidden");
+  const mt = MI.meet, lock = MI.started, dis = lock ? "disabled" : "";
+  const inp = (k, label, val, attrs = "") => `<label class="mf"><span>${label}</span><input data-mi="${k}" value="${esc(val ?? "")}" ${attrs} ${dis}></label>`;
+  const dayName = i => { const d = MI.dates[i - 1]; return d ? new Date(d + "T12:00").toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric"}) : ""; };
+  const nDays = Math.max(MI.days, ...MI.sessions.map(s => s.day));
+  const dayOpts = cur => Array.from({length: nDays + 1}, (_, i) => i + 1).map(n => `<option value="${n}" ${n === cur ? "selected" : ""}>Day ${n}${dayName(n) ? " · " + dayName(n) : ""}${n > MI.days ? " (adds a day)" : ""}</option>`).join("");
+  const evRange = s => !s.events.length ? `<span class="muted">no events</span>` : s.events.map(e => `<span class="chip" title="${esc(e.label)}">#${esc(e.no)}</span>`).join("");
+  const rows = MI.sessions.map(s => `<tr>
+      <td><b>${s.no}</b></td>
+      <td><input data-ms="${s.ptr}" data-f="name" value="${esc(s.name)}" size="12" ${dis}></td>
+      <td><select data-ms="${s.ptr}" data-f="day" ${dis}>${dayOpts(s.day)}</select></td>
+      <td><input type="time" data-ms="${s.ptr}" data-f="start" value="${miHHMM(s.start)}" ${dis}>${s.shown_start !== s.start ? `<div class="muted" style="font-size:12px">${MI.session_break != null ? `with the ${MI.session_break}-minute break: ` : ""}starts ${miClock(s.shown_start)}</div>` : ""}</td>
+      <td style="max-width:420px">${evRange(s)}</td>
+      <td style="white-space:nowrap">${s.finish ? `${miClock(s.shown_start)} &ndash; about ${miClock(s.finish)}<div class="muted" style="font-size:12px">${s.heats} heats</div>` : ""}</td>
+      <td style="white-space:nowrap">${s.events.length > 1 && !lock ? `<select data-split="${s.ptr}" title="Start a new session at this event: it and every later event in this session move to the new one"><option value="">Split at event…</option>${s.events.slice(1).map(e => `<option value="${e.ptr}">#${esc(e.no)} ${esc(e.label)}</option>`).join("")}</select>` : ""}
+        ${!s.events.length && !lock ? `<button class="ghost small" data-delsess="${s.ptr}">Delete</button>` : ""}</td></tr>
+      ${s.clash != null ? `<tr><td></td><td colspan="6"><div class="issue warn" style="font-size:13px;margin:0">Session ${s.no} is set to start at ${miClock(s.clash)}, before the session before it is projected to finish. Pick a break between sessions, or change its start time.</div></td></tr>` : ""}`).join("");
+  const allEv = MI.sessions.flatMap(s => s.events.map(e => ({...e, sess: s.ptr})));
+  const sessOpts = cur => MI.sessions.map(s => `<option value="${s.ptr}" ${s.ptr === cur ? "selected" : ""}>Session ${s.no} (day ${s.day})</option>`).join("");
+  $("#miBody").innerHTML = `
+    ${lock ? `<div class="issue warn" style="font-size:13px">The meet has started &mdash; sessions and the meet header are locked.</div>` : ""}
+    <h3 style="margin:8px 0 4px">Sessions</h3>
+    <div class="scroll"><table class="miSess"><tr><th>#</th><th>Name</th><th>Day</th><th>Starts</th><th>Events</th><th>Projected</th><th></th></tr>${rows}</table></div>
+    <div class="row" style="margin-top:6px;gap:12px;align-items:center;flex-wrap:wrap">
+      <label class="muted" style="font-size:13.5px">Break between sessions <select id="miBreak" ${dis}><option value="">Use each session's start time</option>
+        ${[5, 10, 15, 20, 30].map(n => `<option value="${n}" ${MI.session_break === n ? "selected" : ""}>${n} minutes</option>`).join("")}</select></label>
+      <span class="muted" style="font-size:12.5px">With a break picked, a later session <b>on the same day</b> starts that long after the one before it is projected to finish. The first session of each day keeps its own start time.</span>
+      ${lock ? "" : `<button class="ghost small" id="miAddSess">+ Add a session</button>`}</div>
+    <div class="muted" style="font-size:12.5px;margin-top:4px">Two-day meet: split the session where day 2 begins (Split at event…), then set the new session's day and start time. Projected times count each heat as its slowest seed time plus the heat interval; an NT swim counts as Meet Manager's NT estimate plus 15% (individual events).</div>
+    <details style="margin-top:8px"><summary class="muted">Move single events between sessions</summary>
+      <div class="scroll" style="margin-top:6px"><table>${allEv.map(e => `<tr><td>#${esc(e.no)}</td><td>${esc(e.label)}${e.rnd === "P" ? " (prelims)" : ""}</td><td><select data-moveev="${e.ptr}" ${dis}>${sessOpts(e.sess)}</select></td></tr>`).join("")}</table></div></details>
+    <h3 style="margin:14px 0 4px">Meet header</h3>
+    <div class="muted" style="font-size:12.5px;margin-bottom:6px">Stored in the Meet Manager database: it prints on heat sheets and results and goes into every export. Name, date, start time and location are at the top of this page.</div>
+    <div class="miGrid">${inp("header1", "Header line 1", mt.header1, 'maxlength="75"')}${inp("header2", "Header line 2", mt.header2, 'maxlength="75"')}
+      ${inp("end", "End date", mt.end || mt.start, 'type="date"')}${inp("calc_date", "Age-up date", mt.calc_date, 'type="date"')}
+      <label class="mf"><span>Course</span><select data-mi="course" ${dis}>${[[3, "Short course yards (SCY)"], [2, "Short course meters (SCM)"], [1, "Long course meters (LCM)"]].map(([v, l]) => `<option value="${v}" ${+mt.course === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      ${inp("lanes", "Lanes", mt.lanes, 'type="number" min="1" max="10"')}${inp("altitude", "Altitude (ft)", mt.altitude || "", 'type="number" min="0" max="15000"')}
+      ${inp("addr1", "Address", mt.addr1, 'maxlength="30"')}${inp("addr2", "Address line 2", mt.addr2, 'maxlength="30"')}
+      ${inp("city", "City", mt.city, 'maxlength="30"')}${inp("state", "State", mt.state, 'maxlength="3"')}${inp("zip", "Zip", mt.zip, 'maxlength="10"')}${inp("country", "Country", mt.country, 'maxlength="3"')}</div>`;
+}
+document.addEventListener("change", async e => {
+  const t = e.target, d = t.dataset || {};
+  if (!t.closest || !t.closest("#miSec")) return;
+  if (d.mi) return miOp("meet", {fields: {[d.mi]: t.value.trim()}});
+  if (d.ms) return miOp("session", {ptr: +d.ms, fields: {[d.f]: d.f === "day" ? +t.value : t.value}});
+  if (d.split && t.value) {
+    const s = MI.sessions.find(x => x.ptr === +d.split), ev = s.events.find(x => x.ptr === +t.value);
+    if (!confirm(`Start a new session at event #${ev.no}? Event ${ev.no} and every later event in session ${s.no} move to it. Then set its day and start time.`)) { t.value = ""; return; }
+    return miOp("add_session", {from_event: +t.value, day: s.day});
+  }
+  if (d.moveev) return miOp("session_event", {event: +d.moveev, to: +t.value});
+  if (t.id === "miBreak") {
+    try { await api(`/api/meets/${M.id}/state`, J("PUT", {session_break: t.value === "" ? null : +t.value})); } catch (x) { alert(x.message); }
+    return miLoad(true);
+  }
+});
+document.addEventListener("click", e => {
+  if (e.target.id === "miAddSess") miOp("add_session", {day: Math.max(...MI.sessions.map(s => s.day))});
+  const del = e.target.closest && e.target.closest("[data-delsess]");
+  if (del) miOp("delete_session", {ptr: +del.dataset.delsess});
+});
+
 function render() {
+  miLoad();
   $("#meet").classList.remove("hidden");
   $("#newBox").classList.add("hidden");
   $("#openDb").href = `/db?meet=${M.id}`;

@@ -844,7 +844,11 @@ def _nt_estimate(v, course):
     return d * f * (1.1 if course in ("L", "S") else 1.0)
 
 
-NT_PAD = 1.10      # an NT swim: 10% slower than the slowest seed time in the event
+# An NT swim, from 329 NT swims with results in our past meets (Blue & Black, BL DP RH @ GHS, GHS-LHS-MOR, Mel
+# Roberts 2025, Fremont @ Tooele, Millard @ Grantsville): individual NT swims came in at 1.03x Meet Manager's canned NT
+# time on average (median 1.01, three in four within 1.15x); relays at 0.84x (nine in ten within 1.0x). NT swimmers
+# were usually *not* slower than the event's slowest seed (median 0.92x it).
+NT_PAD_IND, NT_PAD_REL = 1.15, 1.0
 
 
 def timeline(m, gap_min=None) -> list:
@@ -852,8 +856,8 @@ def timeline(m, gap_min=None) -> list:
     each heat lasts as long as its slowest seed time plus the session's heat interval, plus the backstroke allowance for events that
     start in the water (backstroke and medley relays). Unseeded events use the average entry time and a
     projected heat count. Unlike Meet Manager, an NT entry isn't left out: high school NT swimmers are often swimming
-    the event for the first time, so an NT counts as NT_PAD slower than the event's slowest seed time (or Meet
-    Manager's canned NT time when that is slower, or when nobody in the event has a time). Start times are rounded up to the minute.
+    the event for the first time, so an NT counts as Meet Manager's canned NT time x NT_PAD_IND (individual events)
+    or x NT_PAD_REL (relays) - see the numbers above NT_PAD_IND. Start times are rounded up to the minute.
     gap_min: break between sessions (minutes). When set, a later session on the same day starts that long after
     the one before it is projected to finish, instead of at its Meet Manager start time. Without it, a session whose
     Meet Manager start time comes before the previous session's projected finish starts at that finish instead
@@ -882,8 +886,7 @@ def timeline(m, gap_min=None) -> list:
                 else:
                     swimmers.update(a for a in e["legs"] if a)
             back = s["back"] if (v["stroke"] == "B" or (v["ind_rel"] == "R" and v["stroke"] == "E")) else 0
-            seeds = [e["conv"] or e["seed"] for e in ents if (e["conv"] or e["seed"])]
-            nt = max(_nt_estimate(v, s["course"]), max(seeds) * NT_PAD if seeds else 0)   # a first-time swimmer
+            nt = _nt_estimate(v, s["course"]) * (NT_PAD_REL if v["ind_rel"] == "R" else NT_PAD_IND)   # a first-time swimmer
             seeded = any(e["heat"] for e in ents)
             start = t
             if seeded:

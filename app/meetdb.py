@@ -175,6 +175,7 @@ def load(db) -> dict:
     sessions = [{"ptr": s["Sess_ptr"], "no": s.get("Sess_no") or 0, "ltr": _s(s.get("Sess_ltr")), "name": _s(s.get("Sess_name")),
                  "day": s.get("Sess_day") or 1, "start": s.get("Sess_starttime") or 0, "interval": s.get("Sess_interval") or 0,
                  "back": s.get("Sess_backinterval") or 0, "course": _s(s.get("Sess_course")) or "Y",
+                 "raw": {k: s.get(k) for k in ("Sess_entrymax", "Sess_entrymaxind", "Sess_entrymaxrel", "Sess_divinginterval", "Sess_chaseinterval")},
                  "items": sorted(({"event": it["Event_ptr"], "order": it.get("Sess_order") or 0, "rnd": _s(it.get("Sess_rnd")) or "F",
                                    "delay": it.get("Delay_seconds") or 0, "delay_desc": _s(it.get("Delay_desc"))}
                                   for it in t.get("Sessitem", []) if it["Sess_ptr"] == s["Sess_ptr"]), key=lambda x: x["order"])}
@@ -657,6 +658,137 @@ def start_time_ops(m, v):
             "set": {"Sess_starttime": max(0, min(86399, int(x["start"] or 0) + delta))}} for x in day1]
     shown = "%d:%02d %s" % ((secs // 3600 - 1) % 12 + 1, secs % 3600 // 60, "PM" if secs >= 43200 else "AM")
     return ops, f"start time → {shown}"
+
+
+# ---- sessions (Meet Manager's Session / Sessitem tables) ----
+def _session(m, ptr):
+    s = next((x for x in m.get("sessions", []) if x["ptr"] == int(ptr)), None)
+    if not s:
+        raise ValueError("No such session")
+    return s
+
+
+def _meet_days(m) -> int:
+    import datetime as _dt
+    mt = m["meet"]
+    try:
+        return max(1, (_dt.date.fromisoformat(mt["end"]) - _dt.date.fromisoformat(mt["start"])).days + 1)
+    except (ValueError, TypeError, KeyError):
+        return 1
+
+
+def _end_for_day(m, day):
+    """The meet's end date, moved out so the meet covers this day (a session on day 2 makes it a two-day meet)."""
+    import datetime as _dt
+    if day <= _meet_days(m):
+        return []
+    try:
+        end = _dt.date.fromisoformat(m["meet"]["start"]) + _dt.timedelta(days=day - 1)
+    except (ValueError, TypeError, KeyError):
+        return []
+    return [{"op": "update", "table": "Meet", "set": {"Meet_end": end.isoformat()}}]
+
+
+def op_session(m, ptr, fields):
+    """Change a session: {name, day, start ("3:00 PM" / "15:00")}."""
+    s = _session(m, ptr)
+    st, said, extra = {}, [], []
+    if "name" in fields:
+        v = str(fields["name"] or "").strip()[:60]
+        st["Sess_name"] = v or str(s["no"])
+        said.append(f"name {st['Sess_name']}")
+    if "day" in fields:
+        d = int(fields["day"])
+        if not 1 <= d <= 14:
+            raise ValueError("Day must be 1-14")
+        st["Sess_day"] = d
+        said.append(f"day {d}")
+        extra = _end_for_day(m, d)
+    if "start" in fields:
+        st["Sess_starttime"] = parse_hhmm(fields["start"])
+        said.append(f"starts {fields['start']}")
+    if not st:
+        return [], ""
+    return [{"op": "update", "table": "Session", "match": {"Sess_ptr": s["ptr"]}, "set": st}] + extra, \
+        f"Session {s['no']}: " + ", ".join(said)
+
+
+def _layout(m):
+    return {s["ptr"]: [(it["event"], it["rnd"]) for it in s["items"]] for s in m.get("sessions", [])}
+
+
+def _apply_layout(m, new):
+    """Sessitem updates that turn the current layout into `new`. Each item is matched on its event and round
+    (an event is in one session per round)."""
+    cur = {(ev, rnd): sp for sp, items in _layout(m).items() for ev, rnd in items}
+    ops = []
+    for sp, items in new.items():
+        for i, (ev, rnd) in enumerate(items, 1):
+            ops.append({"op": "update", "table": "Sessitem", "match": {"Sess_ptr": cur[(ev, rnd)], "Event_ptr": ev, "Sess_rnd": rnd},
+                        "set": {"Sess_ptr": sp, "Sess_order": i}})
+    return ops
+
+
+def _evno(m, ptr):
+    v = next((x for x in m["events"] if x["ptr"] == ptr), {})
+    return v.get("no", ptr)
+
+
+def op_session_event(m, event, to):
+    """Move an event (all its rounds in one session) to another session; each session keeps event-number order."""
+    event, to = int(event), int(to)
+    dst = _session(m, to)
+    new = _layout(m)
+    moved = [(ev, rnd) for items in new.values() for ev, rnd in items if ev == event]
+    if not moved:
+        raise ValueError("That event isn't in a session")
+    for sp in new:
+        new[sp] = [x for x in new[sp] if x[0] != event]
+    new[to] = sorted(new[to] + moved, key=lambda x: (_evno(m, x[0]), x[1] != "P"))
+    return _apply_layout(m, new), f"Event {_evno(m, event)} moved to session {dst['no']}"
+
+
+def op_add_session(m, day=None, start=None, from_event=None):
+    """A new session after the last one (settings copied from the last session). from_event: that event and every
+    later one in its session move into the new session - "split the session here"."""
+    ss = m.get("sessions", [])
+    if not ss:
+        raise ValueError("This meet has no sessions in Meet Manager")
+    last = ss[-1]
+    ptr = max(s["ptr"] for s in ss) + 1
+    no = max(s["no"] for s in ss) + 1
+    src = None
+    if from_event is not None:
+        src = next((s for s in ss if any(it["event"] == int(from_event) for it in s["items"])), None)
+        if not src:
+            raise ValueError("That event isn't in a session")
+    base = src or last
+    day = int(day or base["day"])
+    start_s = parse_hhmm(start) if start else int(base["start"] or 0)
+    raw = base.get("raw") or {}
+    row = {"Sess_no": no, "Sess_ltr": " ", "Sess_ptr": ptr, "Sess_day": day, "Sess_starttime": start_s,
+           "Sess_entrymax": raw.get("Sess_entrymax") or 0, "Sess_name": str(no), "Sess_interval": base["interval"] or 0,
+           "Sess_course": base["course"] or "Y", "Sess_entrymaxind": raw.get("Sess_entrymaxind") or 0,
+           "Sess_entrymaxrel": raw.get("Sess_entrymaxrel") or 0, "Sess_backinterval": base["back"] or 0,
+           "Sess_divinginterval": raw.get("Sess_divinginterval") or 0, "Sess_chaseinterval": raw.get("Sess_chaseinterval") or 0}
+    ops = [{"op": "insert", "table": "Session", "row": row}] + _end_for_day(m, day)
+    msg = f"Added session {no} (day {day})"
+    if src:
+        items = [(it["event"], it["rnd"]) for it in src["items"]]
+        cut = next(i for i, x in enumerate(items) if x[0] == int(from_event))
+        if cut == 0:
+            raise ValueError("That's the session's first event - pick a later one to split at")
+        new = {src["ptr"]: items[:cut], ptr: items[cut:]}
+        ops += _apply_layout({**m, "sessions": [src]}, new)
+        msg = f"Split session {src['no']}: events {_evno(m, items[cut][0])}-{_evno(m, items[-1][0])} are now session {no} (day {day})"
+    return ops, msg
+
+
+def op_delete_session(m, ptr):
+    s = _session(m, ptr)
+    if s["items"]:
+        raise ValueError("Move its events to another session first")
+    return [{"op": "delete", "table": "Session", "match": {"Sess_ptr": s["ptr"]}}], f"Deleted session {s['no']}"
 
 
 def op_meet(m, fields):

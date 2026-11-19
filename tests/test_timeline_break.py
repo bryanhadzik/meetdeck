@@ -32,5 +32,5 @@ def test_nt_swimmer_adds_time_to_their_heat():
     m["entries"][0]["seed"] = 0                      # one first-time swimmer in event 1's heat
     tl = heatsheet.timeline(m)[0]
     assert tl["finish"] >= base                      # the heat lasts at least as long as an NT swim
-    nt = max(heatsheet._nt_estimate(m["events"][0], "Y"), 30.0 * heatsheet.NT_PAD)
+    nt = max(heatsheet._nt_estimate(m["events"][0], "Y") * heatsheet.NT_PAD_IND, 30.0)
     assert tl["finish"] == 15 * 3600 + -(-(nt + 30) // 60) * 60

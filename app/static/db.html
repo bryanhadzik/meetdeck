@@ -137,7 +137,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
   <span class="grow"></span>
   <nav id="tabs" class="hidden"><button data-tab="events" class="on">Events</button><button data-tab="swimmers">Swimmers</button><button data-tab="scores">Scores</button>
     <div class="menu" id="moreMenu"><button type="button" id="moreBtn">More &#9662;</button>
-      <div class="pop hidden" id="morePop" style="min-width:170px;left:0;right:auto"><button data-tab="teams">Teams</button><button data-tab="meet">Meet info</button><button data-tab="rules">Rules</button><button data-tab="changes">Changes</button></div></div></nav>
+      <div class="pop hidden" id="morePop" style="min-width:170px;left:0;right:auto"><button data-tab="teams">Teams</button><button data-tab="rules">Rules</button><button data-tab="changes">Changes</button></div></div></nav>
   <a class="hidden" id="finishBtn" href="#" style="text-decoration:none;background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:5px 11px;font-size:13px;white-space:nowrap" title="Send results: emails, files, Meet Manager backup">Finish the meet &rarr;</a>
   <button class="small hidden" id="scoreBtn" title="Scoring settings (Utah high school / NFHS tables)">Scoring</button>
   <button class="ghost small hidden" id="undoBtn" title="Undo the last change">Undo</button>
@@ -261,7 +261,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
 
     <section id="tab-teams" class="hidden"><div id="teamList"></div></section>
 
-    <section id="tab-meet" class="hidden"><div id="meetForm"></div></section>
+    <section id="tab-meet" class="hidden"><div class="muted">Meet info and sessions moved to <a id="miLink" href="/">Set up meet</a>.</div></section>
 
     <section id="tab-rules" class="hidden">
       <div class="row"><input id="rq" type="search" placeholder='Search the rules: e.g. backup buttons, false start, 6-4-1, "official time"' style="flex:1;min-width:240px"><button class="small" id="rgo">Search</button></div>
@@ -544,7 +544,7 @@ function render() {
   if (TAB === "events") renderEvents();
   if (TAB === "swimmers") renderSwimmers();
   if (TAB === "teams") renderTeams();
-  if (TAB === "meet") renderMeet();
+  if (TAB === "meet") { const a = document.getElementById("miLink"); if (a) a.href = "/#meet/" + MID; }
   if (TAB === "rules") setTimeout(() => $("#rq").focus(), 0);
   if (TAB === "scores") renderScores();
   if (TAB === "changes") renderChanges();

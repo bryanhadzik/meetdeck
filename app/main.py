@@ -2298,7 +2298,54 @@ OPS = {"dfs": meetdb.op_dfs, "scratch": meetdb.op_scratch, "scratch_athlete": me
        "athlete": meetdb.op_athlete, "add_athlete": meetdb.op_add_athlete, "team": meetdb.op_team, "legs": meetdb.op_legs,
        "heat_results": meetdb.op_heat_results, "watches": meetdb.op_watches, "dq": meetdb.op_dq, "undq": meetdb.op_undq, "meet": meetdb.op_meet,
        "insert_heat": meetdb.op_insert_heat, "close_heats": meetdb.op_close_heats,
-       "exh": meetdb.op_exh, "exh_athlete": meetdb.op_exh_athlete}
+       "exh": meetdb.op_exh, "exh_athlete": meetdb.op_exh_athlete,
+       "session": meetdb.op_session, "session_event": meetdb.op_session_event, "add_session": meetdb.op_add_session,
+       "delete_session": meetdb.op_delete_session}
+
+
+def _meetinfo(mid: str) -> dict:
+    """Set up meet > Meet info & sessions: the meet header and Meet Manager's sessions (which events, which day,
+    start times) with the projected timeline."""
+    import datetime as _dt
+    import heatsheet
+    d = _dir(mid)
+    if not _dbfile(d).exists():
+        return {"has_db": False}
+    m = meetdb.load(_dbfile(d))
+    gap = _meta(d).get("session_break")
+    gap = gap if isinstance(gap, int) else None
+    tl = {s["no"]: s for s in heatsheet.timeline(m, gap)}
+    evs = {v["ptr"]: v for v in m["events"]}
+    days = meetdb._meet_days(m)
+    try:
+        d0 = _dt.date.fromisoformat(m["meet"]["start"])
+        dates = [(d0 + _dt.timedelta(days=i)).isoformat() for i in range(max(days, max([s["day"] for s in m["sessions"]] or [1])))]
+    except (ValueError, TypeError):
+        dates = []
+    sess = []
+    for s in m["sessions"]:
+        t = tl.get(s["no"]) or {}
+        sess.append({"ptr": s["ptr"], "no": s["no"], "name": s["name"], "day": s["day"], "start": s["start"],
+                     "shown_start": t.get("start", s["start"]), "finish": t.get("finish"), "clash": t.get("clash"),
+                     "heats": t.get("heats", 0), "interval": s["interval"], "back": s["back"],
+                     "events": [{"ptr": it["event"], "no": evs[it["event"]]["no"], "label": evs[it["event"]]["label"], "rnd": it["rnd"]}
+                                for it in s["items"] if it["event"] in evs]})
+    return {"has_db": True, "started": _meet_started(m), "meet": m["meet"], "sessions": sess, "days": days, "dates": dates,
+            "session_break": gap}
+
+
+@app.get("/api/meets/{mid}/meetinfo")
+def meetinfo_get(mid: str):
+    return _meetinfo(mid)
+
+
+@app.post("/api/meets/{mid}/meetinfo/op")
+def meetinfo_op(mid: str, body: dict):
+    """A change from Set up meet > Meet info & sessions (meet header or sessions), same rules and undo as Run the meet."""
+    if body.get("op") not in ("meet", "session", "session_event", "add_session", "delete_session"):
+        raise HTTPException(400, "unknown change")
+    db_op(mid, body)
+    return _meetinfo(mid)
 
 
 _DQR = {}

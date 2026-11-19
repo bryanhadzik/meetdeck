@@ -456,6 +456,145 @@ def referee_pdf(m, licensee="", printed=None) -> bytes:
     return r.render()
 
 
+# ---------------- referee program v2: DQ and order of finish ----------------
+# One event per page (continued pages as needed). Per lane: a DQ box, code box(es) - two for medley events, where a
+# swimmer or relay can be called on a stroke and an exchange - and a box to write the infraction. Under each heat,
+# a numbered box per place for the order of finish, where the referee writes the lane.
+class _Referee2(_Sheet):
+    BOTTOM = 762.0
+    X_LANE, X_NAME, X_SCH, X_SEED = 30.0, 44.0, 190.0, 334.0
+    X_DQ, X_CODE, X_INF, X_END = 342.0, 362.0, 0.0, 594.0
+    BOX = 17.0                               # height of the code and infraction boxes
+
+    def new_page(self):
+        if self.page:
+            self.c.showPage()
+        self.page += 1
+        mt = self.m["meet"]
+        self.text(18.0, 34.1, self.licensee, size=HSZ)
+        stamp = f"MeetDeck - {self.printed.strftime('%I:%M %p').lstrip('0')}  " \
+                f"{self.printed.month}/{self.printed.day}/{self.printed.year}  Page {self.page}"
+        self.text(self.X_END, 34.1, stamp, size=HSZ, align="r")
+        try:
+            d = dt.date.fromisoformat(mt["start"])
+            when = f"{d.month}/{d.day}/{d.year}"
+        except Exception:
+            when = mt.get("start") or ""
+        self.text(PAGE_W / 2, 46.1, f"{mt['name']} - {when}" if when else mt["name"], bold=True, size=HSZ, align="c")
+        self.text(PAGE_W / 2, 57.7, "Referee Program", bold=True, size=HSZ, align="c")
+
+    def codes(self, v):
+        return 2 if (v.get("stroke") or "").upper() == "E" else 1
+
+    def page_for(self, v, cont=False):
+        self.new_page()
+        no = f"{v['no']}{v.get('ltr') or ''}"
+        self.text(18.0, 78.0, "Event", bold=True, size=11.0)
+        self.text(52.0, 78.0, no, bold=True, size=11.0)
+        lx = 52.0 + pdfmetrics.stringWidth(no, self.bold, 11.0) + 7.0
+        self.text(lx, 78.0, event_title(v, self.m["meet"].get("course") or 3).split(" ", 1)[1] + (" (continued)" if cont else ""),
+                  bold=True, size=11.0)
+        relay = v["ind_rel"] == "R"
+        top = 96.0
+        self.text(self.X_LANE, top, "Lane", bold=True, size=HSZ, align="c")
+        self.text(self.X_NAME, top, "Team" if relay else "Name", bold=True, size=HSZ)
+        self.text(self.X_SCH, top, "Relay" if relay else "School", bold=True, size=HSZ)
+        self.text(self.X_SEED, top, "Seed", bold=True, size=HSZ, align="r")
+        self.text(self.X_DQ + 6.0, top, "DQ", bold=True, size=HSZ, align="c")
+        self.text(self.X_CODE, top, "Codes" if self.codes(v) == 2 else "Code", bold=True, size=HSZ)
+        self.text(self._inf_x(v), top, "Infraction", bold=True, size=HSZ)
+        self.c.setFillGray(0)
+        self.c.rect(18.0, PAGE_H - 108.0, self.X_END - 18.0, 0.9, stroke=0, fill=1)
+        return 114.0
+
+    def _inf_x(self, v):
+        return self.X_CODE + (2 * 30.0 + 4.0 if self.codes(v) == 2 else 34.0) + 6.0
+
+    def row_h(self, relay):
+        return 34.0 if relay else 23.0
+
+    def heat_h(self, lanes, relay):
+        return 16.0 + len(lanes) * self.row_h(relay) + 46.0
+
+    def box(self, x, top, w, h, lw=0.8):
+        self.c.setLineWidth(lw)
+        self.c.rect(x, PAGE_H - top - h, w, h, stroke=1, fill=0)
+
+    def event(self, v, heats):
+        relay = v["ind_rel"] == "R"
+        aths, teams = self.m["athletes"], self.m["teams"]
+        nc, xi = self.codes(v), self._inf_x(v)
+        y = self.page_for(v)
+        for hi, lanes in enumerate(heats):
+            if hi and y + self.heat_h(lanes, relay) > self.BOTTOM:
+                y = self.page_for(v, cont=True)
+            self.text(18.0, y, f"Heat {hi + 1} of {len(heats)}", bold=True, size=10.5)
+            y += 16.0
+            rh = self.row_h(relay)
+            for j, e in enumerate(lanes):
+                bt = y + 1.0                                   # boxes' top
+                self.c.setStrokeGray(0.75)
+                self.c.setLineWidth(0.4)
+                self.c.line(18.0, PAGE_H - (y + rh - 2.0), self.X_END, PAGE_H - (y + rh - 2.0))
+                self.c.setStrokeGray(0)
+                self.text(self.X_LANE, y + 3.0, str(j + 1), bold=True, size=12.0, align="c")
+                self.box(self.X_DQ, bt + 3.0, 12.0, 12.0)
+                for k in range(nc):
+                    self.box(self.X_CODE + k * 34.0, bt, 30.0, self.BOX)
+                self.box(xi, bt, self.X_END - xi, self.BOX)
+                if not e:
+                    self.text(self.X_NAME, y + 4.0, "(empty)", size=SZ)
+                    y += rh
+                    continue
+                self.text(self.X_SEED, y + 4.0, _seed(e), size=HSZ, align="r")
+                if relay:
+                    tm = teams.get(e["team"], {})
+                    self.text(self.X_NAME, y + 3.0, self.team_label(tm, 140, 10.5), size=10.5, w=140)
+                    self.text(self.X_SCH, y + 3.0, e.get("ltr") or "", size=10.5)
+                    legs = [aths.get(x) for x in (e.get("legs") or [])[:4]] + [None] * 4
+                    for k in range(4):
+                        if legs[k]:
+                            self.text(self.X_NAME + k * 74.0, y + 17.0, f"{k + 1}) {_name(legs[k])}", size=7.5, w=71)
+                else:
+                    a_ = aths.get(e["ath"], {})
+                    nm = _name(a_) + (f" ({a_['yr']})" if a_.get("yr") else "")
+                    self.text(self.X_NAME, y + 3.0, nm, size=10.5, w=142)
+                    self.text(self.X_SCH, y + 4.0, self.team_label(teams.get(a_.get("team"), {}), 120, HSZ), size=HSZ, w=120)
+                y += rh
+            # order of finish: one box per place, the referee writes the lane
+            y += 6.0
+            self.text(18.0, y + 4.0, "Order of finish", bold=True, size=HSZ)
+            self.text(18.0, y + 15.0, "write the lane", size=SZ)
+            n = len(lanes)
+            bw = min(40.0, (self.X_END - 100.0) / max(n, 1) - 4.0)
+            for k in range(n):
+                x = 100.0 + k * (bw + 4.0)
+                self.box(x, y, bw, 28.0, lw=1.0)
+                self.text(x + 2.5, y + 2.0, ("1st", "2nd", "3rd")[k] if k < 3 else f"{k + 1}th", size=6.5)
+            y += 40.0
+
+    def render(self):
+        for v, heats in _blocks(self.m):
+            self.event(v, heats)
+        if not self.page:
+            self.new_page()
+        self.c.showPage()
+        self.c.save()
+        return self.buf.getvalue()
+
+
+def referee2_pdf(m, licensee="", printed=None) -> bytes:
+    if printed is None:
+        try:
+            from zoneinfo import ZoneInfo
+            printed = dt.datetime.now(ZoneInfo("America/Denver"))
+        except Exception:
+            printed = dt.datetime.now()
+    r = _Referee2(m, licensee, printed)
+    r.c.setTitle(f"{m['meet']['name']} - Referee Program")
+    return r.render()
+
+
 # ---------------- timer sheets: one set of pages per lane, every heat of every event ----------------
 class _Timer(_Sheet):
     LAST_ROW = 740.0

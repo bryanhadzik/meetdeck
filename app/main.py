@@ -3459,6 +3459,8 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
         pdf, label = heatsheet.heat_sheet_pdf(m, licensee), "heat sheet"
     elif kind == "referee":
         pdf, label = heatsheet.referee_pdf(m, licensee), "referee program"
+    elif kind == "referee2":
+        pdf, label = heatsheet.referee2_pdf(m, licensee), "referee program"
     elif kind == "results":
         try:
             m["records_broken"] = _records_broken(d, m)

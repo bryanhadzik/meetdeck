@@ -3171,7 +3171,7 @@ def _public_doc(mid: str, stream: bool = True) -> dict:
     return doc
 
 
-def _public_job(mid: str):
+def _public_job(mid: str, top: bool = True):
     st = _settings()
     if not st.get("public_token"):
         raise RuntimeError("Add a GitHub token in Setup > Phone results first")
@@ -3187,7 +3187,15 @@ def _public_job(mid: str):
         if adoc.get("stream"):              # keep where the recordings are (race replays), but no live player
             adoc["stream"] = {"url": adoc["stream"].get("url"), "live": False, "off": True}
         arch = (slug, adoc)
-    out = public_results.publish(doc, _pub_repo(st), st["public_token"], _pub_domain(st), archive=arch)
+    if not top and not arch:
+        raise RuntimeError("A test meet doesn't get a kept copy")
+    out = public_results.publish(doc, _pub_repo(st), st["public_token"], _pub_domain(st), archive=arch, top=top)
+    if not top:
+        meta = _meta(_dir(mid))
+        meta["pub_slug"], meta["archive_url"] = arch[0], out.get("archive_url")
+        _save(_dir(mid), meta)
+        _dblog(_dir(mid), f"Kept a copy of the phone results at {out.get('archive_url')}", "export")
+        return out
     meta = _meta(_dir(mid))                 # what went out, so Run the meet can say when the page is behind
     if arch:
         meta["pub_slug"], meta["archive_url"] = arch[0], out.get("archive_url")
@@ -3354,6 +3362,16 @@ def public_preview_json(mid: str):
 @app.get("/api/meets/{mid}/public/")
 def public_preview_page(mid: str):
     return Response(public_results.PAGE.read_text(encoding="utf-8"), media_type="text/html")
+
+
+@app.post("/api/meets/{mid}/public/archive")
+def public_archive(mid: str):
+    """Write (or refresh) this meet's kept copy at m/<date-name>/ without changing the top page - for past meets."""
+    _public_doc(mid)
+    try:
+        return _public_job(mid, top=False)
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/api/meets/{mid}/public/publish")

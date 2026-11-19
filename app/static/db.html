@@ -324,6 +324,12 @@ const evOf = ptr => M.events.find(e => e.ptr === ptr);
 const isDfs = e => ["F", "D", "Q"].includes((e.stat || "").trim()) && ["7B", "7P"].includes((e.dq || "").toUpperCase()) && !e.time;
 
 document.addEventListener("click", async e => {
+  if (e.target.id !== "pubKeep") return;
+  e.target.disabled = true; e.target.textContent = "Saving…";
+  try { const r = await api(`/api/meets/${MID}/public/archive`, J({})); toast("Coaches' copy saved"); } catch (x) { alert(x.message); }
+  pubStatus();
+});
+document.addEventListener("click", async e => {
   const b = e.target.closest("[data-copyarch]"); if (!b) return;
   try { await navigator.clipboard.writeText(b.dataset.copyarch); toast("Link copied"); } catch (x) { prompt("Copy the link:", b.dataset.copyarch); }
 });
@@ -1259,7 +1265,8 @@ async function pubStatus() {
     if (p.changed) { st.className = "badge warn"; st.textContent = "out of date"; }
     $("#pubArch").innerHTML = p.test ? "Test meet: no permanent copy is kept."
       : p.archive_url ? `Link for coaches (stays up after the next meet): <a href="${esc(p.archive_url)}" target="_blank" rel="noopener">${esc(p.archive_url.replace(/^https:\/\//, ""))}</a> <button class="ghost small" data-copyarch="${esc(p.archive_url)}">Copy</button>`
-      : "A permanent copy for coaches is made the first time this meet is published.";
+      : "No permanent copy for coaches yet.";
+    if (!p.test && p.token) $("#pubArch").innerHTML += ` <button class="ghost small" id="pubKeep" title="Write this meet's results to its own address on the phone site, without changing what the main page shows (for past meets)">${p.archive_url ? "Update the coaches' copy only" : "Make the coaches' copy (main page unchanged)"}</button>`;
   } catch (e) {}
 }
 // red box + pulsing button when the board / phone page still has an older meet

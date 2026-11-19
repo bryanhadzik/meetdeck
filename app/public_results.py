@@ -190,7 +190,7 @@ def files(doc: dict, domain: str = "") -> dict:
     return f
 
 
-def publish(doc: dict, repo: str, token: str, domain: str = "", archive: tuple | None = None) -> dict:
+def publish(doc: dict, repo: str, token: str, domain: str = "", archive: tuple | None = None, top: bool = True) -> dict:
     """One new commit with the page and these results at the top of the site. archive=(slug, doc) also writes
     m/<slug>/ - a copy of this meet that stays put when the next meet takes over the top page. Earlier meets'
     m/ folders are kept (the new tree is built on the old one)."""
@@ -199,6 +199,19 @@ def publish(doc: dict, repo: str, token: str, domain: str = "", archive: tuple |
         slug, adoc = archive
         fl[f"m/{slug}/index.html"] = fl["index.html"]
         fl[f"m/{slug}/results.json"] = json.dumps(adoc, separators=(",", ":"))
+        idx = []                            # m/index.json: every kept meet, newest first (the page's meet picker)
+        try:
+            import base64
+            got = _api(token, "GET", f"/repos/{repo}/contents/m/index.json?ref={BRANCH}")
+            idx = json.loads(base64.b64decode(got["content"]).decode())
+        except (RuntimeError, KeyError, TypeError, ValueError):
+            idx = []
+        m_ = adoc.get("meet") or {}
+        idx = [x for x in idx if x.get("slug") != slug and not (m_.get("id") and x.get("id") == m_.get("id"))]
+        idx.append({"slug": slug, "id": m_.get("id", ""), "name": m_.get("name", ""), "date": m_.get("date", ""), "iso": slug[:10]})
+        fl["m/index.json"] = json.dumps(sorted(idx, key=lambda x: x.get("iso", ""), reverse=True), separators=(",", ":"))
+        if not top:                         # only the kept copy: the top page keeps showing whatever it shows
+            fl = {k: v for k, v in fl.items() if k.startswith("m/")}
     body = {"tree": [{"path": p, "mode": "100644", "type": "blob", "content": c} for p, c in fl.items()]}
     try:                                    # keep what's there (the m/ archive); a brand-new site has nothing yet
         head = _api(token, "GET", f"/repos/{repo}/git/refs/heads/{BRANCH}")
@@ -215,6 +228,8 @@ def publish(doc: dict, repo: str, token: str, domain: str = "", archive: tuple |
         _api(token, "PUT", f"/repos/{repo}/contents/README.md",
              {"message": "Start", "content": base64.b64encode(b"Live swim meet results, published by MeetDeck to the gh-pages branch.\n").decode()})
         tree = _api(token, "POST", f"/repos/{repo}/git/trees", body)
+    if not top and "base_tree" not in body:
+        raise RuntimeError("Publish a meet to the phone page first")
     commit = _api(token, "POST", f"/repos/{repo}/git/commits",
                   {"message": f"Results {doc['meet']['name']} {doc['updated']}", "tree": tree["sha"], "parents": []})
     try:

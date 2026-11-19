@@ -15,6 +15,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-app
 header{background:var(--acc);color:#fff;padding:14px 16px 12px;position:sticky;top:0;z-index:5}
 @media (prefers-color-scheme:dark){header{background:#0b3a6e}}
 header h1{margin:0;font-size:19px;line-height:1.2;padding-right:92px}
+header h1{position:relative}
+#mpickC{font-size:14px;opacity:.85}
+#mpick{position:absolute;inset:0;width:calc(100% - 92px);opacity:0;font-size:16px;cursor:pointer}
 .share{position:absolute;top:12px;right:12px;border:0;border-radius:10px;padding:7px 12px;font-size:14px;font-weight:600;
   background:rgba(255,255,255,.18);color:#fff;display:flex;align-items:center;gap:6px;cursor:pointer}
 .share svg{width:17px;height:17px}
@@ -115,7 +118,8 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
 <body>
 <header>
   <button class="share" id="share" aria-label="Send this page to someone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 3v13"/><path d="m7 8 5-5 5 5"/></svg>Share</button>
-  <h1 id="mname">Swim results</h1>
+  <h1><span id="mname">Swim results</span><span id="mpickC" class="hide" aria-hidden="true"> &#9662;</span>
+    <select id="mpick" class="hide" aria-label="Pick a meet"></select></h1>
   <div class="sub" id="msub">Loading…</div>
   <a class="live hide" id="liveBtn" href="#watch">LIVE &middot; Watch the stream</a>
   <div class="bar"><input id="q" type="search" placeholder="Find a swimmer or team" autocomplete="off" enterkeyhint="search"><button id="mine" title="Show only swimmers you starred">★ Mine</button></div>
@@ -138,6 +142,30 @@ function ago(iso) {
   if (s < 3600) return Math.round(s / 60) + " min ago";
   return new Date(iso).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
 }
+
+// ---- meet picker: the title lists the meets kept at m/<date-name>/ (and the latest, on the top page)
+const BASE = location.pathname.includes("/m/") ? location.pathname.slice(0, location.pathname.indexOf("/m/") + 1)
+           : location.pathname.replace(/[^/]*$/, "");
+const HERE = (location.pathname.match(/\/m\/([^/]+)/) || [])[1] || "";      // "" = the top page (latest meet)
+let IDX = null;
+async function meets() {
+  if (IDX === null) {
+    IDX = [];
+    try { const r = await fetch(BASE + "m/index.json?t=" + Date.now(), {cache: "no-store"}); if (r.ok) IDX = await r.json(); } catch (e) {}
+  }
+  const sel = $("#mpick"), id = D && D.meet && D.meet.id;
+  const list = IDX.filter(x => HERE || x.id !== id);           // the top page's meet is listed once, as the top page
+  if (!list.length) { sel.classList.add("hide"); $("#mpickC").classList.add("hide"); return; }
+  const opt = (v, t, on) => `<option value="${esc(v)}" ${on ? "selected" : ""}>${esc(t)}</option>`;
+  sel.innerHTML = (HERE ? opt("", "Latest meet") : opt("", (D.meet.name || "This meet") + (D.meet.date ? " - " + D.meet.date : ""), true))
+    + list.map(x => opt(x.slug, `${x.name}${x.date ? " - " + x.date : ""}`, x.slug === HERE)).join("");
+  sel.classList.remove("hide"); $("#mpickC").classList.remove("hide");
+}
+$("#mpick").addEventListener("change", e => {
+  const v = e.target.value;
+  track(v ? `meet/${v}` : "meet/latest", "Picked a meet");
+  location.href = BASE + (v ? `m/${v}/` : "");
+});
 
 async function load() {
   try {
@@ -284,6 +312,7 @@ function render() {
   const m = D.meet || {};
   document.title = (m.name || "Swim") + " – results";
   $("#mname").textContent = m.name || "Swim results";
+  meets();
   $("#msub").textContent = sub();
   const lb = $("#liveBtn"), st = D.stream;
   const live = !D.archive && !!(st && st.url && st.live && !st.off);   // a meet's permanent copy: replays only

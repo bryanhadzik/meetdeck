@@ -818,6 +818,8 @@ def put_state(mid: str, body: dict):
             if _dbfile(d).exists():
                 _db_start_time(d, v)
         meta["start_time"] = v
+    if _dbfile(d).exists() and any(k in body for k in ("name", "date", "location")):
+        _db_header(d, {k: body[k] for k in ("name", "date", "location") if k in body})
     if "record_team" in body:
         if body["record_team"] is None:
             meta.pop("record_team", None)   # back to automatic
@@ -833,6 +835,40 @@ def put_state(mid: str, body: dict):
         except Exception as x:
             print("seeding to db:", x)
     return _state(d)
+
+
+def _db_header(d: Path, f: dict):
+    """Keep the meet database's header (name, start date, location) in step with Set up meet - heat sheets, the
+    timeline and exports read the database. A new start date moves the end date with it, so a two-day meet stays two days."""
+    import datetime as _dt
+    db = _dbfile(d)
+    try:
+        m = meetdb.load(db)
+        mt, fields = m["meet"], {}
+        for k, mk in (("name", "name"), ("location", "location")):
+            v = str(f.get(k) or "").strip()
+            if k in f and v and v != (mt.get(mk) or "").strip():
+                fields[mk] = v
+        v = str(f.get("date") or "").strip()
+        if v and v != mt.get("start"):
+            fields["start"] = v
+            try:
+                span = (_dt.date.fromisoformat(mt.get("end") or mt["start"]) - _dt.date.fromisoformat(mt["start"])).days
+            except (ValueError, KeyError, TypeError):
+                span = 0
+            fields["end"] = (_dt.date.fromisoformat(v) + _dt.timedelta(days=max(span, 0))).isoformat()
+        if fields:
+            ops, msg = meetdb.op_meet(m, fields)
+            if ops:
+                _snapshot(d, "before: " + msg)
+                meetdb.apply(db, ops)
+                _dblog(d, msg)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:              # an older Access 97 meet file the server can only read: keep MeetDeck's copy
+        if not ("NonWritable" in str(e) and _jet3(db)):
+            raise HTTPException(500, f"Database change failed: {e}")
+        print("meet header to db:", e)
 
 
 def _db_start_time(d: Path, hhmm: str):

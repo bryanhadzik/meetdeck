@@ -7,7 +7,10 @@
 
      {app: "meetdeck" | "meetboard",   which program this page belongs to
       active: "setup" | "run" | "music" | "admin",
-      debug: true}                     meet-board only: show Debug in the Setup menu
+      debug: true,                     meet-board only: show Debug in the Setup menu
+      pool: true|false}                MeetDeck only, optional: pool features (meet board, music, stream,
+                                       screens). Left out, MeetDeck's setting (Setup > Pool features) decides;
+                                       meet-board pages always have them.
 
    The Screens menu has the TV controls (warm-up slide, need timers, break slide, go black,
    refresh all screens) on every page of both programs; they talk to meet-board's API.
@@ -24,6 +27,8 @@
   var host = location.hostname || "127.0.0.1";
   var MD = C.app === "meetdeck" ? location.origin : "http://" + host + ":8001";
   var MB = C.app === "meetboard" && location.port === "5000" ? location.origin : "http://" + host + ":5000";
+  // pool features: the meet board / music / stream / screens parts, only for the pool's own PCs
+  var POOL = C.app === "meetboard" ? true : (typeof C.pool === "boolean" ? C.pool : null);
 
   var css = [
     "#appbar .rl{font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#0b1618;background:#d9a441;border:0;border-radius:7px;padding:9px 11px;cursor:pointer}",
@@ -61,7 +66,7 @@
     "@media (max-width:640px){#appbar{padding:4px 6px}#appbar a.ab,#appbar button.ab{padding:8px 8px}#appbar .main{font-size:14px}",
     "  #appbar .hide-sm{display:none}#appbar .pop{position:fixed;left:8px;right:8px;top:52px;min-width:0}}"
   ].join("\n");
-  css += "#appbar .abStream{display:contents}";
+  css += "#appbar .abStream{display:contents}#appbar .abPool{display:contents}#appbar.nopool .abPool{display:none!important}";
   var st = document.createElement("style"); st.textContent = css; document.head.appendChild(st);
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); }
@@ -78,10 +83,10 @@
   var html =
     main("setup", "Set up meet", MD + "/#meets") +
     main("run", "Run meet", runHref) +
-    main("music", "Music", MB + "/music") +
-    '<span class="abStream">' + main("stream", "Stream", MB + "/stream") + "</span>" +
+    '<span class="abPool">' + main("music", "Music", MB + "/music") +
+    '<span class="abStream">' + main("stream", "Stream", MB + "/stream") + "</span></span>" +
     '<span class="sp"></span>' +
-    '<div class="menu" id="abScreens"><button class="ab" type="button">Screens <span class="hide-sm">&#9662;</span><span class="dot hidden" id="abScrOn" style="display:none;background:#ffd23f"></span></button><div class="pop">' +
+    '<div class="menu abPool" id="abScreens"><button class="ab" type="button">Screens <span class="hide-sm">&#9662;</span><span class="dot hidden" id="abScrOn" style="display:none;background:#ffd23f"></span></button><div class="pop">' +
       '<div class="lbl">Open</div>' +
       item(MB + "/web/meetboard", "Meet board &#8599;", "", true) +
       '<span class="abStream">' + item(MB + "/overlay/race?layout=strip&test", "Lower Lanes (stream) &#8599;", "", true) +
@@ -94,7 +99,7 @@
       item(MD + "/#contacts", "Contacts", "contacts") +
       item(MD + "/#rules", "Rules", "rules") +
       item(MD + "/#setup", "MeetDeck setup (Drive, phone results, timing)", "mdsetup") +
-      "<hr>" +
+      '<div class="abPool"><hr>' +
       '<div class="lbl">Screens &amp; stream</div>' +
       item(MB + "/settings", "Meet board settings", "settings") +
       item(MB + "/team_colors", "Team colors &amp; logos", "colors") +
@@ -102,7 +107,7 @@
       item(MB + "/meet_files", "Meet files (load by hand)", "files") +
       item(MB + "/software_update", 'Meet board update <span class="badge" id="abUpdItem" style="display:none">new</span>', "update") +
       (C.debug ? item(MB + "/debug", "Debug", "debug") : "") +
-    "</div></div>" +
+    "</div></div></div>" +
     '<span class="st" id="abStatus" title="Checking…"><span class="dot" id="abDot"></span></span>';
 
   // Settings -> Streaming turned off: hide the Stream tab and the stream pages (meet-board tells us; from MeetDeck, ask it)
@@ -111,6 +116,7 @@
   }
   var bar = document.createElement("div");
   bar.id = "appbar";
+  if (POOL !== true) bar.classList.add("nopool");     // shown once MeetDeck says this PC has pool features
   bar.innerHTML = html;
   document.body.insertBefore(bar, document.body.firstChild);
   document.body.classList.add("hasAppbar");
@@ -124,7 +130,7 @@
   setH(); window.addEventListener("resize", setH);
 
   // TV controls in Screens (the same on every page of both programs): they work meet-board's API
-  (function () {
+  function initScreens() {
     var box = document.getElementById("abCtlBox");
     box.innerHTML = '<hr><div class="lbl">On the TVs now</div><div class="ctl">' +
       '<button class="rl wu" type="button" data-k="wu" title="Show the warm-up slide (meet, teams, start time) on the meet boards and the stream">Warm-up slide</button>' +
@@ -181,7 +187,16 @@
       Object.keys(path).forEach(function (k) { api(path[k]).then(show[k]).catch(function () {}); });
     }
     load(); setInterval(load, 15000);
-  })();
+  }
+  function setPool(on) {
+    POOL = !!on;
+    bar.classList.toggle("nopool", !POOL);
+    if (POOL && !bar.dataset.scr) { bar.dataset.scr = "1"; initScreens(); }
+    setH();
+  }
+  if (POOL !== null) setPool(POOL);
+  else fetch(MD + "/api/settings", {cache: "no-store"}).then(function (r) { return r.json(); })
+    .then(function (s) { setPool(!!s.pool_features); poll(); }).catch(function () { setPool(false); });
 
   // menus: click to open, click elsewhere to close
   [].forEach.call(bar.querySelectorAll(".menu"), function (m) {
@@ -220,13 +235,15 @@
   function json(url) { return fetch(url, {cache: "no-store"}).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); }
   function poll() {
     if (document.hidden) return;
-    var jobs = [C.app === "meetdeck" ? reach(MB + "/favicon.ico") : reach(MD + "/favicon.ico")];
+    var jobs = [C.app === "meetdeck" ? (POOL ? reach(MB + "/favicon.ico") : Promise.resolve(null)) : reach(MD + "/favicon.ico")];
     jobs.push(C.app === "meetdeck" ? json("/api/bridge/status") : json("/api/serial"));
     Promise.all(jobs).then(function (r) {
       var other = r[0], d = r[1], lines = [], cls = "ok";
       if (C.app === "meetdeck") {
-        lines.push("Meet board program: " + (other ? "running" : "not reachable"));
-        if (!other) cls = "bad";
+        if (other !== null) {           // pool PCs only: the meet board program
+          lines.push("Meet board program: " + (other ? "running" : "not reachable"));
+          if (!other) cls = "bad";
+        }
         var con = d && d.connected;
         lines.push("Timing console: " + (con ? "connected" + (d.port ? " (" + d.port + ")" : "") : "not connected"));
         if (!con && cls === "ok") cls = "warn";

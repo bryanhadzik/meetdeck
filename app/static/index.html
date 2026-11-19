@@ -410,6 +410,11 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     <details style="margin-top:8px"><summary class="muted">Show the script</summary><textarea id="sScript" rows="12" readonly style="width:100%;margin-top:6px;font:12px ui-monospace,monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px"></textarea></details>
   </section>
   <section>
+    <h2>Pool features</h2>
+    <label class="row" style="font-size:14px"><input type="checkbox" id="sPool"> This PC runs meets at the pool with the <b>meet board</b>: spectator TVs, music, the live stream and the screens menu</label>
+    <div class="muted" style="font-size:12.5px;margin-top:4px">Leave it off when you just run meets with MeetDeck: the top bar then has no Music, Stream or Screens, and the phone results page has no stream.</div>
+  </section>
+  <section class="poolOnly">
     <h2>Meet board</h2>
     <div class="muted" style="font-size:13px">The pool PC running <b>meet-board</b> (spectator TVs and the stream overlay). MeetDeck sends it the start lists from the meet database, relay swimmers' last names included &mdash; on the meet database page, <b>Send start lists</b>.</div>
     <div class="row" style="margin-top:8px"><label>Address <input id="sMb" placeholder="http://192.168.8.243:5000" style="width:260px"></label>
@@ -420,16 +425,16 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     <h2>Phone results</h2>
     <div class="muted" style="font-size:13px">A public, phone-friendly results page for spectators (no login, works on cellular). MeetDeck publishes it to
       a GitHub Pages site after each scored race; phones see it about a minute later. Put the address on the board.</div>
-    <div class="row" style="margin-top:8px"><label>GitHub repository <input id="sPubRepo" placeholder="bryanhadzik/swim-results" style="width:220px"></label>
+    <div class="row" style="margin-top:8px"><label>GitHub repository <input id="sPubRepo" placeholder="your-github-name/swim-results" style="width:220px"></label>
       <label>Short address <input id="sPubDom" placeholder="swim.example.org (optional)" style="width:200px"></label></div>
     <div class="row" style="margin-top:6px"><label>GitHub token <input id="sPubTok" type="password" placeholder="github_pat_…" style="width:260px" autocomplete="off"></label>
       <button class="small" id="sPubSave">Save</button><span class="muted" id="sPubMsg" style="font-size:13px"></span></div>
     <div class="muted" style="font-size:12.5px;margin-top:4px">Token: GitHub &rarr; Settings &rarr; Developer settings &rarr; Fine-grained tokens &rarr; only this repository,
       permission <b>Contents: read and write</b>. It stays on this computer.</div>
-    <div class="row" style="margin-top:8px"><label>Live stream player <input id="sStream" placeholder="https://…/iframe" style="width:420px" autocomplete="off"></label>
+    <div class="poolOnly"><div class="row" style="margin-top:8px"><label>Live stream player <input id="sStream" placeholder="https://…/iframe" style="width:420px" autocomplete="off"></label>
       <button class="small" id="sStreamSave">Save</button><span class="muted" id="sStreamMsg" style="font-size:13px"></span></div>
     <div class="muted" style="font-size:12.5px;margin-top:4px">The embed (iframe) address of the stream player. The phone page shows it above the results while OBS is streaming.
-      Blank = the Pratt Cloudflare Stream player. Never paste a stream key here.</div>
+      Blank = the Pratt Cloudflare Stream player. Never paste a stream key here.</div></div>
     <div class="row" style="margin-top:8px"><label>Visit stats (GoatCounter code) <input id="sGc" placeholder="prattswim" style="width:160px" autocomplete="off"></label>
       <button class="small" id="sGcSave">Save</button><a id="sGcLink" target="_blank" rel="noopener" style="font-size:13px"></a><span class="muted" id="sGcMsg" style="font-size:13px"></span></div>
     <div class="muted" style="font-size:12.5px;margin-top:4px">Counts visits, stars (per swimmer), opened events, searches, shares and stream taps on the phone page.
@@ -674,6 +679,8 @@ async function loadSetup() {
   $("#sDbg").checked = !!SET.debug_tools;
   $("#sGc").value = SET.goatcounter || "";
   $("#sStream").value = SET.stream_url || "";
+  $("#sPool").checked = !!SET.pool_features;
+  document.querySelectorAll(".poolOnly").forEach(x => x.classList.toggle("hidden", !SET.pool_features));
   $("#sGcLink").textContent = SET.goatcounter ? " open stats" : ""; $("#sGcLink").href = SET.goatcounter ? `https://${SET.goatcounter}.goatcounter.com` : "#";
   $("#sPubUrl").textContent = $("#sPubUrl").href = SET.public_url || "";
   $("#sWriteState").innerHTML = !SET.drive_folder ? `<span class="muted">Save the folder first.</span>` : SET.drive_write ? `<span class="badge ok">Set up</span> <span class="muted" style="font-size:13px">Backups you download are also filed into Drive.</span>` : `<span class="badge no">Not set up</span>`;
@@ -965,6 +972,10 @@ $("#sMbAuto").onchange = async () => {
 $("#sDbg").onchange = async e => {
   try { SET = await api("/api/settings", J("PUT", {debug_tools: e.target.checked})); $("#sDbgMsg").textContent = SET.debug_tools ? "On - reload the meet page to see them" : "Off"; }
   catch (x) { $("#sDbgMsg").textContent = x.message; }
+};
+$("#sPool").onchange = async e => {
+  try { SET = await api("/api/settings", J("PUT", {pool_features: e.target.checked})); location.reload(); }
+  catch (x) { e.target.checked = !e.target.checked; alert(x.message); }
 };
 $("#sStreamSave").onclick = async () => {
   try { SET = await api("/api/settings", J("PUT", {stream_url: $("#sStream").value})); $("#sStream").value = SET.stream_url || "";

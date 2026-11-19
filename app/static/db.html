@@ -304,8 +304,8 @@ const MID = new URLSearchParams(location.search).get("meet");
 const API = `/api/meets/${MID}/db`;
 let AUTO_BUILT = false;
 let S = null, M = null, EV = null, TAB = "events", EDIT_SW = null, RELAY_SW = null, TOL = 0.30;
-let MB = {url: "", auto: false, sig: null, timer: null, busy: false};
-fetch("/api/settings").then(r => r.json()).then(st => { document.body.classList.toggle("dbgOn", !!st.debug_tools); if (st.time_tolerance) TOL = st.time_tolerance; MB.url = st.meetboard_url || ""; MB.auto = !!st.meetboard_auto; mbShow(); }).catch(() => {});
+let MB = {url: "", auto: false, sig: null, timer: null, busy: false, pool: false};
+fetch("/api/settings").then(r => r.json()).then(st => { document.body.classList.toggle("dbgOn", !!st.debug_tools); if (st.time_tolerance) TOL = st.time_tolerance; MB.pool = !!st.pool_features; MB.url = MB.pool ? st.meetboard_url || "" : ""; MB.auto = !!st.meetboard_auto; mbShow(); }).catch(() => {});
 try { EV = +sessionStorage.getItem("db-ev-" + MID) || null; } catch (e) {}
 
 async function api(url, opt) {
@@ -432,7 +432,7 @@ function printPdf(url) {
 // ---- meet-board: start lists to the pool's spectator TVs / stream overlay --------------
 function mbShow() {
   const on = !!(MB.url && S && S.exists);
-  $("#mbBox").classList.toggle("hidden", !S || !S.exists);
+  $("#mbBox").classList.toggle("hidden", !S || !S.exists || !MB.pool);       // pool PCs only
   $("#pubBox").classList.toggle("hidden", !S || !S.exists);
   { const n = watchesNeeded(), wc = document.getElementById("watchCount"); if (wc) { wc.textContent = n ? `(${n} lane${n > 1 ? "s" : ""} to get)` : "(none right now)"; wc.style.color = n ? "var(--warn)" : ""; }
     const wb = document.getElementById("watchBadge");

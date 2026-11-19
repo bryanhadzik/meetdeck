@@ -67,13 +67,32 @@ def _write_settings(st: dict):
 DEFAULT_STREAM_URL = "https://customer-1zhj64jhwa95o9th.cloudflarestream.com/1ffbfff5a9a1afdf13e1c17059eb5a65/iframe"
 
 
+def _pool(st: dict) -> bool:
+    """Pool features (Setup > Pool features): the meet board, music, stream and screens, and the pool's own phone-results
+    site and stream as defaults. Off for everyone else; PCs already set up with a meet board count as pool PCs."""
+    return bool(st.get("pool_features", bool(st.get("meetboard_url"))))
+
+
+def _pub_repo(st: dict) -> str:
+    return st.get("public_repo") or (public_results.DEFAULT_REPO if _pool(st) else "")
+
+
+def _pub_domain(st: dict) -> str:
+    return st.get("public_domain", public_results.DEFAULT_DOMAIN if _pool(st) else "")
+
+
+def _pub_url(st: dict) -> str:
+    repo, dom = _pub_repo(st), _pub_domain(st)
+    return public_results.site_url(repo, dom) if (repo or dom) else ""
+
+
 def _settings() -> dict:
     try:
         s = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
     except ValueError:          # half-written file (PC switched off mid-save): start from defaults
         s = {}
     s.setdefault("season", season_of())
-    if not s.get("stream_url"):
+    if not s.get("stream_url") and _pool(s):
         s["stream_url"] = DEFAULT_STREAM_URL
     s.setdefault("time_tolerance", 0.30)   # seconds: pad / backup / timers differing by more than this is highlighted
     return s
@@ -298,10 +317,11 @@ def get_settings():
     y = int(cur[:4])
     seasons = {f"{y + i}-{(y + i + 1) % 100:02d}" for i in (-1, 0, 1)} | {m["season"] for m in list_meets()} | {st["season"]}
     pub = {k: v for k, v in st.items() if k not in ("drive_token", "public_token")}
-    pub.setdefault("public_repo", public_results.DEFAULT_REPO)
+    pub["public_repo"] = _pub_repo(st)
     pub["public_token_set"] = bool(st.get("public_token"))
-    pub.setdefault("public_domain", public_results.DEFAULT_DOMAIN)
-    pub["public_url"] = public_results.site_url(pub["public_repo"], pub["public_domain"])
+    pub["public_domain"] = _pub_domain(st)
+    pub["public_url"] = _pub_url(st)
+    pub["pool_features"] = _pool(st)
     return {**pub, "current": cur, "seasons": sorted(seasons, reverse=True), "drive_write": bool(st.get("drive_url"))}
 
 
@@ -332,11 +352,13 @@ def put_settings(body: dict):
             raise HTTPException(400, str(e))
     if "meetboard_auto" in body:
         st["meetboard_auto"] = bool(body["meetboard_auto"])
+    if "pool_features" in body:
+        st["pool_features"] = bool(body["pool_features"])
     if "public_repo" in body:
         r = (body["public_repo"] or "").strip().removeprefix("https://github.com/").strip("/")
         if r and not re.fullmatch(r"[\w.-]+/[\w.-]+", r):
             raise HTTPException(400, "The repository looks like owner/name, e.g. bryanhadzik/swim-results")
-        st["public_repo"] = r or public_results.DEFAULT_REPO
+        st["public_repo"] = r
     if "public_token" in body and body["public_token"] != "":
         st["public_token"] = (body["public_token"] or "").strip()
     if "public_domain" in body:
@@ -2872,7 +2894,9 @@ def _stream_link() -> dict | None:
     """The meet's live stream for the phone page: the player address (the stream_url setting) and whether
     OBS is streaming right now (from the meet-board). Off when the meet-board has streaming turned off."""
     st = _settings()
-    out = {"url": st.get("stream_url") or DEFAULT_STREAM_URL, "live": False}
+    if not _pool(st) or not st.get("stream_url"):
+        return None                          # no stream on this PC's phone page
+    out = {"url": st["stream_url"], "live": False}
     url = st.get("meetboard_url")
     if not url:
         return out
@@ -2920,7 +2944,9 @@ def _public_job(mid: str):
     if not st.get("public_token"):
         raise RuntimeError("Add a GitHub token in Setup > Phone results first")
     doc = _public_doc(mid)
-    out = public_results.publish(doc, st.get("public_repo") or public_results.DEFAULT_REPO, st["public_token"], st.get("public_domain", public_results.DEFAULT_DOMAIN))
+    if not _pub_repo(st):
+        raise RuntimeError("Add your GitHub repository in Setup > Phone results first")
+    out = public_results.publish(doc, _pub_repo(st), st["public_token"], _pub_domain(st))
     meta = _meta(_dir(mid))                 # what went out, so Run the meet can say when the page is behind
     meta["pub_sig"] = _doc_sig(doc, PUB_VOLATILE)
     _save(_dir(mid), meta)
@@ -2945,7 +2971,7 @@ def _stream_watch():
         time.sleep(30)
         try:
             st = _settings()
-            if not (st.get("public_auto") and st.get("public_token") and st.get("meetboard_url")):
+            if not (_pool(st) and st.get("public_auto") and st.get("public_token") and st.get("meetboard_url")):
                 prev = None
                 continue
             s = _stream_link() or {}
@@ -2954,8 +2980,8 @@ def _stream_watch():
                 last = public_results.PUBLISHER.last
                 mid = max(last, key=last.get) if last and time.time() - max(last.values()) < 12 * 3600 else None
                 if not mid:
-                    url = public_results.site_url(st.get("public_repo") or public_results.DEFAULT_REPO, st.get("public_domain", public_results.DEFAULT_DOMAIN))
-                    mid = (public_results.live_meet(url) or {}).get("id")
+                    url = _pub_url(st)
+                    mid = (public_results.live_meet(url) or {}).get("id") if url else None
                 if mid and _dir(mid).exists():
                     print("stream", "started" if now else "stopped", "- publishing phone results")
                     _public_auto(mid)
@@ -2990,8 +3016,8 @@ def public_publish(mid: str):
 def public_status(mid: str):
     st = _settings()
     t = public_results.PUBLISHER.timer.get(mid)
-    url = public_results.site_url(st.get("public_repo") or public_results.DEFAULT_REPO, st.get("public_domain", public_results.DEFAULT_DOMAIN))
-    live = public_results.live_meet(url)
+    url = _pub_url(st)
+    live = public_results.live_meet(url) if url else None
     mine = None
     if live and not live.get("id"):          # published before meets carried an id: compare names
         try:

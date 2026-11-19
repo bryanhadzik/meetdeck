@@ -3178,12 +3178,30 @@ def _public_job(mid: str):
     doc = _public_doc(mid)
     if not _pub_repo(st):
         raise RuntimeError("Add your GitHub repository in Setup > Phone results first")
-    out = public_results.publish(doc, _pub_repo(st), st["public_token"], _pub_domain(st))
+    meta = _meta(_dir(mid))
+    arch = None
+    if not _is_test(meta):                  # a copy that stays at its own address for coaches (test meets: none)
+        slug = meta.get("pub_slug") or _pub_slug(meta)
+        adoc = json.loads(json.dumps(doc))
+        adoc["archive"] = True
+        if adoc.get("stream"):              # keep where the recordings are (race replays), but no live player
+            adoc["stream"] = {"url": adoc["stream"].get("url"), "live": False, "off": True}
+        arch = (slug, adoc)
+    out = public_results.publish(doc, _pub_repo(st), st["public_token"], _pub_domain(st), archive=arch)
     meta = _meta(_dir(mid))                 # what went out, so Run the meet can say when the page is behind
+    if arch:
+        meta["pub_slug"], meta["archive_url"] = arch[0], out.get("archive_url")
     meta["pub_sig"] = _doc_sig(doc, PUB_VOLATILE)
     _save(_dir(mid), meta)
     _dblog(_dir(mid), f"Published phone results ({sum(1 for e in doc['events'] if e['rows'])} events) to {out['url']}", "export")
     return out
+
+
+def _pub_slug(meta: dict) -> str:
+    """The meet's permanent folder on the phone site: 2026-11-20-south-region-invite (fixed after the first publish,
+    so the coaches' link survives a rename)."""
+    name = re.sub(r"[^a-z0-9]+", "-", (meta.get("name") or "meet").lower()).strip("-")[:48] or "meet"
+    return f"{meta.get('date') or time.strftime('%Y-%m-%d')}-{name}"
 
 
 def _public_auto(mid: str):
@@ -3370,7 +3388,8 @@ def public_status(mid: str):
         except HTTPException:
             pass
     return {"last": public_results.PUBLISHER.status.get(mid), "queued": bool(t), "auto": bool(st.get("public_auto")),
-            "token": bool(st.get("public_token")), "url": url, "live": live, "other_meet": other, "changed": changed}
+            "token": bool(st.get("public_token")), "url": url, "live": live, "other_meet": other, "changed": changed,
+            "archive_url": _meta(_dir(mid)).get("archive_url"), "test": _is_test(_meta(_dir(mid)))}
 
 
 # ---- rules library ----

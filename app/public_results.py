@@ -190,9 +190,21 @@ def files(doc: dict, domain: str = "") -> dict:
     return f
 
 
-def publish(doc: dict, repo: str, token: str, domain: str = "") -> dict:
-    """Replace the site with one new commit holding the page and these results."""
-    body = {"tree": [{"path": p, "mode": "100644", "type": "blob", "content": c} for p, c in files(doc, domain).items()]}
+def publish(doc: dict, repo: str, token: str, domain: str = "", archive: tuple | None = None) -> dict:
+    """One new commit with the page and these results at the top of the site. archive=(slug, doc) also writes
+    m/<slug>/ - a copy of this meet that stays put when the next meet takes over the top page. Earlier meets'
+    m/ folders are kept (the new tree is built on the old one)."""
+    fl = files(doc, domain)
+    if archive:
+        slug, adoc = archive
+        fl[f"m/{slug}/index.html"] = fl["index.html"]
+        fl[f"m/{slug}/results.json"] = json.dumps(adoc, separators=(",", ":"))
+    body = {"tree": [{"path": p, "mode": "100644", "type": "blob", "content": c} for p, c in fl.items()]}
+    try:                                    # keep what's there (the m/ archive); a brand-new site has nothing yet
+        head = _api(token, "GET", f"/repos/{repo}/git/refs/heads/{BRANCH}")
+        body["base_tree"] = _api(token, "GET", f"/repos/{repo}/git/commits/{head['object']['sha']}")["tree"]["sha"]
+    except (RuntimeError, KeyError, TypeError):
+        pass
     try:
         tree = _api(token, "POST", f"/repos/{repo}/git/trees", body)
     except RuntimeError as e:
@@ -213,7 +225,10 @@ def publish(doc: dict, repo: str, token: str, domain: str = "") -> dict:
         _api(token, "POST", f"/repos/{repo}/git/refs", {"ref": f"refs/heads/{BRANCH}", "sha": commit["sha"]})
     _ensure_pages(repo, token, domain)
     _api(token, "POST", f"/repos/{repo}/dispatches", {"event_type": "publish"})
-    return {"url": site_url(repo, domain), "commit": commit["sha"][:7], "updated": doc["updated"]}
+    out = {"url": site_url(repo, domain), "commit": commit["sha"][:7], "updated": doc["updated"]}
+    if archive:
+        out["archive_url"] = out["url"].rstrip("/") + f"/m/{archive[0]}/"
+    return out
 
 
 def _ensure_pages(repo: str, token: str, domain: str):

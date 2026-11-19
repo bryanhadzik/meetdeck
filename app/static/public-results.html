@@ -286,9 +286,9 @@ function render() {
   $("#mname").textContent = m.name || "Swim results";
   $("#msub").textContent = sub();
   const lb = $("#liveBtn"), st = D.stream;
-  const live = !!(st && st.url && st.live && !st.off);
+  const live = !D.archive && !!(st && st.url && st.live && !st.off);   // a meet's permanent copy: replays only
   lb.classList.toggle("hide", !live);
-  LAST_P = [st && st.url && !st.off ? st.url : "", !live];
+  LAST_P = [!D.archive && st && st.url && !st.off ? st.url : "", !live];
   player(...LAST_P);
   const q = $("#q").value.trim().toLowerCase();
   const out = [];

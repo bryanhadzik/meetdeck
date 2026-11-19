@@ -199,6 +199,21 @@ function legsHtml(r) {
 // (the stream is paid by the minute watched), and "Stop watching" unloads it again.
 let WATCH = false;
 let REPLAY = null, LAST_P = ["", true];            // {src, label}: a finished race in the recording
+// iPhone/iPad play the stream in Safari's own player, which can't rewind a live broadcast (it shows nan:nan)
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let SDK = null;                                   // Cloudflare's player API: seek a replay inside a broadcast still going
+function sdk() {
+  return SDK || (SDK = new Promise(ok => { const sc = document.createElement("script"); sc.src = "https://embed.cloudflarestream.com/embed/sdk.latest.js";
+    sc.onload = () => ok(window.Stream); sc.onerror = () => ok(null); document.head.appendChild(sc); }));
+}
+async function seekTo(f, t) {
+  const S_ = await sdk(); if (!S_ || !f.isConnected) return;
+  try {
+    const p = S_(f); let done = false;
+    const go = () => { if (done) return; try { if (Math.abs((p.currentTime || 0) - t) > 4) p.currentTime = t; done = true; } catch (e) {} };
+    ["loadedmetadata", "canplay", "play"].forEach(ev => p.addEventListener(ev, go));
+  } catch (e) {}
+}
 function player(u, offline) {
   const w = $("#watch"), box = w.querySelector(".vid");
   if (REPLAY) { w.classList.remove("hide"); }
@@ -217,6 +232,7 @@ function player(u, offline) {
       f.src = REPLAY.src; f.title = "Race replay";
       f.allow = "autoplay; fullscreen; picture-in-picture"; f.allowFullscreen = true;
       box.replaceChildren(f);
+      seekTo(f, REPLAY.t);
     }
     let cap = w.querySelector(".rcap");
     if (!cap) { cap = document.createElement("div"); cap.className = "rcap"; w.appendChild(cap); }
@@ -226,7 +242,7 @@ function player(u, offline) {
     return;
   }
   w.querySelector(".rcap")?.remove();
-  const src = u + (u.includes("?") ? "&" : "?") + "autoplay=true&dvrEnabled=true";   // DVR: rewind the live stream
+  const src = u + (u.includes("?") ? "&" : "?") + "autoplay=true" + (IOS ? "" : "&dvrEnabled=true");   // DVR: rewind the live stream
   if (WATCH) {
     if (!box.querySelector("iframe") || box.querySelector("iframe").getAttribute("src") !== src) {
       const f = document.createElement("iframe");
@@ -249,8 +265,9 @@ function watch(on) {
 function seeWatch() {                    // scroll only when the player isn't already fully on screen
   requestAnimationFrame(() => {
     const w = $("#watch"), r = w.getBoundingClientRect();
-    if (r.top >= 0 && r.bottom <= innerHeight) return;
-    w.scrollIntoView({behavior: "smooth", block: r.height > innerHeight ? "start" : "nearest"});
+    const top = ($("header")?.getBoundingClientRect().bottom || 0) + 8;    // below the sticky title bar
+    if (r.top >= top && r.bottom <= innerHeight) return;
+    scrollTo({top: scrollY + r.top - top, behavior: "smooth"});
   });
 }
 document.addEventListener("click", e => {
@@ -369,7 +386,9 @@ document.addEventListener("click", e => {
     const [no, h] = rp.dataset.rp.split("|"), v = (D.events || []).find(x => String(x.no) === no), w = v && v.watch && v.watch[h];
     const base = D.stream && D.stream.url ? new URL(D.stream.url).origin : "";
     if (!w || !base) return;
-    REPLAY = {src: `${base}/${w[0]}/iframe?startTime=${w[1]}&autoplay=true&dvrEnabled=true`,
+    const going = D.stream && D.stream.live && D.stream.video === w[0];     // the broadcast is still being recorded
+    if (going && IOS) { toast("On iPhone and iPad, race replays work once the live stream ends. Until then, watch them on a computer or Android phone."); return; }
+    REPLAY = {t: w[1], src: `${base}/${w[0]}/iframe?startTime=${w[1]}&autoplay=true${going ? "&dvrEnabled=true" : ""}`,
               label: `Event ${v.no} ${v.label}${Object.keys(v.watch).length > 1 ? " · Heat " + h : ""}`};
     player(...LAST_P);
     seeWatch();
@@ -391,8 +410,9 @@ document.addEventListener("click", e => {
   const t = e.target.closest("[data-tog]");
   if (t) {
     const no = t.dataset.tog, v = (D.events || []).find(x => String(x.no) === no);
-    if (!OPEN.has(no)) track(`open/event-${no}`, `Opened event ${no}${v && v.name ? " " + v.name : ""}`);
-    OPEN.has(no) ? OPEN.delete(no) : OPEN.add(no);
+    const shown = !!t.closest(".card")?.classList.contains("open");    // the latest event opens by itself: go by what's on screen
+    if (shown) { OPEN.delete(no); if (!OPEN.size) OPEN.add("-"); }     // "-": they closed things, so don't auto-open the latest again
+    else { track(`open/event-${no}`, `Opened event ${no}${v && v.name ? " " + v.name : ""}`); OPEN.add(no); }
     FRESH.delete(no);
     store.set("open", [...OPEN]); render();
   }

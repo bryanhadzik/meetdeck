@@ -187,7 +187,8 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
         <label class="muted" style="display:flex;flex-direction:column;gap:4px"><span>Meet type <span id="mKindTip" style="cursor:help;border:1px solid var(--line);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">?</span></span> <select id="mKind"></select>
           <span id="mChampWrap" style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap"><input type="checkbox" id="mChamp" style="margin:0;width:auto;flex:none"> Championship rules
           <span id="mChampTip" style="cursor:help;border:1px solid var(--line);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">?</span></span></label>
-        <label class="muted" style="display:flex;flex-direction:column;gap:4px">Date <input id="mDate" type="date"></label>
+        <label class="muted" style="display:flex;flex-direction:column;gap:4px">Date <input id="mDate" type="date">
+          <span style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap" title="A test meet&#39;s records aren&#39;t saved to the schools&#39; record lists. A meet named Test... is one until you untick this."><input type="checkbox" id="mTest" style="margin:0;width:auto;flex:none"> Test meet</span></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Start time <input id="mTime" type="time" title="When the first event starts. Goes into the meet database (heat sheet, timeline) and the meet board's warm-up slide."></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Location <input id="mLoc" placeholder="from host's master file"></label>
         <label class="muted" style="display:flex;flex-direction:column;gap:4px">Host school <select id="hostSel"></select></label>
@@ -1297,7 +1298,7 @@ function render() {
   $("#openDb").href = `/db?meet=${M.id}`;
   { const k = $("#mKind"), o = Object.entries(M.kinds || {}).map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("");
     if (k.dataset.k !== o) { k.innerHTML = o; k.dataset.k = o; } k.value = M.kind || "dual";
-    $("#mChamp").checked = !!M.championship;
+    $("#mChamp").checked = !!M.championship; $("#mTest").checked = !!M.test;
     $("#mChampWrap").dataset.tip = CHAMP_TIP; $("#mChampTip").dataset.tip = CHAMP_TIP; $("#mKindTip").dataset.tip = KIND_TIP; }
   [["#mName", M.name], ["#mDate", M.date || ""], ["#mTime", M.start_time || ""], ["#mLoc", M.location || ""]].forEach(([k, v]) => { if (document.activeElement !== $(k)) $(k).value = v; });
   $("#hostSel").value = M.host;
@@ -1804,6 +1805,7 @@ $("#seedBtn").onclick = () => save({preseed: true});
 $("#unseedBtn").onclick = () => { if (confirm("Clear the seeding here? You'd seed in Meet Manager instead. Hand moves are kept if you seed again.")) save({preseed: false}); };
 $("#mKind").addEventListener("change", e => save({kind: e.target.value}));
 $("#mChamp").addEventListener("change", e => save({championship: e.target.checked}));
+$("#mTest").addEventListener("change", e => save({test: e.target.checked}));
 document.addEventListener("click", e => {
   if (!e.target.closest || !e.target.closest("#drawLots")) return;
   const o = [...M.lanes.order];

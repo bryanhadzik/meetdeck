@@ -330,7 +330,7 @@ function dateGapStrip() {
 }
 document.addEventListener("click", async e => {
   if (!e.target.closest("[data-syncdate]")) return;
-  try { await api(`/api/meets/${MID}/db/sync-date`, J("POST", {})); toast("Meet database date updated"); } catch (x) { return alert(x.message); }
+  try { await api(`/api/meets/${MID}/db/sync-date`, J({})); toast("Meet database date updated"); } catch (x) { return alert(x.message); }
   load();
 });
 async function load() {
@@ -610,8 +610,27 @@ function recordsStrip() {
   const rb = S.records_broken || [];
   if (!rb.length) return "";
   return `<div class="issue" style="background:var(--ok-bg, #e6f5ec);border-color:#2ea043;color:inherit"><b>🏆 ${rb.length === 1 ? "New record" : rb.length + " new records"}:</b> ` +
-    rb.map(r => `<a href="#" data-goev="${r.event}" style="color:inherit">#${r.no} ${esc(r.label)}</a> &ndash; ${esc(r.who)}${r.team ? " (" + esc(r.team) + ")" : ""} <b>${esc(fmt(r.time))}</b> ${r.tie ? "ties" : "breaks"} the ${esc(r.tag)} (${esc(fmt(r.old))}${r.old_year ? " " + esc(String(r.old_year)) : ""}${r.old_who ? ", " + esc(r.old_who) : ""})`).join(" &middot; ") + `</div>`;
+    rb.map(r => `<a href="#" data-goev="${r.event}" style="color:inherit">#${r.no} ${esc(r.label)}</a> &ndash; ${esc(r.who)}${r.team ? " (" + esc(r.team) + ")" : ""} <b>${esc(fmt(r.time))}</b> ${r.tie ? "ties" : "breaks"} the ${esc(r.tag)} (${esc(fmt(r.old))}${r.old_year ? " " + esc(String(r.old_year)) : ""}${r.old_who ? ", " + esc(r.old_who) : ""})` + recSaveCtl(r)).join(" &middot; ") +
+    (S.test ? ` <div class="muted" style="font-size:12.5px;margin-top:4px">Test meet &mdash; records from this meet aren't saved to the schools' record lists (Set up meet &rarr; Test meet).</div>` : "") + `</div>`;
 }
+function recSaveCtl(r) {
+  if (S.test || r.tie) return "";
+  const k = `data-reckey="${esc(r.key)}" data-recptr="${r.tag_ptr}"`;
+  return r.saved ? ` <span class="badge ok">saved</span> <button class="ghost small" data-recundo ${k}>Undo</button>`
+                 : ` <button class="small" data-recsave ${k} title="Write this into the school record lists (the master meet files). Check the time first.">Save to records</button>`;
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-recsave],[data-recundo]"); if (!b) return;
+  const save = b.hasAttribute("data-recsave"), r = (S.records_broken || []).find(x => x.key == b.dataset.reckey && String(x.tag_ptr) === b.dataset.recptr);
+  if (!r) return;
+  if (save && !confirm(`Save ${r.who} ${fmt(r.time)} as the new ${r.tag} for #${r.no} ${r.label}?\n\nOld: ${fmt(r.old)}${r.old_who ? " - " + r.old_who : ""}${r.old_year ? " (" + r.old_year + ")" : ""}\n\nCheck the time is right first. You can undo this.`)) return;
+  b.disabled = true;
+  try {
+    const x = await api(`/api/meets/${MID}/records/${save ? "save" : "undo"}`, J({key: r.key, tag_ptr: r.tag_ptr}));
+    toast(save ? `Saved to ${x.schools.join(", ")} records` : "Record taken back out");
+  } catch (x) { alert(x.message); }
+  load();
+});
 function recBadge(e) {
   return (S.records_broken || []).filter(r => r.key === e.key).map(r => ` <span class="badge ok" title="${r.tie ? "Ties" : "Breaks"} the ${esc(r.tag)} of ${esc(fmt(r.old))}">${r.tie ? "ties" : "new"} ${esc(r.tag)}</span>`).join("");
 }

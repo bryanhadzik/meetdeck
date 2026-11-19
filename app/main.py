@@ -272,7 +272,7 @@ def _state(d: Path) -> dict:
     st_lanes = {"order": order}
     auto_rt = _record_team({"lanes": st_lanes}, host, {})
     return {"id": d.name, "name": meta["name"], "kind": "invitational" if meta.get("kind") == "championship" else meta.get("kind", "dual"),
-            "championship": _is_champ(meta, nt), "started": started, "time_seeded": not plan,
+            "championship": _is_champ(meta, nt), "test": _is_test(meta), "started": started, "time_seeded": not plan,
             "strict_lanes": bool(meta.get("strict_lanes")), "seed_why": seed_why, "lane_mode": meta.get("lane_mode", "teams"), "lane_draw": meta.get("lane_draw"),
             "lane_choice": table_has_open(order, POOL_LANES), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "start_time": meta.get("start_time", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),
@@ -797,7 +797,7 @@ def put_state(mid: str, body: dict):
     before = json.loads(json.dumps(meta))
     body = {k: v for k, v in body.items() if k != "force"}
     for k in ("removed", "rules", "lanes", "name", "date", "location", "host", "combine", "combine_low", "expected_teams", "preseed", "min_heat", "strict_lanes", "seed_exh_last",
-              "run", "ended", "contacts", "session_break", "kind", "championship", "lane_mode", "lane_draw"):
+              "run", "ended", "contacts", "session_break", "kind", "championship", "lane_mode", "lane_draw", "test"):
         if k in body:
             meta[k] = body[k]
     if "championship" in body and bool(body["championship"]) != bool(before.get("championship")) and _dbfile(d).exists():
@@ -909,7 +909,7 @@ def _db_start_time(d: Path, hhmm: str):
 SETUP_LABELS = {"start_time": "start time", "removed": "removed entries", "rules": "rules", "lanes": "lane order", "name": "meet name", "date": "date",
                 "location": "location", "host": "host school", "combine": "combined heats", "combine_low": "combined heats",
                 "expected_teams": "teams expected", "preseed": "seeding", "min_heat": "seeding", "strict_lanes": "strict team lanes", "ended": "meet ended",
-                "contacts": "contacts", "session_break": "session break", "record_team": "record team", "kind": "meet type", "championship": "championship rules", "lane_mode": "lane assignments", "lane_draw": "lane draw"}
+                "contacts": "contacts", "session_break": "session break", "record_team": "record team", "kind": "meet type", "championship": "championship rules", "test": "test meet", "lane_mode": "lane assignments", "lane_draw": "lane draw"}
 
 
 def _setup_history_push(d: Path, before: dict, changed: list):
@@ -1749,7 +1749,7 @@ def _records_broken(d: Path, m: dict) -> list:
             if not tm or (r.get("Record_course") or "Y").strip() not in ("Y", ""):
                 continue
             relay = (r.get("tag_indrel") or "I").strip() == "R"
-            recs.append({"tag": (tg.get("tag_name") or "Record").strip(), "flag": (tg.get("tag_flag") or "").strip(),
+            recs.append({"tag_ptr": r.get("tag_ptr"), "tag": (tg.get("tag_name") or "Record").strip(), "flag": (tg.get("tag_flag") or "").strip(),
                          "order": tg.get("tag_order") or 99, "team_no": tg.get("team_no") or 0,
                          "exh": tg.get("allow_exh") is not False, "gender": (r.get("tag_gender") or "").strip(),
                          "dist": r.get("tag_dist"), "stroke": (r.get("tag_stroke") or "").strip(), "indrel": "R" if relay else "I",
@@ -1766,6 +1766,13 @@ def _records_broken(d: Path, m: dict) -> list:
         for r in _program_records(d):
             recs.append({**r, "tag": r.get("name") or "Record", "flag": "", "exh": True, "who": r.get("holder") or r.get("relay_names") or "",
                          "team_no": (host_nos[0] if len(host_nos) == 1 else -1) if r.get("tag_ptr") in team_tags else 0})
+    meta_ = _meta(d)                  # a host school's own records (team tags) count only for that school's swimmers -
+    host_ = next((h for h in _hosts() if h["id"] == meta_.get("host", "THS")), None) or {}   # the team number in the
+    codes_ = {c.upper() for c in host_.get("team_codes") or []}                                # database file can point
+    nos_ = [no for no, tm in m["teams"].items() if (tm.get("abbr") or "").upper() in codes_]   # at another team
+    for r in recs:
+        if r.get("tag_ptr") in set(host_.get("team_tags") or []):
+            r["team_no"] = nos_[0] if len(nos_) == 1 else -1
     sexof = lambda g: {"G": "F", "W": "F", "B": "M"}.get((g or "").upper()[:1], (g or "").upper()[:1])
     out = []
     for v in m["events"]:
@@ -1781,16 +1788,124 @@ def _records_broken(d: Path, m: dict) -> list:
             best = min(ok, key=lambda e: e["time"])
             if best["time"] > r["time"] + 1e-6:
                 continue
+            tm_ = m["teams"].get(best["team"], {})
             if best["kind"] == "I":
                 a = m["athletes"].get(best.get("ath"), {})
                 e_name = f"{a.get('first', '')} {a.get('last', '')}".strip()
+                holder, rnames = e_name, ""
             else:
-                e_name = f"{m['teams'].get(best['team'], {}).get('abbr', '')} {best.get('ltr') or ''}".strip()
+                e_name = f"{tm_.get('abbr', '')} {best.get('ltr') or ''}".strip()
+                holder = tm_.get("name") or tm_.get("abbr") or ""
+                legs = [m["athletes"].get(x) for x in (best.get("legs") or []) if x]
+                rnames = ", ".join(f"{(l.get('first') or '')[:1]}.{l.get('last') or ''}" for l in legs if l)
             out.append({"key": best["key"], "event": v["ptr"], "no": v["no"], "label": v["label"], "tag": r["tag"], "flag": r["flag"],
                         "order": r.get("order") or 99, "old": r["time"], "old_who": r.get("who") or "", "old_year": r.get("year") or "",
                         "time": best["time"], "who": e_name, "team": m["teams"].get(best["team"], {}).get("abbr", ""),
-                        "tie": abs(best["time"] - r["time"]) < 1e-6})
+                        "tie": abs(best["time"] - r["time"]) < 1e-6,
+                        "tag_ptr": r.get("tag_ptr"), "rec": {"gender": r["gender"], "indrel": r["indrel"], "dist": int(r["dist"] or 0),
+                                                            "stroke": r["stroke"], "holder": holder[:30], "relay_names": rnames[:50],
+                                                            "school": "" if best["kind"] != "I" else (tm_.get("short") or tm_.get("name") or tm_.get("abbr") or "")[:16]}})
+    saved = {(x["key"], x["tag_ptr"]): x for x in _meta(d).get("records_saved") or []}
+    for o in out:
+        o["saved"] = bool(saved.get((o["key"], o["tag_ptr"])))
     return sorted(out, key=lambda x: (x["no"], x["order"]))
+
+
+def _is_test(meta: dict) -> bool:
+    """A test meet: its records aren't saved to the schools' record lists. Set in Set up meet; a meet named
+    "Test..." is one until that box is unticked."""
+    if "test" in meta:
+        return bool(meta["test"])
+    return bool(re.search(r"\btest\b", meta.get("name") or "", re.I))
+
+
+def _rec_match(a: dict, b: dict) -> bool:
+    sx = lambda g: {"G": "F", "W": "F", "B": "M"}.get((g or "").upper()[:1], (g or "").upper()[:1])
+    return (sx(a["gender"]) == sx(b["gender"]) and (a["indrel"] or "I") == (b["indrel"] or "I")
+            and int(a["dist"] or 0) == int(b["dist"] or 0) and (a["stroke"] or "") == (b["stroke"] or ""))
+
+
+@app.post("/api/meets/{mid}/records/save")
+def records_save(mid: str, body: dict):
+    """Put a record broken in this meet into the host school's record list (its master meet file). A record kept
+    by more than one school under the same name (the pool record, e.g. "PAC Record") is updated in each of them."""
+    import datetime as _dt
+    d = _dir(mid)
+    meta = _meta(d)
+    if _is_test(meta):
+        raise HTTPException(400, "This is a test meet - its records aren't saved. Untick Test meet in Set up meet first.")
+    m = meetdb.load(_dbfile(d))
+    r = next((x for x in _records_broken(d, m) if x["key"] == body.get("key") and x["tag_ptr"] == body.get("tag_ptr")), None)
+    if not r:
+        raise HTTPException(404, "That record isn't broken in this meet any more")
+    hid = meta.get("host", "THS")
+    host = _host(hid)
+    targets = [(hid, r["tag_ptr"])]
+    if r["tag_ptr"] not in (host.get("team_tags") or []):          # a school's own record stays with that school
+        for h in _hosts():
+            if h["id"] == hid or not _mpath(h["id"]).exists():
+                continue
+            t = next((t for t in _read_master(h["id"]).get("tags") or [] if (t.get("name") or "").strip().lower() == r["tag"].lower()
+                      and t["tag_ptr"] not in (h.get("team_tags") or [])), None)
+            if t:
+                targets.append((h["id"], t["tag_ptr"]))
+    try:
+        day = _dt.date.fromisoformat(m["meet"].get("start") or "")
+    except ValueError:
+        day = _dt.date.today()
+    rec = {k: v for k, v in r["rec"].items() if k != "school"}
+    new = {**rec, "team": "", "time": round(r["time"], 2), "year": day.year, "month": day.month, "day": day.day, "course": "Y"}
+    undo, names = [], []
+    for h_id, ptr in targets:
+        info = _read_master(h_id)
+        if not info.get("loaded"):
+            continue
+        recs = [dict(x) for x in info.get("records") or []]
+        old = next((x for x in recs if x["tag_ptr"] == ptr and _rec_match(x, new)), None)
+        if old and old["time"] and old["time"] < new["time"] - 1e-6:
+            continue                                                 # that list already has a faster time
+        if old:
+            recs.remove(old)
+        team_tag = ptr in (_host(h_id).get("team_tags") or [])       # the school's own record: no school name needed
+        recs.append({**new, "tag_ptr": ptr, "team": "" if team_tag else r["rec"].get("school", "")})
+        _write_master(h_id, {"records": recs}, note=f"{r['tag']} from {meta['name']}")
+        undo.append({"host": h_id, "tag_ptr": ptr, "prev": old})
+        names.append(_host(h_id).get("short") or h_id)
+    if not undo:
+        raise HTTPException(400, "Every record list already has this time or a faster one")
+    meta.setdefault("records_saved", []).append({"key": r["key"], "tag_ptr": r["tag_ptr"], "tag": r["tag"], "time": new["time"],
+                                                 "when": time.strftime("%Y-%m-%d %H:%M"), "undo": undo})
+    _save(d, meta)
+    _dblog(d, f"Saved {r['tag']}: #{r['no']} {r['label']} {r['who']} {new['time']:.2f} to {', '.join(names)} records", kind="change")
+    return {"ok": True, "schools": names}
+
+
+@app.post("/api/meets/{mid}/records/undo")
+def records_undo(mid: str, body: dict):
+    """Take a saved record back out of the school record lists, putting back what was there before."""
+    d = _dir(mid)
+    meta = _meta(d)
+    saved = meta.get("records_saved") or []
+    it = next((x for x in saved if x["key"] == body.get("key") and x["tag_ptr"] == body.get("tag_ptr")), None)
+    if not it:
+        raise HTTPException(404, "Nothing saved for that record")
+    for u in it["undo"]:
+        info = _read_master(u["host"])
+        if not info.get("loaded"):
+            continue
+        recs = [dict(x) for x in info.get("records") or []]
+        mine = next((x for x in recs if x["tag_ptr"] == u["tag_ptr"] and abs(x["time"] - it["time"]) < 1e-6
+                     and (not u["prev"] or _rec_match(x, u["prev"]))), None)
+        if not mine:
+            continue                                                 # changed since: leave it alone
+        recs.remove(mine)
+        if u["prev"]:
+            recs.append(u["prev"])
+        _write_master(u["host"], {"records": recs}, note=f"undid {it['tag']} from {meta['name']}")
+    meta["records_saved"] = [x for x in saved if x is not it]
+    _save(d, meta)
+    _dblog(d, f"Took the saved {it['tag']} ({it['time']:.2f}) back out of the record lists", kind="change")
+    return {"ok": True}
 
 
 def _record_team(st: dict, host: dict, meta: dict) -> str:
@@ -2191,7 +2306,7 @@ def db_get(mid: str):
     except Exception as x:
         print("records broken:", x)
         broken = []
-    return {"exists": True, "started": _meet_started(m), "records_broken": broken, "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
+    return {"exists": True, "started": _meet_started(m), "records_broken": broken, "test": _is_test(_meta(d)), "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
             "model": meetdb.json_safe(m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
@@ -3034,6 +3149,10 @@ def _public_doc(mid: str, stream: bool = True) -> dict:
     doc = public_results.build(meetdb.load(db), _dbinfo(d).get("scoring"), _usc if _settings().get("usc_on", True) else None)
     if stream:
         doc["stream"] = _stream_link()
+        if doc["stream"] and doc["stream"].get("live"):          # the recording being made right now (replays from it
+            cur = [v for v in _videos() if time.time() - v["last"] < 90]   # can't use startTime until it's finished)
+            if cur:
+                doc["stream"]["video"] = max(cur, key=lambda v: v["last"])["uid"]
     try:
         rp = _replays(_settings(), meetdb.load(db)["meet"])
     except Exception as x:

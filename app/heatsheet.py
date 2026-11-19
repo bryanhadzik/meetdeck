@@ -462,8 +462,8 @@ def referee_pdf(m, licensee="", printed=None) -> bytes:
 # a numbered box per place for the order of finish, where the referee writes the lane.
 class _Referee2(_Sheet):
     BOTTOM = 762.0
-    X_LANE, X_NAME, X_SCH, X_SEED = 30.0, 44.0, 190.0, 334.0
-    X_DQ, X_CODE, X_INF, X_END = 342.0, 362.0, 0.0, 594.0
+    X_LANE, X_NAME, X_SCH = 30.0, 44.0, 172.0              # name, then the school's short name
+    X_DQ, X_CODE, X_INF, X_END = 246.0, 266.0, 0.0, 594.0
     BOX = 17.0                               # height of the code and infraction boxes
 
     def new_page(self):
@@ -548,17 +548,17 @@ class _Referee2(_Sheet):
                     continue
                 if relay:
                     tm = teams.get(e["team"], {})
-                    self.text(self.X_NAME, y + 3.0, self.team_label(tm, 140, 10.5), size=10.5, w=140)
+                    self.text(self.X_NAME, y + 3.0, tm.get("short") or tm.get("abbr") or tm.get("name") or "", size=10.5, w=124)
                     self.text(self.X_SCH, y + 3.0, e.get("ltr") or "", size=10.5)
                     legs = [aths.get(x) for x in (e.get("legs") or [])[:4]] + [None] * 4
-                    for k in range(4):
+                    for k in range(4):                        # two swimmers a line, left of the DQ boxes
                         if legs[k]:
-                            self.text(self.X_NAME + k * 74.0, y + 17.0, f"{k + 1}) {_name(legs[k])}", size=7.5, w=71)
+                            self.text(self.X_NAME + (k % 2) * 100.0, y + 16.0 + (k // 2) * 10.0, f"{k + 1}) {_name(legs[k])}", size=7.5, w=96)
                 else:
                     a_ = aths.get(e["ath"], {})
-                    nm = _name(a_) + (f" ({a_['yr']})" if a_.get("yr") else "")
-                    self.text(self.X_NAME, y + 3.0, nm, size=10.5, w=142)
-                    self.text(self.X_SCH, y + 4.0, self.team_label(teams.get(a_.get("team"), {}), 145, HSZ), size=HSZ, w=145)
+                    tm = teams.get(a_.get("team"), {})
+                    self.text(self.X_NAME, y + 3.0, _name(a_), size=10.5, w=124)
+                    self.text(self.X_SCH, y + 4.0, tm.get("short") or tm.get("abbr") or tm.get("name") or "", size=HSZ, w=70)
                 y += rh
             # order of finish: one box per place, the referee writes the lane
             y += 6.0

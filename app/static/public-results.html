@@ -99,6 +99,9 @@ main{padding:12px;max-width:720px;margin:0 auto}
 .player .tap .pl{width:64px;height:64px;border-radius:50%;background:#e5252a;display:flex;align-items:center;justify-content:center}
 .player .tap .pl::after{content:"";border-style:solid;border-width:13px 0 13px 22px;border-color:transparent transparent transparent #fff;margin-left:6px}
 .player .tap b{font-size:17px}.player .tap small{color:#bfe6ec;font-size:13px}
+.player .tap.off{cursor:default;background:linear-gradient(160deg,#2a3236,#151a1c)}
+.player .tap.off .pl{background:#5b6468}
+.player .tap.off small{color:#c7cfd2}
 .player .stop{display:block;margin:6px 0 0 auto;background:none;border:0;color:var(--mute);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline}
 footer{text-align:center;color:var(--mute);font-size:12px;padding:6px 16px 22px}
 .hide{display:none!important}
@@ -190,10 +193,17 @@ function legsHtml(r) {
 // the live stream above the results while OBS is streaming. The player only loads when someone taps it
 // (the stream is paid by the minute watched), and "Stop watching" unloads it again.
 let WATCH = false;
-function player(u) {
+function player(u, offline) {
   const w = $("#watch"), box = w.querySelector(".vid");
   if (!u) { WATCH = false; w.classList.add("hide"); box.innerHTML = ""; w.dataset.u = ""; return; }
   w.classList.remove("hide");
+  if (offline) {                  // a stream is set up but not on right now: keep its spot, say it's offline
+    WATCH = false; w.dataset.u = "";
+    w.querySelector(".stop")?.remove();
+    if (!box.querySelector(".off")) box.innerHTML = `<div class="tap off" role="status"><span class="pl"></span><b>Live stream is offline</b><small>It starts when the meet does &mdash; this page shows it then.</small></div>`;
+    return;
+  }
+  if (box.querySelector(".off")) box.innerHTML = "";
   const src = u + (u.includes("?") ? "&" : "?") + "autoplay=true";
   if (WATCH) {
     if (!box.querySelector("iframe") || box.querySelector("iframe").getAttribute("src") !== src) {
@@ -227,7 +237,7 @@ function render() {
   const lb = $("#liveBtn"), st = D.stream;
   const live = !!(st && st.url && st.live && !st.off);
   lb.classList.toggle("hide", !live);
-  player(live ? st.url : "");
+  player(st && st.url && !st.off ? st.url : "", !live);
   const q = $("#q").value.trim().toLowerCase();
   const out = [];
   // meet order: event 1, 2, 3 ... (the latest one is marked LATEST and opened)

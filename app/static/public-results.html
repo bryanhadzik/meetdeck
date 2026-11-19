@@ -18,7 +18,7 @@ header h1{margin:0;font-size:19px;line-height:1.2;padding-right:92px}
 header h1{position:relative}
 #mpickC{font-size:14px;opacity:.85}
 #mpick{position:absolute;inset:0;width:calc(100% - 92px);opacity:0;font-size:16px;cursor:pointer}
-.share{position:absolute;top:12px;right:12px;border:0;border-radius:10px;padding:7px 12px;font-size:14px;font-weight:600;
+.share{position:absolute;top:12px;right:12px;z-index:2;border:0;border-radius:10px;padding:7px 12px;font-size:14px;font-weight:600;
   background:rgba(255,255,255,.18);color:#fff;display:flex;align-items:center;gap:6px;cursor:pointer}
 .share svg{width:17px;height:17px}
 .sheet{position:fixed;inset:auto 0 0 0;z-index:20;background:var(--card);color:var(--ink);border-top:1px solid var(--line);
@@ -471,20 +471,16 @@ $("#share").addEventListener("click", () => {
   const url = location.href.split("#")[0].split("?")[0], st = D && D.stream && D.stream.url && !D.stream.off ? D.stream : null;
   const watchUrl = location.origin + "/";       // parents only ever see our address; the page shows the player when live
   const old = document.getElementById("sheet"); if (old) old.remove();
-  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent), sms = t => `sms:${ios ? "&" : "?"}body=${encodeURIComponent(t)}`;
   const name = D && D.meet && D.meet.name ? D.meet.name : "";
   const resText = "Live results" + (name ? " for " + name : "") + ": " + url;
-  const strText = "Watch " + (name || "the meet") + " live: " + watchUrl;
   const el = document.createElement("div");
   el.className = "sheet"; el.id = "sheet";
   el.innerHTML = `<h3>Results</h3>
-    <a href="${sms(resText)}">💬 Text the results link</a>
-    ${navigator.share ? `<button data-native="res">📤 More ways to send it…</button>` : `<a href="mailto:?subject=${encodeURIComponent(document.title)}&body=${encodeURIComponent(resText)}">✉️ Email it</a>`}
+    ${navigator.share ? `<button data-native="res">📤 Share the results link…</button>` : `<a href="mailto:?subject=${encodeURIComponent(document.title)}&body=${encodeURIComponent(resText)}">✉️ Email it</a>`}
     <button data-copy="${esc(url)}">🔗 Copy the results link</button>
     ${st ? `<h3 style="margin-top:12px">Live stream${st.live ? " &middot; on now" : ""}</h3>
     ${st.live ? `<a href="#watch" data-watch="1">▶️ Watch the stream</a>` : ""}
-    <a href="${sms(strText)}">💬 Text the stream link</a>
-    ${navigator.share ? `<button data-native="str">📤 More ways to send it…</button>` : ""}
+    ${navigator.share ? `<button data-native="str">📤 Share the stream link…</button>` : ""}
     <button data-copy="${esc(watchUrl)}" data-str="1">🔗 Copy the stream link</button>` : ""}
     <button class="x" id="closeSheet">Close</button>`;
   document.body.appendChild(el);

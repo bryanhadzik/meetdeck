@@ -1186,7 +1186,8 @@ function setupSum() {
   const dt = M.date ? new Date(M.date + "T12:00").toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric"}) : "no date";
   el.innerHTML = `<b>${esc(M.name || "")}</b> &middot; ${esc(dt)}${M.start_time ? " &middot; " + miClock((+M.start_time.split(":")[0] * 60 + +M.start_time.split(":")[1]) * 60) : ""}${M.location ? " &middot; " + esc(M.location) : ""}` +
     (sess ? ` &middot; ${day > 1 ? day + " days &middot; " : ""}<span title="Sessions">${esc(sess)}</span>` : "") +
-    (MI && MI.sessions && MI.sessions.some(s => s.clash != null) ? ` <span style="color:var(--warn)">&#9888; a session overlaps the one before it</span>` : "");
+    (MI && MI.sessions && MI.sessions.some(s => s.clash != null) ? ` <span style="color:var(--warn)">&#9888; a session overlaps the one before it</span>` : "") +
+    (MI && MI.date_gap ? ` <span style="color:var(--warn)">&#9888; the meet database has a different date</span>` : "");
 }
 (function () {
   let shut = false;
@@ -1210,6 +1211,11 @@ function miLoad(now) {                  // the timeline follows entries and heat
   const id = M.id;
   MI_T = setTimeout(async () => { try { const r = await api(`/api/meets/${id}/meetinfo`); if (M && M.id === id) { MI = r; miRender(); } } catch (e) {} }, now ? 0 : 800);
 }
+document.addEventListener("click", async e => {
+  if (!e.target.closest("[data-syncdate]")) return;
+  try { await api(`/api/meets/${M.id}/db/sync-date`, J("POST", {})); } catch (x) { return alert(x.message); }
+  miLoad(true);
+});
 async function miOp(op, args) {
   try { MI = await api(`/api/meets/${M.id}/meetinfo/op`, J("POST", {op, args})); }
   catch (x) { alert(x.message); }
@@ -1238,7 +1244,10 @@ function miRender() {
       ${s.clash != null ? `<tr><td></td><td colspan="6"><div class="issue warn" style="font-size:13px;margin:0">Session ${s.no} is set to start at ${miClock(s.clash)}, before the session before it is projected to finish. Pick a break between sessions, or change its start time.</div></td></tr>` : ""}`).join("");
   const allEv = MI.sessions.flatMap(s => s.events.map(e => ({...e, sess: s.ptr})));
   const sessOpts = cur => MI.sessions.map(s => `<option value="${s.ptr}" ${s.ptr === cur ? "selected" : ""}>Session ${s.no} (day ${s.day})</option>`).join("");
+  const gd = v => v ? new Date(v + "T12:00").toLocaleDateString(undefined, {weekday: "short", month: "numeric", day: "numeric"}) : "no date";
   $("#miBody").innerHTML = `
+    ${MI.date_gap ? `<div class="issue warn" style="font-size:13px">&#9888; <b>The dates don't match.</b> The meet is on ${esc(gd(MI.date_gap.setup))} here, but the meet database (heat sheets, timeline, meet board, exports) says ${esc(gd(MI.date_gap.db))}.
+      <div style="margin-top:6px"><button class="small" data-syncdate>Use ${esc(gd(MI.date_gap.setup))} in the meet database</button></div></div>` : ""}
     ${lock ? `<div class="issue warn" style="font-size:13px">The meet has started &mdash; sessions and the meet header are locked.</div>` : ""}
     <h3 style="margin:8px 0 4px">Sessions</h3>
     <div class="scroll"><table class="miSess"><tr><th>#</th><th>Name</th><th>Day</th><th>Starts</th><th>Events</th><th>Projected</th><th></th></tr>${rows}</table></div>

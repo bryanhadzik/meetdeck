@@ -321,6 +321,17 @@ const teamAbbr = no => M.teams[no]?.abbr || "?";
 const evOf = ptr => M.events.find(e => e.ptr === ptr);
 const isDfs = e => ["F", "D", "Q"].includes((e.stat || "").trim()) && ["7B", "7P"].includes((e.dq || "").toUpperCase()) && !e.time;
 
+function dateGapStrip() {
+  const g = S.date_gap; if (!g) return "";
+  const gd = v => v ? new Date(v + "T12:00").toLocaleDateString(undefined, {weekday: "short", month: "numeric", day: "numeric"}) : "no date";
+  return `<div class="unseeded-note">&#9888; <b>The dates don't match.</b> Set up meet has this meet on ${esc(gd(g.setup))}, but the meet database (heat sheets, timeline, meet board, exports) says ${esc(gd(g.db))}.
+    <div class="row" style="margin-top:8px"><button class="small" data-syncdate>Use ${esc(gd(g.setup))} in the meet database</button></div></div>`;
+}
+document.addEventListener("click", async e => {
+  if (!e.target.closest("[data-syncdate]")) return;
+  try { await api(`/api/meets/${MID}/db/sync-date`, J("POST", {})); toast("Meet database date updated"); } catch (x) { return alert(x.message); }
+  load();
+});
 async function load() {
   S = await api(API);
   show();
@@ -355,7 +366,7 @@ function show() {
   wtShow();
   lastMinShow();
   missingTeamsShow();
-  $("#problems").innerHTML = recordsStrip() + scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "") + laneGapWarning();
+  $("#problems").innerHTML = dateGapStrip() + recordsStrip() + scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "") + laneGapWarning();
   render();
 }
 // ---- teams added in meet setup after the database was built: a database can't take new teams, so offer a rebuild ----

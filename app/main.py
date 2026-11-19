@@ -837,6 +837,27 @@ def put_state(mid: str, body: dict):
     return _state(d)
 
 
+def _date_gap(d: Path, m: dict) -> dict | None:
+    """Set up meet's date and the meet database's start date disagree (the heat sheets, timeline, meet-board and
+    exports all use the database's). None when they match or the meet has no date in Set up meet."""
+    want = str(_meta(d).get("date") or "").strip()
+    have = (m.get("meet") or {}).get("start") or ""
+    return {"setup": want, "db": have} if want and want != have else None
+
+
+@app.post("/api/meets/{mid}/db/sync-date")
+def db_sync_date(mid: str):
+    """Put Set up meet's date into the meet database (the yellow 'dates don't match' warning's button)."""
+    d = _dir(mid)
+    if not _dbfile(d).exists():
+        raise HTTPException(400, "This meet has no database yet")
+    want = str(_meta(d).get("date") or "").strip()
+    if not want:
+        raise HTTPException(400, "Set the meet's date in Set up meet first")
+    _db_header(d, {"date": want})
+    return {"ok": True, "date_gap": _date_gap(d, meetdb.load(_dbfile(d)))}
+
+
 def _db_header(d: Path, f: dict):
     """Keep the meet database's header (name, start date, location) in step with Set up meet - heat sheets, the
     timeline and exports read the database. A new start date moves the end date with it, so a two-day meet stays two days."""
@@ -2171,7 +2192,7 @@ def db_get(mid: str):
         print("records broken:", x)
         broken = []
     return {"exists": True, "started": _meet_started(m), "records_broken": broken, "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
-            "model": meetdb.json_safe(m), "problems": meetdb.check(m), "log": log[::-1],
+            "model": meetdb.json_safe(m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
             "scoring_methods": {k: {"name": c["name"], "ind_max": c["ind_max"], "rel_max": c["rel_max"]} for k, c in meetdb.SCORING.items()},
@@ -2367,7 +2388,7 @@ def _meetinfo(mid: str) -> dict:
                      "events": [{"ptr": it["event"], "no": evs[it["event"]]["no"], "label": evs[it["event"]]["label"], "rnd": it["rnd"]}
                                 for it in s["items"] if it["event"] in evs]})
     return {"has_db": True, "started": _meet_started(m), "meet": m["meet"], "sessions": sess, "days": days, "dates": dates,
-            "session_break": gap}
+            "session_break": gap, "date_gap": _date_gap(d, m)}
 
 
 @app.get("/api/meets/{mid}/meetinfo")

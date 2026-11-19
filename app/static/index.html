@@ -137,7 +137,7 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
 #setupHead{cursor:pointer;user-select:none}
 #setupHead .setupTw{display:inline-block;color:var(--muted);font-size:15px;transition:transform .15s;margin-right:2px}
 #setupSec.setupShut #setupHead .setupTw{transform:rotate(-90deg)}
-#setupSec.setupShut #meetFields,#setupSec.setupShut #hostNote,#setupSec.setupShut #miWrap{display:none !important}
+#setupSec.setupShut #meetFields,#setupSec.setupShut #hostNote,#setupSec.setupShut #miWrap,#setupSec.setupShut .setupFoot{display:none !important}
 #setupSec:not(.setupShut) #setupSum{display:none}
 </style>
 <script src="/static/ao.js"></script>
@@ -195,6 +195,9 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <div class="muted" id="hostNote" style="margin-top:6px"></div>
       <div id="miWrap" class="hidden" style="margin-top:12px;border-top:1px solid var(--line);padding-top:4px"><div id="miBody"></div></div>
       <div class="muted" id="setupSum" style="font-size:13.5px"></div>
+      <div class="row setupFoot" style="margin-top:12px"><button class="ghost small" id="bkNow" title="Save everything for this meet (setup, entry files, meet database, results and change history) in one backup file, and copy it to Google Drive">Back up this meet now</button>
+        <span class="muted" id="bkMsg" style="font-size:13px;flex:1"></span>
+        <button class="ghost small" id="delMeet" title="A backup is saved first, so a deleted meet can be restored from Setup &rarr; Meet backups">Delete this meet</button></div>
     </section>
 
     <section>
@@ -298,29 +301,6 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
       <div id="heatSheet" class="hs"></div>
     </section>
 
-    <section>
-      <h2><span class="n">8</span> Download for Meet Manager</h2>
-      <div id="dlWarn"></div>
-      <div class="row">
-        <button id="mmBtn">Download Meet Manager backup</button>
-        <span class="muted" id="mmMsg"></span>
-      </div>
-      <div id="mmReport" style="margin-top:8px"></div>
-      <ol class="steps muted">
-        <li>In Meet Manager: <b>File &rarr; Restore</b>, pick the downloaded <code>Swmm8Bkup&hellip;zip</code>. It opens with teams, athletes, entries, relays and records already in.</li>
-        <li>Check <b>Set-up &rarr; Seeding Preferences &rarr; Dual Meets</b>: teams in their lanes, <b>Use Lane Assignments Above</b> checked (only matters if you ever re-seed).</li>
-        <li id="seedStep"></li>
-      </ol>
-      <details style="margin-top:10px">
-        <summary class="muted">Prefer importing? Per-team entry files</summary>
-        <div class="row" id="dl" style="margin-top:6px"></div>
-        <div class="muted" style="margin-top:6px">Meet Manager: <b>File &rarr; Import &rarr; Entries</b>, one zip per team.</div>
-      </details>
-      
-      <div class="row" style="margin-top:12px"><button class="ghost small" id="bkNow" title="Save everything for this meet (setup, entry files, meet database, results and change history) in one backup file, and copy it to Google Drive">Back up this meet now</button>
-        <span class="muted" id="bkMsg" style="font-size:13px;flex:1"></span>
-        <button class="ghost small" id="delMeet" title="A backup is saved first, so a deleted meet can be restored from Setup &rarr; Meet backups">Delete this meet</button></div>
-    </section>
 
   </div>
 </main>
@@ -1418,13 +1398,8 @@ function render() {
     M.lanes.order.map(t => `<option value="${esc(t)}">${esc(M.teams[t]?.name || t)} only</option>`).join("") +
     `<option value="">All teams (intrasquad)</option>`;
   $("#recTeamSel").value = M.record_team === null || M.record_team === undefined ? "__auto" : M.record_team;
-  $("#seedStep").innerHTML = M.preseed ? `<b>Don't run Seeding</b> &mdash; every heat and lane is already set. Print the heat sheet and go. (Re-seeding in Meet Manager can put a swimmer alone in heat 1 again.)`
-    : `<b>Seeding &rarr; Select All &rarr; Start Seeding</b>${M.combos.some(c => c.selected && c.fits) ? " (leave the combined events unselected)" : ""}.`;
-  $("#dlWarn").innerHTML = (M.has_db ? `<div class="issue warn"><b>This meet has an edited database.</b> The button below rebuilds from the team entries and leaves out changes made there &mdash; to keep them, use <a href="/db?meet=${M.id}">Run the meet</a> &rarr; Download / export.</div>` : "") + (errs ? `<div class="issue error"><b>${errs} rule problem(s) still open.</b> You can download anyway, but those entries go in as-is.</div>` : "");
   if (M.has_db && TV && TV.id === M.id && !TV_LOADING) tvLoad();   // pick up changes made in the meet database
   renderTable();
-  $("#dl").innerHTML = M.files.length ? `<button onclick="location='/api/meets/${M.id}/download-all'">Download all teams</button>` +
-    M.files.map(f => `<button class="ghost" onclick="location='/api/meets/${M.id}/download/${encodeURIComponent(f.name)}'">${esc(f.teams.join(", "))}</button>`).join("") : "";
 }
 
 // ---------------- 6. Changes at the table ----------------
@@ -2029,22 +2004,6 @@ $("#fileIn").onchange = e => { upload(e.target.files); e.target.value = ""; };
 drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
 drop.ondragleave = () => drop.classList.remove("over");
 drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); upload(e.dataTransfer.files); };
-$("#mmBtn").onclick = async () => {
-  $("#mmMsg").textContent = "Building database…"; $("#mmReport").innerHTML = ""; $("#mmBtn").disabled = true;
-  try {
-    const r = await fetch(`/api/meets/${M.id}/mm-backup`);
-    if (!r.ok) { let d = await r.text(); try { d = JSON.parse(d).detail; } catch (e) {} throw new Error(d); }
-    const rep = JSON.parse(r.headers.get("X-Build-Report") || "{}");
-    const name = (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1] || "meet.zip";
-    const url = URL.createObjectURL(await r.blob());
-    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    $("#mmMsg").textContent = `Saved ${name}`;
-    $("#mmReport").innerHTML = `<div class="okbox">${esc(rep.host)} master &middot; ${rep.teams} teams, ${rep.athletes} athletes, ${rep.entries} entries, ${rep.relays} relays &middot; ${rep.meet_style == 3 ? "3+ Team Dbl Dual" : rep.meet_style == 2 ? "2 Team Dual" : "Standard"}${rep.anyone_on_relay ? " &middot; 'anyone on relay' turned on" : ""}${rep.preseeded ? ` &middot; ${rep.preseeded} entries/relays seeded into heats and lanes` : ""}</div>` +
-      (rep.warnings || []).map(w => `<div class="issue warn">${esc(w)}</div>`).join("");
-  } catch (e) { $("#mmMsg").textContent = ""; $("#mmReport").innerHTML = `<div class="issue error">${esc(e.message)}</div>`; }
-  $("#mmBtn").disabled = false;
-};
 
 // ---------------- schools ----------------
 async function loadSchools() {

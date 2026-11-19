@@ -1242,7 +1242,7 @@ function miRender() {
         ${[5, 10, 15, 20, 30].map(n => `<option value="${n}" ${MI.session_break === n ? "selected" : ""}>${n} minutes</option>`).join("")}</select></label>
       <span class="muted" style="font-size:12.5px">With a break picked, a later session <b>on the same day</b> starts that long after the one before it is projected to finish. The first session of each day keeps its own start time.</span>
       ${lock ? "" : `<button class="ghost small" id="miAddSess">+ Add a session</button>`}</div>
-    <div class="muted" style="font-size:12.5px;margin-top:4px">Two-day meet: split the session where day 2 begins (Split at event…), then set the new session's day and start time. Projected times count each heat as its slowest seed time plus the heat interval; an NT swim counts as Meet Manager's NT estimate plus 15% (individual events).</div>
+    <div class="muted" style="font-size:12.5px;margin-top:4px">Two-day meet: split the session where day 2 begins (Split at event…), then set the new session's day and start time. Projected times count each heat as its slowest seed time plus the heat interval; an NT swim counts as the slower of Meet Manager's NT estimate and the event's slowest seed time.</div>
     <details style="margin-top:8px"><summary class="muted">Move single events between sessions</summary>
       <div class="scroll" style="margin-top:6px"><table>${allEv.map(e => `<tr><td>#${esc(e.no)}</td><td>${esc(e.label)}${e.rnd === "P" ? " (prelims)" : ""}</td><td><select data-moveev="${e.ptr}" ${dis}>${sessOpts(e.sess)}</select></td></tr>`).join("")}</table></div></details>
     <h3 style="margin:14px 0 4px">Meet header</h3>

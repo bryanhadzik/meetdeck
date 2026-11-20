@@ -379,7 +379,7 @@ function show() {
   wtShow();
   lastMinShow();
   missingTeamsShow();
-  $("#problems").innerHTML = dateGapStrip() + recordsStrip() + scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "") + laneGapWarning();
+  $("#problems").innerHTML = dateGapStrip() + recordsStrip() + scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "") + laneGapWarning() + buttonMissWarning();
   render();
 }
 // ---- teams added in meet setup after the database was built: a database can't take new teams, so offer a rebuild ----
@@ -1102,6 +1102,30 @@ document.addEventListener("click", async e => {
     toast(r.applied || "Done"); S = r; show();
   } catch (x) { alert(x.message); b.disabled = false; }
 });
+// A lane whose pad keeps getting a time but whose backup button doesn't, 3+ heats in a row: the button may
+// be broken or unplugged, or the timer isn't pushing it. Only counts heats where other lanes did send buttons.
+function buttonMissWarning() {
+  if (!M) return "";
+  const order = new Map(M.events.map((v, i) => [v.ptr, i]));
+  const hasBtn = e => [e.backup, e.back2, e.back3].some(x => +x > 0);
+  const heats = new Map();
+  M.entries.forEach(e => { if (e.scr || !e.heat || !e.lane || !order.has(e.event)) return;
+    const k = e.event + "-" + e.heat; if (!heats.has(k)) heats.set(k, {o: order.get(e.event), h: e.heat, v: e.event, ents: []});
+    heats.get(k).ents.push(e); });
+  const list = [...heats.values()].filter(x => x.ents.some(hasBtn)).sort((a, b) => a.o - b.o || a.h - b.h);
+  const run = {};   // lane -> {n, last}
+  list.forEach(x => x.ents.forEach(e => {
+    if (+e.pad > 0 && !hasBtn(e)) { const r = run[e.lane] || (run[e.lane] = {n: 0}); r.n++; r.last = x; }
+    else if (hasBtn(e)) run[e.lane] = {n: 0};
+  }));
+  const bad = Object.entries(run).filter(([, r]) => r.n >= 3).map(([l, r]) => {
+    const v = M.events.find(v => v.ptr === r.last.v) || {};
+    return `lane ${l} (${r.n} heats in a row, last #${v.no}${v.ltr || ""} heat ${r.last.h})`; });
+  if (!bad.length) return "";
+  return `<div class="issue" style="background:var(--warn-bg,#fff4d6);border-color:#d4a72c"><b>Backup button not coming through:</b> ${bad.map(esc).join(" &middot; ")}.
+    The pad is getting a time but the backup button isn't. Check that lane's button and its cable, or remind the timer to push it at the finish.
+    <span class="muted">This clears once a button time comes through for that lane.</span></div>`;
+}
 function laneGapWarning() {
   if (S.started || !M) return "";
   const out = [];

@@ -451,7 +451,7 @@ def _rows(m):
             mark = {"Q": "DQ", "F": "DQ", "R": "NS"}.get(st, "")
             if e["kind"] == "I":
                 a = aths.get(e["ath"], {})
-                name, yr, team = f"{a.get('last', '')}, {a.get('first', '')}", a.get("yr", ""), teams.get(a.get("team"), {}).get("abbr", "")
+                name, yr, team = f"{a.get('last', '')}, {a.get('first', '')}", a.get("grade", a.get("yr", "")), teams.get(a.get("team"), {}).get("abbr", "")
                 legs = ""
                 who = {"last": a.get("last", ""), "first": a.get("first", ""), "pref": a.get("pref", ""), "school": teams.get(a.get("team"), {}).get("name", "")}
             else:

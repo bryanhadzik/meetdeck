@@ -124,6 +124,19 @@ def _s(v):
     return (v or "").strip() if isinstance(v, str) else ("" if v is None else v)
 
 
+_GRADES = {"FR": "9", "SO": "10", "JR": "11", "SR": "12", "F": "9", "S": "10", "J": "11"}
+
+
+def grade(yr) -> str:
+    """School year the way every printout shows it: the grade as digits (FR -> 9, SR -> 12, "09" -> 9).
+    Meet Manager stores whatever the entry file had (letters from some teams, digits from others); the
+    export files keep that as-is, only what people read is unified."""
+    y = ("" if yr is None else str(yr)).strip().upper()
+    if y in _GRADES:
+        return _GRADES[y]
+    return str(int(y)) if y.isdigit() else y
+
+
 def load(db) -> dict:
     t = {k: v["rows"] for k, v in read(db).items()}
     meet = t["Meet"][0] if t.get("Meet") else {}
@@ -136,7 +149,7 @@ def load(db) -> dict:
                             "email": _s(r.get("Team_email"))} for r in t["Team"]}
     aths = {r["Ath_no"]: {"no": r["Ath_no"], "first": _s(r["First_name"]), "last": _s(r["Last_name"]),
                           "pref": _s(r.get("Pref_name")), "initial": _s(r.get("Initial")), "sex": _s(r["Ath_Sex"]),
-                          "age": r.get("Ath_age") or 0, "yr": _s(r.get("Schl_yr")), "team": r["Team_no"],
+                          "age": r.get("Ath_age") or 0, "yr": _s(r.get("Schl_yr")), "grade": grade(r.get("Schl_yr")), "team": r["Team_no"],
                           "birth": (r.get("Birth_date") or "")[:10], "stat": _s(r.get("Ath_stat")),
                           "comp": r.get("Comp_no") or 0, "reg": _s(r.get("Reg_no")), "citizen": _s(r.get("Citizen_of"))} for r in t["Athlete"]}
     order = {}

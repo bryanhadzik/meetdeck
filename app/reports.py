@@ -125,7 +125,7 @@ def _who(m, e):
         return f"{t.get('name') or t.get('abbr', '')} {e.get('ltr') or ''}".strip(), t.get("abbr", ""), ""
     a = m["athletes"].get(e["ath"], {})
     t = m["teams"].get(a.get("team"), {})
-    return f"{a.get('last', '')}, {a.get('first', '')}", t.get("abbr", ""), a.get("yr", "")
+    return f"{a.get('last', '')}, {a.get('first', '')}", t.get("abbr", ""), a.get("grade", a.get("yr", ""))
 
 
 def psych_pdf(m, licensee="") -> bytes:

@@ -646,7 +646,7 @@ function recBadge(e) {
   return (S.records_broken || []).filter(r => r.key === e.key).map(r => ` <span class="badge ok" title="${r.tie ? "Ties" : "Breaks"} the ${esc(r.tag)} of ${esc(fmt(r.old))}">${r.tie ? "ties" : "new"} ${esc(r.tag)}</span>`).join("");
 }
 function nameCell(e) {
-  if (e.kind === "I") { const a = M.athletes[e.ath] || {}; return `${esc(a.last)}, ${esc(a.first)} <span class="muted" style="font-size:12px">${esc(a.yr || "")}</span>`; }
+  if (e.kind === "I") { const a = M.athletes[e.ath] || {}; return `${esc(a.last)}, ${esc(a.first)} <span class="muted" style="font-size:12px">${esc(a.grade || a.yr || "")}</span>`; }
   const bad = relayIssues(e);
   const scrAth = new Set(bad.filter(b => b.ath).map(b => b.ath));
   return `<b>${esc(M.teams[e.team]?.short || M.teams[e.team]?.name || "?")} "${esc(e.ltr)}"</b><div class="legs">${e.legs.map((x, i) => `<span style="white-space:nowrap"><span class="muted" style="opacity:.7">${i + 1}</span> ` + (x ? (scrAth.has(x) ? `<s style="color:var(--err)">${esc(athName(x))}</s>` : esc(athName(x))) : `<i${bad.length ? ' style="color:var(--err)"' : ""}>open</i>`) + `</span>`).join(" &nbsp;")}</div>` +
@@ -983,9 +983,9 @@ function renderSwimmers() {
       <label>First<input id="eFirst" value="${esc(a.first)}"></label><label>Last<input id="eLast" value="${esc(a.last)}"></label><label>Preferred<input id="ePref" value="${esc(a.pref)}"></label>
       <label>Team<select id="eTeam">${Object.values(M.teams).map(t => `<option value="${t.no}" ${t.no === a.team ? "selected" : ""}>${esc(t.abbr)}</option>`).join("")}</select></label>
       <label>Sex<select id="eSex"><option value="F" ${a.sex === "F" ? "selected" : ""}>F</option><option value="M" ${a.sex === "M" ? "selected" : ""}>M</option></select></label>
-      <label>Age<input id="eAge" value="${a.age || ""}" size="3"></label><label>Year<select id="eYr">${["", "FR", "SO", "JR", "SR"].map(y => `<option ${y === a.yr ? "selected" : ""}>${y}</option>`).join("")}</select></label></div>
+      <label>Age<input id="eAge" value="${a.age || ""}" size="3"></label><label>Grade<select id="eYr">${["", "9", "10", "11", "12"].concat(["7", "8"].includes(a.grade) ? [a.grade] : []).map(y => `<option ${y === (a.grade || "") ? "selected" : ""}>${y}</option>`).join("")}</select></label></div>
       <div class="row" style="margin-top:6px"><button class="small" id="eSave">Save</button><button class="ghost small" id="eCancel">Cancel</button></div></td></tr>`;
-    return `<tr><td><b>${esc(a.last)}, ${esc(a.first)}</b>${a.pref ? ` <span class="muted">(${esc(a.pref)})</span>` : ""}</td><td>${esc(teamAbbr(a.team))}</td><td>${esc(a.sex)}</td><td>${a.age || ""}</td><td>${esc(a.yr)}</td>
+    return `<tr><td><b>${esc(a.last)}, ${esc(a.first)}</b>${a.pref ? ` <span class="muted">(${esc(a.pref)})</span>` : ""}</td><td>${esc(teamAbbr(a.team))}</td><td>${esc(a.sex)}</td><td>${a.age || ""}</td><td>${esc(a.grade || a.yr || "")}</td>
       <td><input type="checkbox" data-exhsw="${a.no}" ${ind.length && nx === ind.length ? "checked" : ""} ${nx && nx < ind.length ? 'data-mixed="1"' : ""} ${ind.length ? "" : "disabled"}
         title="Exhibition in all of their events: they swim and get a time, but score no points"></td>
       <td>${es.map(e => `<span class="chip ${e.scr ? "x" : ""}"${e.exh ? ' title="exhibition"' : ""}>#${evOf(e.event)?.no}${e.kind === "R" ? " relay" : ""}${e.exh ? " exh" : ""}</span>`).join("") || `<span class="muted">none</span>`}</td>

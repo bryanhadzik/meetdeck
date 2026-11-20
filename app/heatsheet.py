@@ -297,8 +297,8 @@ class _Sheet:
                 else:
                     a_ = aths.get(e["ath"], {})
                     self.text(c + 17.4, y, _name(a_), w=80)
-                    if a_.get("yr"):
-                        self.text(c + 99.8, y, a_["yr"], w=13)
+                    if a_.get("grade"):
+                        self.text(c + 99.8, y, a_["grade"], w=13)
                     self.text(c + 114.0, y, teams.get(a_.get("team"), {}).get("abbr", ""), w=40)
                     self.text(c + 180.0, y, _seed(e), align="r")
         self.y = y + GAP_AFTER
@@ -433,8 +433,8 @@ class _Referee(_Sheet):
                 else:
                     a_ = aths.get(e["ath"], {})
                     self.text(54.0, y, _name(a_), size=11.0, w=140)
-                    if a_.get("yr"):
-                        self.text(222.0, y, a_["yr"], size=HSZ, align="r")
+                    if a_.get("grade"):
+                        self.text(222.0, y, a_["grade"], size=HSZ, align="r")
                     self.text(228.0, y, self.team_label(teams.get(a_.get("team"), {}), 160, HSZ), size=HSZ, w=160)
             y += 11.4
 
@@ -849,7 +849,7 @@ class _Results(_Sheet):
                               (RW, pts, "r")]))
         else:
             a = aths.get(e["ath"], {})
-            lines.append((0, [(18.0, place, "r"), (24.0, nm(a), "l", 108), (138.0, a.get("yr", ""), "r"),
+            lines.append((0, [(18.0, place, "r"), (24.0, nm(a), "l", 108), (138.0, a.get("grade", ""), "r"),
                               (150.0, teams.get(a.get("team"), {}).get("abbr", ""), "l", 54), (240.0, tm, "r"), (RW, pts, "r")]))
         y = 11.5
         for r in [r for r in self.m.get("records_broken") or [] if r["key"] == e["key"]]:
@@ -864,7 +864,7 @@ class _Results(_Sheet):
             y += 11.5
         if relay:
             legs = (e.get("legs") or [])[:4]
-            leg = lambda k: (lambda a: f"{k + 1}) {nm(a)}" + (f" {a['yr']}" if a and a.get("yr") else ""))(aths.get(legs[k]) if k < len(legs) else None)
+            leg = lambda k: (lambda a: f"{k + 1}) {nm(a)}" + (f" {a['grade']}" if a and a.get("grade") else ""))(aths.get(legs[k]) if k < len(legs) else None)
             if any(legs):
                 lines.append((y, [(24.0, leg(0), "l", 116), (144.0, leg(1), "l", 128)]))
                 lines.append((y + 11.0, [(24.0, leg(2), "l", 116), (144.0, leg(3), "l", 128)]))

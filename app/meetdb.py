@@ -509,9 +509,16 @@ def op_heat_results(m, ptr, heat, lanes, overwrite=True):
             skipped.append(e["lane"])
             continue
         pad, backup = float(ln.get("pad", ln.get("final")) or 0), float(ln.get("backup") or 0)
-        w1, w2 = float(ln.get("watch") or 0), float(ln.get("watch2") or 0)
+        if "watch" in ln or "watch2" in ln:
+            w1, w2 = float(ln.get("watch") or 0), float(ln.get("watch2") or 0)
+        else:                           # straight from the console: keep watch times already typed in
+            w1, w2 = float(e.get("watch") or 0), float(e.get("watch2") or 0)
         watch = timers_time(w1, w2) if w1 and w2 else (w1 or w2)       # two watches: averaged, thousandths dropped
         use = ln.get("use") or "pad"
+        if use == "auto":               # the usual rule: pad, unless missing / early, or the watches side with the button
+            btn_ = [float(b) for b in (ln.get("buttons") or []) if b]
+            back_ = (sum(round(b * 100) for b in btn_) // len(btn_)) / 100 if btn_ else backup
+            use = pick_time(pad, back_, watch, float(ln.get("tol") or 0.30))
         final = {"pad": pad, "backup": backup, "watch": watch}.get(use, pad) or 0
         if use != "pad" and final:
             used.append(f"lane {e['lane']} {'backup button' if use == 'backup' else 'timers'}")

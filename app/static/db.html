@@ -923,7 +923,7 @@ function renderEvent() {
     }
     const hs = heatState(act.filter(e => e.heat === h));
     const hpill = hs.cls === "done" ? `<span class="pill timed">Timed</span>` : hs.cls === "part" ? `<span class="pill prog">${hs.r} of ${hs.n} lanes</span>` : `<span class="pill none">Waiting</span>`;
-    html += `<div class="heat"><h3>Heat ${h} of ${topHeat} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button>${ins}${act.some(e => e.heat === h && (+e.pad > 0 || +e.backup > 0)) ? ` <button class="ghost small" data-savedtimes="${h}" title="Open this heat's saved pad and backup button times again - to enter watch times or change which time counts - without asking the console">Enter watches</button>` : ""}</h3><div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1, h)).join("")}
+    html += `<div class="heat"><h3>Heat ${h} of ${topHeat} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button>${ins}</h3><div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1, h)).join("")}
       ${inHeat.filter(e => !e.lane || e.lane > lanes).map(e => row(e)).join("")}</table>${finishOrder(inHeat)}</div>`;
   }
   if (MOVING) {   // an empty heat to drag swimmers into
@@ -1383,6 +1383,18 @@ async function getTimes(h, saved) {
       return;
     }
   }
+  }
+  if (!saved) {
+    // straight into the heat's Pad / Button columns - the official time follows the usual rule; nothing to apply
+    if ((r.event && r.event !== v.no) || (r.heat && r.heat !== h)) {
+      box.innerHTML = `<div class="issue">Console race ${r.race_number} is <b>event ${r.event} heat ${r.heat}</b>, not event ${v.no} heat ${h}. Nothing was saved - check the race on the console.</div>`;
+      return;
+    }
+    box.innerHTML = "";
+    const lanes = r.lanes.map(l => ({lane: l.lane, pad: l.final || 0, backup: l.backup || 0, buttons: (l.buttons || []).filter(b => b > 0),
+      place: l.place, splits: l.splits, use: "auto", tol: TOL}));
+    change("heat_results", {ptr: v.ptr, heat: h, overwrite: true, lanes, raw: r});
+    return;
   }
   const inHeat = evEntries(v.ptr).filter(e => !e.scr && e.heat === h);
   const rows = r.lanes.map(l => { const e = inHeat.find(x => x.lane === l.lane); return {l, e}; }).filter(x => x.e || x.l.final);

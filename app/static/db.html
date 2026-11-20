@@ -1410,6 +1410,7 @@ async function getTimes(h, saved) {
   };
   // compare pad, buttons, backup and the timers' watch; colour what disagrees and say what it probably means
   const BIG = 1.0;                                   // a full second off is a mistake, not reaction time
+  const PAD_EARLY = 3.0;                             // buttons more than this behind the pad: the pad went off early
   const tint = (el, d) => { if (!el) return; const a = Math.abs(d);
     el.style.background = a > BIG ? "var(--err-bg, #fde2e1)" : a > TOL + 1e-4 ? "var(--warn-bg)" : "";
     el.style.color = a > BIG ? "var(--err)" : ""; el.style.borderRadius = "4px"; };
@@ -1442,6 +1443,10 @@ async function getTimes(h, saved) {
           const early = btns.length > 1 && btns.some(b => med - b > BIG);
           note = early ? `Backup button ${sgn(d)} fast because a button was pressed early. <b>Stick with the pad.</b>`
                        : `Pad ${sgn(-d)} slower than the backup button &mdash; a late pad (soft touch)? <b>Enter the timers' watch times</b>: if they agree with the backup button, use the backup button.`;
+        } else if (d > PAD_EARLY) {
+          // buttons are late by tenths, not seconds: a pad this far ahead was set off early (a turn touch, a bump, someone on the wall)
+          if (!watch) pick = "backup";
+          note = `Pad ${sgn(-d)} faster than the buttons &mdash; far too much for late buttons, so <b>the pad went off early</b> (a touch at a turn, a bump, or someone on the wall). <b>Use the backup button</b>, and enter the timers' watch times to confirm.`;
         } else note = `Buttons ${sgn(d)} slower than the pad. <b>Stick with the pad</b> (buttons are usually late).`;
       }
       if (watch && !note) {

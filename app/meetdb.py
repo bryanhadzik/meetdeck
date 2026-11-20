@@ -435,7 +435,11 @@ def pick_time(pad, back, watch, tol=0.30):
         return "backup" if back else "watch" if watch else "pad"
     if back and abs(pad - back) > tol and watch and abs(watch - back) < abs(watch - pad):
         return "backup"
+    if back and not watch and back - pad > PAD_EARLY:   # buttons seconds behind: the pad went off early, not late buttons
+        return "backup"
     return "pad"
+
+PAD_EARLY = 3.0
 
 
 def op_watches(m, key, t1_s="", t2_s="", tol=0.30, use="auto"):

@@ -116,6 +116,49 @@ def _nice_date(s):
         return s
 
 
+_SCR_CACHE = {}
+
+
+def _db_scratched_ids(d: Path, entries: list, swimmers: dict) -> set:
+    """Setup entries whose swim was scratched in the meet database (Run the meet / Changes at the table) before
+    the meet started - Seeding leaves them out, so re-seeding closes the hole instead of keeping their lane."""
+    db = _dbfile(d)
+    if not db.exists():
+        return set()
+    try:
+        mt = db.stat().st_mtime
+        hit = _SCR_CACHE.get(str(db))
+        if hit and hit[0] == mt:
+            keys = hit[1]
+        else:
+            import dbsync
+            m = meetdb.load(db)
+            evno = {v["ptr"]: f"{v['no']}{v.get('ltr') or ''}" for v in m["events"]}
+            abbr = {no: (t or {}).get("abbr", "") for no, t in m["teams"].items()}
+            ath = {no: "%s|%s" % ((a["last"] or "").strip().lower(), (a["first"] or "").strip().lower()) for no, a in m["athletes"].items()}
+            keys = set()
+            for e in m["entries"]:
+                if e["scr"]:
+                    who = ath.get(e.get("ath"), "") if e["kind"] == "I" else "%s|%s" % (abbr.get(e.get("team"), ""), e.get("ltr") or "A")
+                    keys.add((evno.get(e["event"], ""), who))
+            _SCR_CACHE[str(db)] = (mt, keys)
+        if not keys:
+            return set()
+        import dbsync
+        out = set()
+        for e in entries:
+            if e["kind"] == "ind":
+                k = (str(e["event_no"]), dbsync._who(swimmers, e["swimmers"][0])) if e["swimmers"] else None
+            else:
+                k = (str(e["event_no"]), "%s|%s" % (e["team"], e.get("relay") or "A"))
+            if k in keys:
+                out.add(e["id"])
+        return out
+    except Exception as x:
+        print("scratched in database:", x)
+        return set()
+
+
 def _apply_seed_moves(moves: dict, entries: list, removed: set, seed_lanes: dict, combo_lanes: dict) -> set:
     """Hand moves made in the Seeding section, laid over the automatic seeding. A swimmer sitting in a
     moved-to spot (that wasn't moved by hand itself) is swapped into the mover's old spot."""
@@ -248,16 +291,17 @@ def _state(d: Path) -> dict:
     plan, seed_why = _team_lanes(meta, order)
     for e in entries:                       # option: exhibition swimmers go after every scoring swimmer when seeding
         e["exh_last"] = bool(meta.get("seed_exh_last")) and bool(e.get("exhibition"))
+    seed_out = removed | _db_scratched_ids(d, entries, swimmers)   # scratched at the table: no lane in Seeding either
     preseed = meta.get("preseed", bool(meta.get("seed_moves")))   # seeded only after "Seed heats" is clicked
     min_heat = 3          # fixed: every heat gets at least 3 swimmers
     seed_lanes, seed_info = ({}, [])
     if preseed and order:
         if plan:
-            seed_lanes, seed_info = seed_meet(entries, removed, plan, min_heat, skip=set(combo_lanes),
+            seed_lanes, seed_info = seed_meet(entries, seed_out, plan, min_heat, skip=set(combo_lanes),
                                               strict=bool(meta.get("strict_lanes")))
         else:                       # seeded meet (NFHS 5-3): by time only, no team lanes
-            seed_lanes, seed_info = _standard_seed_meet(entries, removed, min_heat, set(combo_lanes))
-    seed_moved = _apply_seed_moves(meta.get("seed_moves", {}), entries, removed, seed_lanes, combo_lanes)
+            seed_lanes, seed_info = _standard_seed_meet(entries, seed_out, min_heat, set(combo_lanes))
+    seed_moved = _apply_seed_moves(meta.get("seed_moves", {}), entries, seed_out, seed_lanes, combo_lanes)
     nt, started, db_teams = len(order), False, []
     if _dbfile(d).exists():
         try:

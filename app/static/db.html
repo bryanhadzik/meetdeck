@@ -1093,6 +1093,14 @@ function renderMeet() {
 }
 // Before the meet starts: a heat with an empty lane between swimmers (a scratch left a hole) is worth
 // fixing - re-seed the event or move a swimmer. Once the first race is swum the warning goes away.
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-fixgaps]"); if (!b) return;
+  b.disabled = true;
+  try {
+    const r = await api(`/api/meets/${MID}/db/apply-seeding`, J({ptrs: b.dataset.fixgaps.split(",").map(Number)}));
+    toast(r.applied || "Done"); S = r; show();
+  } catch (x) { alert(x.message); b.disabled = false; }
+});
 function laneGapWarning() {
   if (S.started || !M) return "";
   const out = [];
@@ -1107,7 +1115,8 @@ function laneGapWarning() {
   });
   if (!out.length) return "";
   return `<div class="issue" style="background:var(--warn-bg,#fff4d6);border-color:#d4a72c"><b>Empty lanes in the middle of a heat:</b> ${out.map(x => esc(x.txt)).join(" &middot; ")}.
-    <span class="muted">Re-seed the event or move a swimmer in Seeding. This goes away once the meet starts.</span></div>`;
+    <span class="muted">This goes away once the meet starts.</span>
+    <div class="row" style="margin-top:6px"><button class="small" data-fixgaps="${[...new Set(out.map(x => x.ptr))].join(",")}">Close the gaps (re-seed ${[...new Set(out.map(x => x.txt.split(" ")[0]))].join(", ")} from Seeding)</button></div></div>`;
 }
 function renderChanges() {
   { const other = l => l.kind === "export" || /^(Published|Sent|Downloaded|Exported)\b/.test(l.msg || "");

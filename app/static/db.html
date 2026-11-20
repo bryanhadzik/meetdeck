@@ -679,7 +679,7 @@ function statBadge(e) {
 }
 // ---- time typing: digits only, the ":" and "." are already there and fill from the right like a register
 //      (type 3 0 2 5 -> 0:30.25; 1 3 0 2 5 -> 1:30.25). Tab goes straight to the next time box.
-const TIME_BOX = "[data-watch],[data-watch2],[data-time],[data-timer],[data-wk]";
+const TIME_BOX = "[data-watch],[data-watch2],[data-time],[data-timer],[data-wk],[data-wt]";
 function maskTime(v) {
   if (/[a-z]/i.test(v)) return v;                       // NT / NS / DQ typed on purpose: leave it
   const d = v.replace(/\D/g, "").replace(/^0+/, "").slice(0, 6);
@@ -857,15 +857,19 @@ function usedPicker(key, anchor) {
 }
 document.addEventListener("click", ev => { const u = ev.target.closest("[data-usedpick]"); if (u) { ev.stopPropagation(); usedPicker(u.dataset.usedpick, u); } }, true);
 function timerCells(e) {
-  if (TIMERS() === 1) return `<input class="t" data-time="${e.key}" value="${esc(fmt(e.time))}" placeholder="time" title="Finals time">${usedBadge(e)}`;
-  // two timers: keep both watch times; official = average with thousandths dropped (NFHS 6-4-1b)
-  const w1 = e.watch || (e.time && !e.watch2 ? e.time : 0), w2 = e.watch2 || 0;
-  const tol = TOL || 0.30;
-  const far = w1 && w2 && Math.abs(w1 - w2) > tol + 1e-9;
-  const off = e.time ? fmt(e.time) : "";
-  return `<input class="t" data-timer="1" data-key="${e.key}" value="${esc(fmt(w1))}" placeholder="timer 1" title="Timer 1" style="width:72px${far ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}">
-    <input class="t" data-timer="2" data-key="${e.key}" value="${esc(fmt(w2))}" placeholder="timer 2" title="Timer 2" style="width:72px${far ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}">
-    <b data-off="${e.key}" title="Official time: average of the two timers, thousandths dropped" style="display:inline-block;min-width:52px;text-align:right">${esc(off)}</b>${usedBadge(e)}${far ? ` <span title="The two timers differ by more than ${Math.round(tol * 1000)} ms - check with the timers" style="color:var(--warn)">⚠</span>` : ""}`;
+  // every time the lane has, each in its own column (blank when there's none yet): pad, backup button, both
+  // timers' watches (typed here - the official time then follows the same rule as Get times), the official time
+  const btn = [e.backup, e.back2, e.back3].filter(x => +x > 0);
+  const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
+  const pad = +e.pad || 0, tol = TOL || 0.30;
+  const far = (a, b) => a && b && Math.abs(a - b) > tol + 1e-9;
+  const ref = pad || back;
+  const ro = (t, title, warn) => `<td class="mono" style="text-align:right;white-space:nowrap${warn ? ";color:var(--warn);font-weight:600" : ""}" title="${esc(title)}">${t ? esc(fmt(t)) : '<span class="muted">&ndash;</span>'}</td>`;
+  const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" title="Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)" style="width:72px${far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
+  return ro(pad, "Pad (touchpad) time", far(pad, back)) +
+    ro(back, btn.length > 1 ? "Backup buttons: " + btn.map(fmt).join(" / ") + " (average)" : "Backup button", far(pad, back)) +
+    w(1, e.watch) + w(2, e.watch2) +
+    `<td style="white-space:nowrap"><input class="t" data-time="${e.key}" value="${esc(fmt(e.time))}" placeholder="time" title="Official time - type one in to override">${usedBadge(e)}</td>`;
 }
 function renderEvent() {
   const v = evOf(EV); if (!v) { $("#evDetail").innerHTML = "No events."; return; }
@@ -878,11 +882,11 @@ function renderEvent() {
   // Move mode: drag a row onto any lane (an empty one, or another swimmer to swap); the selects still work
   const dto = (h, l) => MOVING && h && l ? ` data-dto="${h}|${l}"` : "";
   const grip = e => MOVING && !e.scr ? `<span class="grip" title="Drag to another lane or heat">&#10303;</span>` : "";
-  const row = (e, lane, h) => !e ? `<tr class="empty"${dto(h, lane)}><td class="ln">${lane}</td><td colspan="${MOVING ? 9 : 8}" class="muted">${MOVING ? "empty &middot; drop here" : "empty"}</td></tr>` :
+  const row = (e, lane, h) => !e ? `<tr class="empty"${dto(h, lane)}><td class="ln">${lane}</td><td colspan="${MOVING ? 13 : 12}" class="muted">${MOVING ? "empty &middot; drop here" : "empty"}</td></tr>` :
     `<tr class="${e.scr ? "scr" : relayIssues(e).length ? "relaybad" : ""}"${MOVING && !e.scr ? ` draggable="true" data-dkey="${e.key}"` : ""}${e.scr ? "" : dto(e.heat, e.lane <= lanes ? e.lane : 0)}><td class="ln">${grip(e)}${e.lane || ""}</td><td class="nm">${nameCell(e)}${e.exh ? ' <span class="badge">exh</span>' : ""}${recBadge(e)}</td><td>${esc(teamAbbr(e.team))}</td>
       <td><input class="t" data-seed="${e.key}" value="${esc(fmt(e.seed) || "NT")}" title="Seed time"></td>
       ${MOVING ? `<td style="white-space:nowrap">${e.scr ? "" : hsel(e) + " " + lsel(e)}</td>` : ""}
-      <td style="white-space:nowrap">${e.scr ? "" : timerCells(e)}</td>
+      ${e.scr ? '<td colspan="5"></td>' : timerCells(e)}
       <td class="plc" data-plc="${e.key}">${e.place || ""} ${(e.stat || "").trim() === "R" ? statBadge(e) : ""}</td>
       <td class="st" style="white-space:nowrap">${e.scr ? "" : isDfs(e) ? `<span class="badge dq" data-tip="${TIP.dfs}">DFS</span> <button class="ghost small" data-undfs="${e.key}" data-tip="${TIP.undfs}">Undo DFS</button>` : (e.stat === "Q" || e.stat === "F" || e.stat === "D") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" || e.stat === "D" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
         : `<select data-stat="${e.key}" data-tip="${TIP.noshow}"><option value="">OK</option><option value="R" ${e.stat === "R" ? "selected" : ""}>No show</option></select> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>${e.time ? "" : ` <button class="ghost small" data-dfs="${e.key}" data-tip="${TIP.dfs}">DFS</button>`}`}
@@ -891,7 +895,7 @@ function renderEvent() {
         : S.started ? ""
         : `<button class="ghost small" data-scr="${e.key}" data-on="1" data-tip="${TIP.drop}">Drop</button>`}
         <button class="ghost small danger" data-del="${e.key}" title="Delete this entry">✕</button></td></tr>`;
-  const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th>Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>${TIMERS() === 2 ? "Timers <span class=\"muted\" style=\"font-weight:400\">(1 · 2 → official time)</span>" : "Time <span class=\"muted\" style=\"font-weight:400\">(the tag says where it came from)</span>"}</th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
+  const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th>Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>Pad</th><th>Button</th><th>Timer 1</th><th>Timer 2</th><th>Time <span class="muted" style="font-weight:400">(from)</span></th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
   const unseeded = act.filter(e => !e.heat || !e.lane);
   let html = `<div class="row" style="justify-content:flex-end;margin-bottom:6px;font-size:13px"><label>Timers per lane <select id="timersSel" title="How many timers work each lane at this meet"><option value="1" ${TIMERS() === 1 ? "selected" : ""}>1 timer</option><option value="2" ${TIMERS() === 2 ? "selected" : ""}>2 timers</option></select></label></div>
     <div class="row" style="margin-bottom:4px"><h2 style="margin:0">Event ${v.no} &nbsp;${esc(v.label)}</h2><span class="pill ${eventState(v).status}">${eventState(v).label}</span><span class="muted">${act.length} entered${scr.length ? ` · ${scr.length} scratched` : ""}${v.day > 1 ? ` · day ${v.day}` : ""}</span>
@@ -1809,6 +1813,11 @@ document.addEventListener("change", async ev => {
   }
   else if (d.race !== undefined && ev.target.matches("input[data-race]")) {
     try { S = await api(`${API}/race`, J({ptr: EV, heat: +d.race, race: ev.target.value.trim()})); toast(S.log[0]?.msg || "Saved"); show(); } catch (x) { toast(x.message); show(); }
+  }
+  else if (d.wt) {
+    const tr = ev.target.closest("tr"), a = tr.querySelector('[data-wt="1"]'), b = tr.querySelector('[data-wt="2"]');
+    for (const x of [a, b]) { if (x.value.trim() && isNaN(parseTime(x.value))) return toast("That watch time isn't a time"); if (x.value.trim()) x.value = fmt(parseTime(x.value)); }
+    change("watches", {key: d.key, t1_s: a.value.trim(), t2_s: b.value.trim(), tol: TOL});
   }
   else if (d.timer) {
     const e = M.entries.find(x => x.key === d.key);

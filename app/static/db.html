@@ -65,7 +65,9 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 .evlist button{display:flex;width:100%;text-align:left;background:transparent;color:var(--ink);border-radius:6px;padding:6px 8px;gap:6px;font-size:15px}
 .evlist button.on{background:var(--sel)}
 .evlist .cnt{margin-left:auto;color:var(--muted);font-size:13px}
-.heat{margin-bottom:12px}
+/* Run the meet: scrolling settles on a whole heat, just below the sticky header */
+html{scroll-snap-type:y proximity}
+.heat{margin-bottom:12px;scroll-snap-align:start;scroll-margin-top:calc(var(--abh,0px) + var(--hdh,56px) + 6px)}
 .heat h3{font-size:13px;margin:6px 0 2px;color:var(--muted)}
 td.ln{width:22px;color:var(--muted);text-align:right}
 tr.empty td{padding:1px 6px;font-size:12px;line-height:16px;border-bottom-style:dashed}
@@ -1928,6 +1930,12 @@ fetch("/api/version").then(r => r.json()).then(v => { const t = document.getElem
   const tb = document.getElementById("tmBody"); if (tb) tb.style.display = "";
   apply();
   new MutationObserver(apply).observe(document.getElementById("lastMin"), {childList: true});
+})();
+</script>
+<script>
+(function () {   // header height, for where a heat snaps to
+  const fit = () => { const h = document.querySelector("header"); if (h) document.documentElement.style.setProperty("--hdh", h.offsetHeight + "px"); };
+  addEventListener("resize", fit); addEventListener("load", fit); setInterval(fit, 3000); fit();
 })();
 </script>
 </body>

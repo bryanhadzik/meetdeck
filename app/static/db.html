@@ -634,6 +634,8 @@ function recordsStrip() {
 }
 function recSaveCtl(r) {
   if (S.test || r.tie) return "";
+  const e = M.entries.find(x => x.key === r.key);
+  if (e && !r.saved && !(+e.watch > 0 || +e.watch2 > 0)) return ` <span class="badge" style="background:var(--warn-bg);color:var(--warn)" title="Record swims need the timers' watch times to confirm the time - enter them in Enter watch times (Watches needed)">needs watch times</span>`;
   const k = `data-reckey="${esc(r.key)}" data-recptr="${r.tag_ptr}"`;
   return r.saved ? ` <span class="badge ok">saved</span> <button class="ghost small" data-recundo ${k}>Undo</button>`
                  : ` <button class="small" data-recsave ${k} title="Write this into the school record lists (the master meet files). Check the time first.">Save to records</button>`;
@@ -1296,7 +1298,7 @@ function watchesNeeded() {
     if (e.scr || !e.heat || !e.lane || ["R", "F", "D"].includes((e.stat || "").trim()) || +e.watch > 0 || +e.watch2 > 0) return false;
     const pad = +e.pad || 0, btn = [e.backup, e.back2, e.back3].filter(x => +x > 0);
     const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
-    return (!pad && back) || (pad && back && Math.abs(pad - back) > TOL + 1e-6) || (S.watch_ask || []).includes(e.key);
+    return (!pad && back) || (pad && back && Math.abs(pad - back) > TOL + 1e-6) || (S.watch_ask || []).includes(e.key) || (S.record_watch || []).includes(e.key);
   }).length;
 }
 async function pubStatus() {
@@ -1622,7 +1624,7 @@ function wtShow() {
     const v = evOf(e.event) || {}, pad = +e.pad || 0;
     const btn = [e.backup, e.back2, e.back3].filter(x => +x > 0);
     const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
-    const why = !pad ? "No pad" : back && Math.abs(pad - back) > TOL + 1e-6 ? `Btn ${back > pad ? "+" : "-"}${Math.abs(back - pad).toFixed(2)}` : (WT.asked || []).includes(e.key) ? "Asked for" : "";
+    const why = !pad ? "No pad" : back && Math.abs(pad - back) > TOL + 1e-6 ? `Btn ${back > pad ? "+" : "-"}${Math.abs(back - pad).toFixed(2)}` : (WT.record || []).includes(e.key) ? "<b>Record?</b> confirm" : (WT.asked || []).includes(e.key) ? "Asked for" : "";
     const t = +e.time || 0, src = usedSource(e) || "";
     const changed = t && (!pad || Math.abs(t - pad) > 0.004);
     const st = eventState(v), stale = st.status === "stale";

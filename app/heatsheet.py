@@ -1251,7 +1251,7 @@ def softtouch_pdf(m, licensee="", printed=None) -> bytes:
     return buf.getvalue()
 
 
-def watches_needed(m, tol=0.30, keys=None, ask=()):
+def watches_needed(m, tol=0.30, keys=None, ask=(), rec=()):
     """Lanes that still need the timers' watch times: no pad touch, or pad and backup button disagree by more
     than the tolerance - and no watch time entered yet (entering one takes the lane off the list)."""
     import meetdb as _mdb
@@ -1270,7 +1270,7 @@ def watches_needed(m, tol=0.30, keys=None, ask=()):
         pad = float(e.get("pad") or 0)
         btn = [float(x) for x in (e.get("backup"), e.get("back2"), e.get("back3")) if x and float(x) > 0]
         back = (sum(round(b * 100) for b in btn) // len(btn)) / 100 if btn else 0
-        if not pad and not back and keys is None and e["key"] not in ask and (e["time"] or (e["event"], e["heat"]) not in timed):
+        if not pad and not back and keys is None and e["key"] not in ask and e["key"] not in rec and (e["time"] or (e["event"], e["heat"]) not in timed):
             continue                    # not swum yet (or already has a time); a timed heat's empty lane is listed
         if not pad and not back and not e["time"]:
             why = "No pad or buttons"
@@ -1281,6 +1281,8 @@ def watches_needed(m, tol=0.30, keys=None, ask=()):
             why = f"Btn {'+' if d > 0 else '-'}{abs(d):.2f}"
         elif keys is not None:
             why = ""
+        elif e["key"] in rec:
+            why = "Record? confirm"
         elif e["key"] in ask:
             why = "Asked for"
         else:
@@ -1294,9 +1296,9 @@ def watches_needed(m, tol=0.30, keys=None, ask=()):
     return out
 
 
-def watches_pdf(m, tol=0.30, licensee="", printed=None, ask=()) -> bytes:
+def watches_pdf(m, tol=0.30, licensee="", printed=None, ask=(), rec=()) -> bytes:
     """The watch times still to collect, one row per lane, with boxes for both watches."""
-    rows_data = watches_needed(m, tol, ask=ask)
+    rows_data = watches_needed(m, tol, ask=ask, rec=rec)
     reg, bold = _fonts()
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)

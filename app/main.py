@@ -1790,7 +1790,7 @@ def _team_rec_names(d: Path, recs: list, key: str) -> list:
     return recs
 
 
-def _records_broken(d: Path, m: dict) -> list:
+def _records_broken(d: Path, m: dict, scored_only: bool = True) -> list:
     """Swims that beat (or tie) a record on the meet's record list - Meet Manager flags these as they happen.
     Team records (e.g. "Varsity Rec") only count for their team; a tag can leave out exhibition swims.
     -> [{key, event, no, label, tag, flag, old, old_who, old_year, time, who, team, tie}]"""
@@ -1865,6 +1865,8 @@ def _records_broken(d: Path, m: dict) -> list:
     for o in out:
         o["saved"] = bool(saved.get((o["key"], o["tag_ptr"])))
     # only once the event is scored (and unchanged since): a wrong time (an early pad) mustn't show as a record
+    if not scored_only:
+        return sorted(out, key=lambda x: (x["no"], x["order"]))
     try:
         sigs = (_dbinfo(d).get("scoring") or {}).get("sigs") or {}
         ok = {v["ptr"] for v in m["events"] if sigs.get(str(v["ptr"])) and sigs.get(str(v["ptr"])) == meetdb.event_sig(m, v["ptr"])}
@@ -2370,7 +2372,7 @@ def db_get(mid: str):
         print("records broken:", x)
         broken = []
     return {"exists": True, "started": _meet_started(m), "records_broken": broken, "test": _is_test(_meta(d)), "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
-            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
+            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "record_watch": _record_watch(d, m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
             "scoring_methods": {k: {"name": c["name"], "ind_max": c["ind_max"], "rel_max": c["rel_max"]} for k, c in meetdb.SCORING.items()},
@@ -2836,9 +2838,23 @@ def db_watch_sheet(mid: str):
     """The last printed Watches needed sheet (entry keys in its order), for typing the watch times back in."""
     d = _dir(mid)
     mt = _meta(d)
-    ws, ask = mt.get("watch_sheet") or {}, mt.get("watch_ask") or []
+    ws, ask = mt.get("watch_sheet") or {}, list(mt.get("watch_ask") or [])
+    try:                                    # record swims always need watch times
+        rec = _record_watch(d, meetdb.load(_dbfile(d))) if _dbfile(d).exists() else []
+    except Exception:
+        rec = []
+    ask += [k for k in rec if k not in ask]
     keys = ws.get("keys", [])
-    return {"printed": ws.get("printed", "") or ("" if not ask else "-"), "keys": keys + [k for k in ask if k not in keys], "asked": ask}
+    return {"printed": ws.get("printed", "") or ("" if not ask else "-"), "keys": keys + [k for k in ask if k not in keys], "asked": ask, "record": rec}
+
+
+def _record_watch(d: Path, m: dict) -> list:
+    """Swims that would break a record: the timers' watch times are always collected to make sure it's real."""
+    try:
+        return list(dict.fromkeys(r["key"] for r in _records_broken(d, m, scored_only=False)))
+    except Exception as x:
+        print("record watch:", x)
+        return []
 
 
 @app.post("/api/meets/{mid}/db/watch-ask")
@@ -3786,9 +3802,9 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
         pdf, label = heatsheet.softtouch_pdf(m, licensee), "soft touch backup times"
     elif kind == "watches":
         tol = float(_settings().get("time_tolerance") or 0.30)
-        ask = set(_meta(d).get("watch_ask") or [])
-        pdf, label = heatsheet.watches_pdf(m, tol, licensee, ask=ask), "watches needed"
-        rows = heatsheet.watches_needed(m, tol, ask=ask)
+        ask, rec = set(_meta(d).get("watch_ask") or []), set(_record_watch(d, m))
+        pdf, label = heatsheet.watches_pdf(m, tol, licensee, ask=ask, rec=rec), "watches needed"
+        rows = heatsheet.watches_needed(m, tol, ask=ask, rec=rec)
         if rows:                       # the Enter watch times box lists the sheet as printed
             mt = _meta(d)
             mt["watch_sheet"] = {"printed": time.strftime("%I:%M %p").lstrip("0"), "keys": [r["key"] for r in rows]}

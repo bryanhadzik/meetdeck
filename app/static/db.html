@@ -887,7 +887,7 @@ function renderEvent() {
       <td class="st" style="white-space:nowrap">${e.scr ? "" : isDfs(e) ? `<span class="badge dq" data-tip="${TIP.dfs}">DFS</span> <button class="ghost small" data-undfs="${e.key}" data-tip="${TIP.undfs}">Undo DFS</button>` : (e.stat === "Q" || e.stat === "F" || e.stat === "D") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" || e.stat === "D" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
         : `<select data-stat="${e.key}" data-tip="${TIP.noshow}"><option value="">OK</option><option value="R" ${e.stat === "R" ? "selected" : ""}>No show</option></select> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>${e.time ? "" : ` <button class="ghost small" data-dfs="${e.key}" data-tip="${TIP.dfs}">DFS</button>`}`}
         ${(e.stat === "Q" || e.stat === "F" || e.stat === "D") && e.dq ? `<div class="legs" style="color:var(--err)">${esc(dqText(e))}</div>` : ""}</td>
-      <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}">Swimmers</button> ` : ""}${e.scr ? `<button class="ghost small" data-scr="${e.key}" data-on="0" data-tip="${TIP.putback}">Put back</button>`
+      <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}">Swimmers</button> ` : ""}${!e.scr && e.heat && e.lane && S.started ? wAskBtn(e) : ""}${e.scr ? `<button class="ghost small" data-scr="${e.key}" data-on="0" data-tip="${TIP.putback}">Put back</button>`
         : S.started ? ""
         : `<button class="ghost small" data-scr="${e.key}" data-on="1" data-tip="${TIP.drop}">Drop</button>`}
         <button class="ghost small danger" data-del="${e.key}" title="Delete this entry">✕</button></td></tr>`;
@@ -1283,7 +1283,7 @@ function watchesNeeded() {
     if (e.scr || !e.heat || !e.lane || ["R", "F", "D"].includes((e.stat || "").trim()) || +e.watch > 0 || +e.watch2 > 0) return false;
     const pad = +e.pad || 0, btn = [e.backup, e.back2, e.back3].filter(x => +x > 0);
     const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
-    return (!pad && back) || (pad && back && Math.abs(pad - back) > TOL + 1e-6);
+    return (!pad && back) || (pad && back && Math.abs(pad - back) > TOL + 1e-6) || (S.watch_ask || []).includes(e.key);
   }).length;
 }
 async function pubStatus() {
@@ -1511,6 +1511,22 @@ async function getTimes(h, saved) {
 }
 
 
+// put a lane on the Watches needed list by hand (its time looks wrong even though pad and buttons agree)
+const wAsked = e => (S.watch_ask || []).includes(e.key);
+const wAskBtn = e => wAsked(e)
+  ? `<button class="ghost small" data-wask="${e.key}" data-on="0" title="On the Watches needed list - click to take it off" style="color:var(--warn);border-color:var(--warn)">&#9201; On watch list</button> `
+  : `<button class="ghost small" data-wask="${e.key}" data-on="1" title="Add this lane to the Watches needed list (and Enter watch times) so the timers' watch times get collected">&#9201; Get watches</button> `;
+document.addEventListener("click", async ev => {
+  const b = ev.target.closest("[data-wask]"); if (!b) return;
+  b.disabled = true;
+  try {
+    WT = await api(`${API}/watch-ask`, J({key: b.dataset.wask, on: b.dataset.on === "1"}));
+    S.watch_ask = WT.asked || [];
+    toast(b.dataset.on === "1" ? "Added to the Watches needed list" : "Taken off the Watches needed list");
+    show(); wtShow();
+  } catch (x) { alert(x.message); b.disabled = false; }
+});
+
 // ---------------- Enter watch times (the last printed Watches needed sheet) ----------------
 let WT = {printed: "", keys: []};
 async function wtLoad() { try { WT = await api(`${API}/watch-sheet`); } catch (e) { WT = {printed: "", keys: []}; } wtShow(); }
@@ -1523,7 +1539,7 @@ function wtShow() {
   const rows = WT.keys.map(k => M.entries.find(e => e.key === k)).filter(Boolean);
   box.classList.toggle("hidden", !rows.length);
   if (!rows.length) return;
-  $("#wtSub").textContent = `sheet printed ${WT.printed} · ${rows.length} lane${rows.length > 1 ? "s" : ""}`;
+  $("#wtSub").textContent = `${WT.printed && WT.printed !== "-" ? "sheet printed " + WT.printed : "added by hand"} · ${rows.length} lane${rows.length > 1 ? "s" : ""}`;
   const ae = document.activeElement, focus = ae && ae.dataset && ae.dataset.wk ? ae.dataset.wk + "|" + ae.dataset.wn : "", typing = focus ? ae.value : null;
   const rescore = new Set();
   let last = null;
@@ -1531,7 +1547,7 @@ function wtShow() {
     const v = evOf(e.event) || {}, pad = +e.pad || 0;
     const btn = [e.backup, e.back2, e.back3].filter(x => +x > 0);
     const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
-    const why = !pad ? "No pad" : back && Math.abs(pad - back) > TOL + 1e-6 ? `Btn ${back > pad ? "+" : "-"}${Math.abs(back - pad).toFixed(2)}` : "";
+    const why = !pad ? "No pad" : back && Math.abs(pad - back) > TOL + 1e-6 ? `Btn ${back > pad ? "+" : "-"}${Math.abs(back - pad).toFixed(2)}` : (WT.asked || []).includes(e.key) ? "Asked for" : "";
     const t = +e.time || 0, src = usedSource(e) || "";
     const changed = t && (!pad || Math.abs(t - pad) > 0.004);
     const st = eventState(v), stale = st.status === "stale";

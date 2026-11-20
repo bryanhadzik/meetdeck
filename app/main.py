@@ -1864,6 +1864,13 @@ def _records_broken(d: Path, m: dict) -> list:
     saved = {(x["key"], x["tag_ptr"]): x for x in _meta(d).get("records_saved") or []}
     for o in out:
         o["saved"] = bool(saved.get((o["key"], o["tag_ptr"])))
+    # only once the event is scored (and unchanged since): a wrong time (an early pad) mustn't show as a record
+    try:
+        sigs = (_dbinfo(d).get("scoring") or {}).get("sigs") or {}
+        ok = {v["ptr"] for v in m["events"] if sigs.get(str(v["ptr"])) and sigs.get(str(v["ptr"])) == meetdb.event_sig(m, v["ptr"])}
+        out = [x for x in out if x["event"] in ok]
+    except Exception as x:
+        print("records scored check:", x)
     return sorted(out, key=lambda x: (x["no"], x["order"]))
 
 
@@ -2363,7 +2370,7 @@ def db_get(mid: str):
         print("records broken:", x)
         broken = []
     return {"exists": True, "started": _meet_started(m), "records_broken": broken, "test": _is_test(_meta(d)), "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
-            "model": meetdb.json_safe(m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
+            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
             "scoring_methods": {k: {"name": c["name"], "ind_max": c["ind_max"], "rel_max": c["rel_max"]} for k, c in meetdb.SCORING.items()},
@@ -2828,8 +2835,24 @@ def db_changes_done(mid: str, body: dict):
 def db_watch_sheet(mid: str):
     """The last printed Watches needed sheet (entry keys in its order), for typing the watch times back in."""
     d = _dir(mid)
-    ws = _meta(d).get("watch_sheet") or {}
-    return {"printed": ws.get("printed", ""), "keys": ws.get("keys", [])}
+    mt = _meta(d)
+    ws, ask = mt.get("watch_sheet") or {}, mt.get("watch_ask") or []
+    keys = ws.get("keys", [])
+    return {"printed": ws.get("printed", "") or ("" if not ask else "-"), "keys": keys + [k for k in ask if k not in keys], "asked": ask}
+
+
+@app.post("/api/meets/{mid}/db/watch-ask")
+def db_watch_ask(mid: str, body: dict):
+    """Put a lane on (or take it off) the Watches needed list by hand - a time that looks wrong even though
+    pad and buttons agree. It's listed until watch times are entered, or the list is taken away."""
+    d = _dir(mid)
+    mt = _meta(d)
+    ask = [k for k in mt.get("watch_ask", []) if k != body.get("key")]
+    if body.get("on"):
+        ask.append(body.get("key"))
+    mt["watch_ask"] = ask
+    _save(d, mt)
+    return db_watch_sheet(mid)
 
 
 @app.delete("/api/meets/{mid}/db/watch-sheet")
@@ -2837,6 +2860,7 @@ def db_watch_sheet_clear(mid: str):
     d = _dir(mid)
     mt = _meta(d)
     mt.pop("watch_sheet", None)
+    mt.pop("watch_ask", None)
     _save(d, mt)
     return {"printed": "", "keys": []}
 
@@ -3728,8 +3752,9 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
         pdf, label = heatsheet.softtouch_pdf(m, licensee), "soft touch backup times"
     elif kind == "watches":
         tol = float(_settings().get("time_tolerance") or 0.30)
-        pdf, label = heatsheet.watches_pdf(m, tol, licensee), "watches needed"
-        rows = heatsheet.watches_needed(m, tol)
+        ask = set(_meta(d).get("watch_ask") or [])
+        pdf, label = heatsheet.watches_pdf(m, tol, licensee, ask=ask), "watches needed"
+        rows = heatsheet.watches_needed(m, tol, ask=ask)
         if rows:                       # the Enter watch times box lists the sheet as printed
             mt = _meta(d)
             mt["watch_sheet"] = {"printed": time.strftime("%I:%M %p").lstrip("0"), "keys": [r["key"] for r in rows]}

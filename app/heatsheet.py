@@ -601,6 +601,52 @@ def referee2_pdf(m, licensee="", printed=None) -> bytes:
     return r.render()
 
 
+# ---------------- QR sign: a page to post at the pool pointing people to the phone page ----------------
+def qr_sign_pdf(m, url: str, stream: bool = True, licensee="") -> bytes:
+    """One letter page: the meet's name, a big QR code to the phone results page, and what's on it
+    (live results, heat sheets, the live stream). For the doors, the stands and the team area."""
+    from reportlab.graphics.barcode import qr
+    from reportlab.graphics.shapes import Drawing
+    from reportlab.graphics import renderPDF
+    sh = _Sheet(m, licensee, dt.datetime.now())
+    c = sh.c
+    c.setTitle(f"{m['meet']['name']} - Results sign")
+    mt = m["meet"]
+    try:
+        d = dt.date.fromisoformat(mt["start"])
+        when = f"{d.strftime('%A')}, {d.strftime('%B')} {d.day}, {d.year}"
+    except Exception:
+        when = mt.get("start") or ""
+    W = PAGE_W
+    sh.text(W / 2, 54, mt["name"], bold=True, size=26, align="c", w=W - 80)
+    if when:
+        sh.text(W / 2, 90, when, size=15, align="c")
+    sh.text(W / 2, 128, "Follow the meet on your phone", bold=True, size=30, align="c", w=W - 60)
+    # the code: big enough to scan from a few steps away
+    size = 330.0
+    w = qr.QrCodeWidget(url, barLevel="M")
+    b = w.getBounds()
+    bw, bh = b[2] - b[0], b[3] - b[1]
+    dr = Drawing(size, size, transform=[size / bw, 0, 0, size / bh, 0, 0])
+    dr.add(w)
+    renderPDF.draw(dr, c, (W - size) / 2, PAGE_H - 182 - size)
+    y = 182 + size + 16
+    sh.text(W / 2, y, url.replace("https://", "").rstrip("/"), bold=True, size=22, align="c")
+    y += 44
+    items = ["Live results as each event is scored", "Heat sheets: every heat and lane",
+             "Search for a swimmer, or star yours"]
+    if stream:
+        items.insert(1, "Live video stream and race replays")
+    for t in items:
+        sh.text(110, y, "\u2022", bold=True, size=20)
+        sh.text(132, y, t, size=20, w=W - 170)
+        y += 32
+    sh.text(W / 2, PAGE_H - 46, "Point your phone's camera at the code. No app needed.", size=13, align="c")
+    c.showPage()
+    c.save()
+    return sh.buf.getvalue()
+
+
 # ---------------- timer sheets: one set of pages per lane, every heat of every event ----------------
 class _Timer(_Sheet):
     LAST_ROW = 740.0

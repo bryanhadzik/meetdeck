@@ -3691,6 +3691,12 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
         pdf, label = heatsheet.heat_sheet_pdf(m, licensee, gap_min=gap if isinstance(gap, int) else None), "heat sheet"
     elif kind == "referee":
         pdf, label = heatsheet.referee_pdf(m, licensee), "referee program"
+    elif kind == "qrsign":
+        st = _settings()
+        url = _pub_url(st)
+        if not url:
+            raise HTTPException(400, "Set up Phone results first (Setup > Phone results) - the sign points to that page")
+        pdf, label = heatsheet.qr_sign_pdf(m, url, stream=bool(_pool(st) and st.get("stream_url"))), "results sign"
     elif kind == "referee2":
         pdf, label = heatsheet.referee2_pdf(m, licensee), "referee program"
     elif kind == "results":

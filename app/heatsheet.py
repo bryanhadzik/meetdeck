@@ -1251,7 +1251,7 @@ def softtouch_pdf(m, licensee="", printed=None) -> bytes:
     return buf.getvalue()
 
 
-def watches_needed(m, tol=0.30, keys=None, ask=(), rec=()):
+def watches_needed(m, tol=0.30, keys=None, ask=(), rec=(), ok=()):
     """Lanes that still need the timers' watch times: no pad touch, or pad and backup button disagree by more
     than the tolerance - and no watch time entered yet (entering one takes the lane off the list)."""
     import meetdb as _mdb
@@ -1262,6 +1262,8 @@ def watches_needed(m, tol=0.30, keys=None, ask=(), rec=()):
     for e in m["entries"]:
         if e["scr"] or not e["heat"] or not e["lane"] or (e["stat"] or "").strip() in ("R", "F", "D", "Q"):
             continue
+        if keys is None and e["key"] in ok and e["key"] not in ask and e["key"] not in rec:
+            continue                    # pad or button accepted by hand
         if keys is not None:
             if e["key"] not in keys:
                 continue
@@ -1296,9 +1298,9 @@ def watches_needed(m, tol=0.30, keys=None, ask=(), rec=()):
     return out
 
 
-def watches_pdf(m, tol=0.30, licensee="", printed=None, ask=(), rec=()) -> bytes:
+def watches_pdf(m, tol=0.30, licensee="", printed=None, ask=(), rec=(), ok=()) -> bytes:
     """The watch times still to collect, one row per lane, with boxes for both watches."""
-    rows_data = watches_needed(m, tol, ask=ask, rec=rec)
+    rows_data = watches_needed(m, tol, ask=ask, rec=rec, ok=ok)
     reg, bold = _fonts()
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)

@@ -2372,7 +2372,7 @@ def db_get(mid: str):
         print("records broken:", x)
         broken = []
     return {"exists": True, "started": _meet_started(m), "records_broken": broken, "test": _is_test(_meta(d)), "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
-            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "record_watch": _record_watch(d, m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
+            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "time_ok": _meta(d).get("time_ok") or {}, "record_watch": _record_watch(d, m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
             "scoring_methods": {k: {"name": c["name"], "ind_max": c["ind_max"], "rel_max": c["rel_max"]} for k, c in meetdb.SCORING.items()},
@@ -2855,6 +2855,33 @@ def _record_watch(d: Path, m: dict) -> list:
     except Exception as x:
         print("record watch:", x)
         return []
+
+
+@app.post("/api/meets/{mid}/db/time-ok")
+def db_time_ok(mid: str, body: dict):
+    """Accept the pad or the backup button for a lane: it becomes the official time, the lane stops being marked
+    amber and comes off the Watches needed list. use=None takes the acceptance away."""
+    d = _dir(mid)
+    key, use = body.get("key"), body.get("use")
+    mt = _meta(d)
+    ok = dict(mt.get("time_ok") or {})
+    if use in ("pad", "backup"):
+        db = _dbfile(d)
+        m = meetdb.load(db)
+        e = meetdb.find(m, key)
+        ops, msg = meetdb.op_watches(m, key, meetdb.fmt_time(e.get("watch")) or "", meetdb.fmt_time(e.get("watch2")) or "",
+                                     float(_settings().get("time_tolerance") or 0.30), use=use)
+        _snapshot(d, "before: " + msg)
+        meetdb.apply(db, ops)
+        ok[key] = use
+        _dblog(d, f"Accepted the {'pad' if use == 'pad' else 'backup button'}: " + msg.split(": ", 1)[0].replace("Watches for ", "")
+                  + " - official " + (msg.split("official ", 1)[1] if "official " in msg else ""))
+    else:
+        ok.pop(key, None)
+    mt["time_ok"] = ok
+    _save(d, mt)
+    _public_auto(mid)
+    return db_get(mid)
 
 
 @app.post("/api/meets/{mid}/db/watch-ask")
@@ -3802,9 +3829,9 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
         pdf, label = heatsheet.softtouch_pdf(m, licensee), "soft touch backup times"
     elif kind == "watches":
         tol = float(_settings().get("time_tolerance") or 0.30)
-        ask, rec = set(_meta(d).get("watch_ask") or []), set(_record_watch(d, m))
-        pdf, label = heatsheet.watches_pdf(m, tol, licensee, ask=ask, rec=rec), "watches needed"
-        rows = heatsheet.watches_needed(m, tol, ask=ask, rec=rec)
+        ask, rec, ok = set(_meta(d).get("watch_ask") or []), set(_record_watch(d, m)), set(_meta(d).get("time_ok") or {})
+        pdf, label = heatsheet.watches_pdf(m, tol, licensee, ask=ask, rec=rec, ok=ok), "watches needed"
+        rows = heatsheet.watches_needed(m, tol, ask=ask, rec=rec, ok=ok)
         if rows:                       # the Enter watch times box lists the sheet as printed
             mt = _meta(d)
             mt["watch_sheet"] = {"printed": time.strftime("%I:%M %p").lstrip("0"), "keys": [r["key"] for r in rows]}

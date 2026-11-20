@@ -877,7 +877,7 @@ function timerCells(e) {
   const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" title="Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)" style="width:72px${far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
   return ro(pad, "Pad (touchpad) time", odd(pad)) +
     ro(back, btn.length > 1 ? "Backup buttons: " + btn.map(fmt).join(" / ") + " (average)" : "Backup button", odd(back)) +
-    w(1, e.watch) + w(2, e.watch2) +
+    w(1, e.watch) + `<td style="white-space:nowrap">${w(2, e.watch2).slice(4, -5)}${e.heat && e.lane ? " " + wAskBtn(e) : ""}</td>` +
     `<td style="white-space:nowrap"><input class="t" data-time="${e.key}" value="${esc(fmt(e.time))}" placeholder="time" title="Official time - type one in to override">${usedBadge(e)}</td>`;
 }
 function renderEvent() {
@@ -900,7 +900,7 @@ function renderEvent() {
       <td class="st" style="white-space:nowrap">${e.scr ? "" : isDfs(e) ? `<span class="badge dq" data-tip="${TIP.dfs}">DFS</span> <button class="ghost small" data-undfs="${e.key}" data-tip="${TIP.undfs}">Undo DFS</button>` : (e.stat === "Q" || e.stat === "F" || e.stat === "D") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" || e.stat === "D" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
         : `<select data-stat="${e.key}" data-tip="${TIP.noshow}"><option value="">OK</option><option value="R" ${e.stat === "R" ? "selected" : ""}>No show</option></select> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>${e.time ? "" : ` <button class="ghost small" data-dfs="${e.key}" data-tip="${TIP.dfs}">DFS</button>`}`}
         ${(e.stat === "Q" || e.stat === "F" || e.stat === "D") && e.dq ? `<div class="legs" style="color:var(--err)">${esc(dqText(e))}</div>` : ""}</td>
-      <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}">Swimmers</button> ` : ""}${!e.scr && e.heat && e.lane && S.started ? wAskBtn(e) : ""}${e.scr ? `<button class="ghost small" data-scr="${e.key}" data-on="0" data-tip="${TIP.putback}">Put back</button>`
+      <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}">Swimmers</button> ` : ""}${e.scr ? `<button class="ghost small" data-scr="${e.key}" data-on="0" data-tip="${TIP.putback}">Put back</button>`
         : S.started ? ""
         : `<button class="ghost small" data-scr="${e.key}" data-on="1" data-tip="${TIP.drop}">Drop</button>`}
         <button class="ghost small danger" data-del="${e.key}" title="Delete this entry">✕</button></td></tr>`;
@@ -1590,16 +1590,18 @@ async function getTimes(h, saved) {
 
 // put a lane on the Watches needed list by hand (its time looks wrong even though pad and buttons agree)
 const wAsked = e => (S.watch_ask || []).includes(e.key);
-const wAskBtn = e => wAsked(e)
-  ? `<button class="ghost small" data-wask="${e.key}" data-on="0" title="On the Watches needed list - click to take it off" style="color:var(--warn);border-color:var(--warn)">&#9201; On watch list</button> `
-  : `<button class="ghost small" data-wask="${e.key}" data-on="1" title="Add this lane to the Watches needed list (and Enter watch times) so the timers' watch times get collected">&#9201; Get watches</button> `;
+const wAskBtn = e => (S.record_watch || []).includes(e.key) && !(+e.watch > 0 || +e.watch2 > 0)
+  ? `<span class="badge" style="background:var(--warn-bg);color:var(--warn)" title="A record swim - its watch times are always on the next Watches needed print">&#9201; record: on next print</span>`
+  : wAsked(e)
+  ? `<button class="ghost small" data-wask="${e.key}" data-on="0" title="On the next Watches needed print (and Enter watch times) - click to take it off" style="color:var(--warn);border-color:var(--warn)">&#9201; On next print &#10003;</button>`
+  : `<button class="ghost small" data-wask="${e.key}" data-on="1" title="Put this lane on the next Watches needed print (and Enter watch times) so the timers' watch times get collected">&#9201; Next print</button>`;
 document.addEventListener("click", async ev => {
   const b = ev.target.closest("[data-wask]"); if (!b) return;
   b.disabled = true;
   try {
     WT = await api(`${API}/watch-ask`, J({key: b.dataset.wask, on: b.dataset.on === "1"}));
     S.watch_ask = WT.asked || [];
-    toast(b.dataset.on === "1" ? "Added to the Watches needed list" : "Taken off the Watches needed list");
+    toast(b.dataset.on === "1" ? "On the next Watches needed print" : "Taken off the next Watches needed print");
     show(); wtShow();
   } catch (x) { alert(x.message); b.disabled = false; }
 });

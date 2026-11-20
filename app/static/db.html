@@ -70,7 +70,9 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 @keyframes gotflash{0%{box-shadow:0 0 0 0 rgba(31,136,61,.9);transform:scale(1.02)}100%{box-shadow:0 0 0 14px rgba(31,136,61,0);transform:scale(1)}}
 /* Run the meet: scrolling settles on a whole heat, just below the sticky header */
 html{scroll-snap-type:y proximity}
-.heat{margin-bottom:12px;scroll-snap-align:start;scroll-margin-top:calc(var(--abh,0px) + var(--hdh,56px) + 6px)}
+.heat{margin-bottom:12px;scroll-snap-align:start;scroll-margin-top:calc(var(--abh,0px) + var(--hdh,56px) + var(--evh,0px) + 6px)}
+/* the event number and name stay at the top while its heats scroll */
+.evhead{position:sticky;top:calc(var(--abh,0px) + var(--hdh,56px));z-index:4;background:var(--bg);padding:6px 0;box-shadow:0 1px 0 var(--line)}
 .heat h3{font-size:13px;margin:6px 0 2px;color:var(--muted)}
 td.ln{width:22px;color:var(--muted);text-align:right}
 tr.empty td{padding:1px 6px;font-size:12px;line-height:16px;border-bottom-style:dashed}
@@ -903,7 +905,7 @@ function renderEvent() {
   const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th>Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>Pad</th><th>Button</th><th>Timer 1</th><th>Timer 2</th><th>Time <span class="muted" style="font-weight:400">(from)</span></th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
   const unseeded = act.filter(e => !e.heat || !e.lane);
   let html = `<div class="row" style="justify-content:flex-end;margin-bottom:6px;font-size:13px"><label>Timers per lane <select id="timersSel" title="How many timers work each lane at this meet"><option value="1" ${TIMERS() === 1 ? "selected" : ""}>1 timer</option><option value="2" ${TIMERS() === 2 ? "selected" : ""}>2 timers</option></select></label></div>
-    <div class="row" style="margin-bottom:4px"><h2 style="margin:0">Event ${v.no} &nbsp;${esc(v.label)}</h2><span class="pill ${eventState(v).status}">${eventState(v).label}</span><span class="muted">${act.length} entered${scr.length ? ` · ${scr.length} scratched` : ""}${v.day > 1 ? ` · day ${v.day}` : ""}</span>
+    <div class="row evhead" style="margin-bottom:4px"><h2 style="margin:0">Event ${v.no} &nbsp;${esc(v.label)}</h2><span class="pill ${eventState(v).status}">${eventState(v).label}</span><span class="muted">${act.length} entered${scr.length ? ` · ${scr.length} scratched` : ""}${v.day > 1 ? ` · day ${v.day}` : ""}</span>
     <span class="grow"></span>${scoreBtn(v)}<button class="ghost small${MOVING ? " on" : ""}" id="moveBtn" title="Heats and lanes are locked so they can't be changed by accident">${MOVING ? "Done moving" : "Move swimmers"}</button><button class="ghost small" id="addEntryBtn">Add entry</button></div><div id="addEntry" class="hidden"></div>`;
   if (unseeded.length && !S.started) {
     const n = unseeded.filter(e => !e.heat).length, what = v.ind_rel === "R" ? `relay${n !== 1 ? "s" : ""}` : `swimmer${n !== 1 ? "s" : ""}`;
@@ -2007,8 +2009,10 @@ fetch("/api/version").then(r => r.json()).then(v => { const t = document.getElem
 </script>
 <script>
 (function () {   // header height, for where a heat snaps to
-  const fit = () => { const h = document.querySelector("header"); if (h) document.documentElement.style.setProperty("--hdh", h.offsetHeight + "px"); };
-  addEventListener("resize", fit); addEventListener("load", fit); setInterval(fit, 3000); fit();
+  const fit = () => { const h = document.querySelector("header"), ev = document.querySelector(".evhead");
+    if (h) document.documentElement.style.setProperty("--hdh", h.offsetHeight + "px");
+    document.documentElement.style.setProperty("--evh", (ev ? ev.offsetHeight : 0) + "px"); };
+  addEventListener("resize", fit); addEventListener("load", fit); setInterval(fit, 1000); fit();
 })();
 </script>
 </body>

@@ -1258,8 +1258,9 @@ def watches_needed(m, tol=0.30, keys=None):
     evs = {v["ptr"]: v for v in m["events"]}
     order = {v["ptr"]: i for i, v in enumerate(m["events"])}
     out = []
+    timed = {(e["event"], e["heat"]) for e in m["entries"] if not e["scr"] and (e.get("pad") or e["time"])}   # heats the console has sent
     for e in m["entries"]:
-        if e["scr"] or not e["heat"] or not e["lane"] or (e["stat"] or "").strip() in ("R", "F", "D"):
+        if e["scr"] or not e["heat"] or not e["lane"] or (e["stat"] or "").strip() in ("R", "F", "D", "Q"):
             continue
         if keys is not None:
             if e["key"] not in keys:
@@ -1269,9 +1270,11 @@ def watches_needed(m, tol=0.30, keys=None):
         pad = float(e.get("pad") or 0)
         btn = [float(x) for x in (e.get("backup"), e.get("back2"), e.get("back3")) if x and float(x) > 0]
         back = (sum(round(b * 100) for b in btn) // len(btn)) / 100 if btn else 0
-        if not pad and not back and keys is None:
-            continue
-        if not pad:
+        if not pad and not back and keys is None and (e["time"] or (e["event"], e["heat"]) not in timed):
+            continue                    # not swum yet (or already has a time); a timed heat's empty lane is listed
+        if not pad and not back and not e["time"]:
+            why = "No pad or buttons"
+        elif not pad:
             why = "No pad"
         elif back and abs(pad - back) > tol + 1e-6:
             d = back - pad

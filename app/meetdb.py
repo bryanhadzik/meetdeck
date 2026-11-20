@@ -492,10 +492,11 @@ def places_ops(m, ptr, override=None):
 
 def op_heat_results(m, ptr, heat, lanes, overwrite=True):
     """Times from the timing console for one heat. lanes: [{lane, final, backup, place, splits:[...]}]
-    (seconds). An entered lane with no time becomes a no-show; place -1 from the console = DQ."""
+    (seconds). An entered lane with no pad time is left without a time (never made a no-show by itself) - it goes on
+    the Watches needed list so the timers' watch times, or a no-show marked by hand, settle it. Place -1 = DQ."""
     ptr, heat = int(ptr), int(heat)
     ents = {e["lane"]: e for e in m["entries"] if e["event"] == ptr and e["heat"] == heat and not e["scr"] and e["lane"]}
-    ops, override, done, ns, dq, skipped, used = [], {}, 0, [], [], [], []
+    ops, override, done, ns, dq, skipped, used = [], {}, 0, [], [], [], []      # ns: lanes with no time (watch list)
     for ln in lanes:
         e = ents.get(int(ln["lane"]))
         if not e:
@@ -510,7 +511,7 @@ def op_heat_results(m, ptr, heat, lanes, overwrite=True):
         final = {"pad": pad, "backup": backup, "watch": watch}.get(use, pad) or 0
         if use != "pad" and final:
             used.append(f"lane {e['lane']} {'backup button' if use == 'backup' else 'timers'}")
-        stat = "R" if not final else ("Q" if int(ln.get("place") or 0) == -1 else "")
+        stat = "Q" if int(ln.get("place") or 0) == -1 else ""
         # keep every time the console and the timers gave, so the official time can be changed later:
         # each button in Fin_back1-3 (the console's backup when it sent no buttons), both watches
         btns = [float(b) for b in (ln.get("buttons") or []) if b][:3] or ([backup] if backup else [])
@@ -527,13 +528,13 @@ def op_heat_results(m, ptr, heat, lanes, overwrite=True):
                 row.update({"Ath_no": e["ath"]} if e["kind"] == "I" else {"Relay_no": e["relay"], "Team_ltr": e["ltr"]})
                 ops.append({"op": "insert", "table": "Split", "row": row})
         done += 1
-        (ns if stat == "R" else dq if stat == "Q" else []).append(e["lane"])
+        (dq if stat == "Q" else ns if not final else []).append(e["lane"])
     if not done:
         raise ValueError("No entered lanes in that heat matched the console's lanes" + (" (all already have results)" if skipped else ""))
     ops += places_ops(m, ptr, override)
     msg = f"Console times for {ev_label(m, ptr)} heat {heat}: {done} lane(s)"
     if ns:
-        msg += f", no-show lane {', '.join(map(str, ns))}"
+        msg += f", no time in lane {', '.join(map(str, ns))} (on the watch list)"
     if dq:
         msg += f", DQ lane {', '.join(map(str, dq))}"
     if used:

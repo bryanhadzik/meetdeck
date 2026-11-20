@@ -1445,7 +1445,7 @@ async function getTimes(h, saved) {
       if (e) preview(e, avail[sel.value] || 0, l.place);
     });
     document.getElementById(`tpNote-${h}`).innerHTML = (flagged ? `<span style="color:var(--warn)"><b>${flagged} lane(s) need a look</b>${nopad ? ` (${nopad} with no pad touch)` : ""} &mdash; see Check, and choose which time to use.</span> ` : "") +
-      (missing ? `${missing} entered lane(s) have no time and will be marked no-show unless you add a timers time.` : "") +
+      (missing ? `${missing} entered lane(s) have no pad time - they stay without a time and go on the Watches needed list. Enter the timers' watch times, or mark a no-show by hand if nobody swam.` : "") +
       (flagged >= 3 ? aoTip("wholeheat", true) : flagged ? aoTip("timing", true) : "") + (missing || nopad ? aoTip("missingpad", true) : "");
   };
   if (r.saved) rows.forEach(({l, e}) => {

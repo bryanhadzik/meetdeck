@@ -3687,7 +3687,8 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
             m["records"] = _program_records(d)
         except Exception as x:
             print("heat sheet records:", x)
-        pdf, label = heatsheet.heat_sheet_pdf(m, licensee), "heat sheet"
+        gap = _meta(d).get("session_break")
+        pdf, label = heatsheet.heat_sheet_pdf(m, licensee, gap_min=gap if isinstance(gap, int) else None), "heat sheet"
     elif kind == "referee":
         pdf, label = heatsheet.referee_pdf(m, licensee), "referee program"
     elif kind == "referee2":

@@ -106,6 +106,9 @@ def event_records(m, v):
     """Records for this event to print under its title (host school's and the pool's, as m["records"]
     lists them): ["PAC Record: 1:58.57  2020  Hadlee Begay", ...] in the tags' order."""
     out = []
+    st = (m.get("_starts") or {}).get(f"{v['no']}{v.get('ltr') or ''}")
+    if st is not None:                      # projected from the timeline: when this event should start
+        out.append((-1, f"Estimated start: {_clock(st).lstrip('0')}"))
     sex = (v.get("gender") or "").upper()[:1]
     sex = {"G": "F", "W": "F", "B": "M"}.get(sex, sex)
     for r in m.get("records") or []:
@@ -345,7 +348,11 @@ class _Sheet:
         return self.buf.getvalue()
 
 
-def heat_sheet_pdf(m, licensee="", printed=None) -> bytes:
+def heat_sheet_pdf(m, licensee="", printed=None, gap_min=None) -> bytes:
+    try:                                    # each event's projected start, printed at the top of the event
+        m = {**m, "_starts": {f"{r['no']}{r['ltr']}": r["start"] for sess in timeline(m, gap_min) for r in sess["rows"]}}
+    except Exception as x:
+        print("heat sheet start times:", x)
     if printed is None:
         try:
             from zoneinfo import ZoneInfo

@@ -943,8 +943,9 @@ function renderEvent() {
 }
 function scoreBtn(v) {
   const st = eventState(v), name = (S.scoring_methods[S.scoring_default] || {}).name || "";
-  if (st.status === "scored") return `<button class="ghost small" data-score="${v.ptr}" title="Scored. Score again (e.g. after a correction)">Rescore</button> `;
-  if (st.status === "stale") return `<button class="small" data-score="${v.ptr}" style="background:var(--err);color:#fff" title="Times, DQs or scratches changed since this race was scored">Rescore event</button> `;
+  const un = `<button class="ghost small" data-unscore="${v.ptr}" title="Take this event's points back off the team scores (score it again later)">Unscore</button> `;
+  if (st.status === "scored") return `<button class="ghost small" data-score="${v.ptr}" title="Scored. Score again (e.g. after a correction)">Rescore</button> ` + un;
+  if (st.status === "stale") return `<button class="small" data-score="${v.ptr}" style="background:var(--err);color:#fff" title="Times, DQs or scratches changed since this race was scored">Rescore event</button> ` + un;
   if (st.status === "timed") return `<button class="small" data-score="${v.ptr}" title="${esc(name)}">Score event</button> `;
   return `<button class="ghost small" disabled title="Every lane needs a time, DQ or no-show first">Score event</button> `;
 }
@@ -1753,6 +1754,14 @@ $("#scoreBtn").onclick = () => {
   $("#scoreDlg").classList.remove("hidden");
 };
 $("#scCancel").onclick = () => $("#scoreDlg").classList.add("hidden");
+document.addEventListener("click", async ev => {
+  const b = ev.target.closest("[data-unscore]"); if (!b) return;
+  const v = evOf(+b.dataset.unscore);
+  if (!confirm(`Unscore #${v.no} ${v.label}? Its points come off the team scores until you score it again.`)) return;
+  b.disabled = true;
+  try { S = await api(`${API}/unscore`, J({events: [v.ptr]})); toast(S.log[0]?.msg || "Unscored"); show(); }
+  catch (e) { toast(e.message); b.disabled = false; }
+});
 async function scoreReq(body, after) {
   try { S = await api(`${API}/score`, J(body)); toast(S.log[0]?.msg || "Scored"); show(); if (after) after(); return true; }
   catch (e) { toast(e.message); return false; }

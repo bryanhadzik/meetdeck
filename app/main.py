@@ -3019,6 +3019,40 @@ def db_score(mid: str, body: dict):
     return db_get(mid)
 
 
+@app.post("/api/meets/{mid}/db/unscore")
+def db_unscore(mid: str, body: dict):
+    """Take scored events back out of the scoring: their points come off and the team totals drop them."""
+    d = _dir(mid)
+    db = _dbfile(d)
+    if not db.exists():
+        raise HTTPException(400, "No database yet")
+    info = _dbinfo(d)
+    prev = info.get("scoring") or {}
+    ptrs = {int(x) for x in body.get("events", [])}
+    if not ptrs:
+        raise HTTPException(400, "Pick an event to unscore")
+    m = meetdb.load(db)
+    ops = [{"op": "update", "table": meetdb._table(e), "match": meetdb._match(e),       # 999 = non-scoring swimmer: keep
+            "set": {"Ev_score": 0, **({} if e.get("nonscoring") else {"Fin_ptsplace": 0})}}
+           for e in m["entries"] if e["event"] in ptrs and ((e.get("points") or 0) or ((e.get("ptsplace") or 0) and not e.get("nonscoring")))]
+    labels = [f"#{v['no']} {v['label']}" for v in m["events"] if v["ptr"] in ptrs]
+    msg = "Unscored " + ", ".join(labels)
+    _snapshot(d, "before: " + msg)
+    if ops:
+        meetdb.apply(db, ops)
+    summary = {**prev, "events": [p for p in prev.get("events", []) if p not in ptrs],
+               "sigs": {k: v for k, v in (prev.get("sigs") or {}).items() if int(k) not in ptrs}}
+    m_now = meetdb.load(db)
+    summary.update(meetdb.score_totals(m_now, summary))
+    info = _dbinfo(d)
+    info["scoring_stack"] = (info.get("scoring_stack", []) + [prev])[-40:]
+    info["scoring"] = summary
+    (_dbdir(d) / "info.json").write_text(json.dumps(info))
+    _dblog(d, msg, "score")
+    _public_auto(mid)
+    return db_get(mid)
+
+
 @app.post("/api/meets/{mid}/db/undo")
 def db_undo(mid: str, body: dict | None = None):
     d = _dir(mid)

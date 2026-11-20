@@ -1579,7 +1579,8 @@ function wtShow() {
       <td class="mono" style="background:${bg}">${pad ? fmt(pad) : "none"}</td><td class="mono" style="background:${bg}">${back ? fmt(back) : "none"}</td><td style="background:${bg};font-size:12px">${why}</td>
       <td style="background:${bg}"><input class="t" data-wk="${esc(e.key)}" data-wn="1" inputmode="numeric" placeholder="watch 1" style="width:92px;font-size:16px" value="${e.watch ? fmt(e.watch) : ""}"></td>
       <td style="background:${bg}"><input class="t" data-wk="${esc(e.key)}" data-wn="2" inputmode="numeric" placeholder="watch 2" style="width:92px;font-size:16px" value="${e.watch2 ? fmt(e.watch2) : ""}"></td>
-      <td style="background:${bg};white-space:nowrap"><b class="mono">${t ? fmt(t) : "&ndash;"}</b> <span class="muted" style="font-size:12px">${src}</span>
+      <td style="background:${bg};white-space:nowrap">${(e.stat || "").trim() === "R" ? `<span class="badge dq">No show</span> <button class="ghost small" data-wtns="${esc(e.key)}" data-on="0" title="Undo the no-show">Undo</button>`
+        : `<b class="mono">${t ? fmt(t) : "&ndash;"}</b> <span class="muted" style="font-size:12px">${src}</span> <button class="ghost small" data-wtns="${esc(e.key)}" data-on="1" title="Nobody swam in this lane: mark it a no-show (no time)">No show</button>`}
         ${changed && stale ? `<div><button class="small" data-score="${v.ptr}" style="background:var(--err);color:#fff">Rescore E${v.no}</button></div>` : changed ? `<div class="muted" style="font-size:11.5px">changed from the pad</div>` : ""}</td></tr>`;
   }).join("");
   $("#wtTable").innerHTML = `<table style="font-size:13.5px"><tr><th>Lane</th><th>Event</th><th>Heat</th><th>Swimmer / relay</th><th>Pad</th><th>Button</th><th>Why</th><th>Watch 1</th><th>Watch 2</th><th>Official</th></tr>${body}</table>`;
@@ -1599,6 +1600,15 @@ $("#wtTable").addEventListener("change", ev => {
   change("watches", {key: k, t1_s: a, t2_s: b, tol: TOL});
 });
 $("#wtBox").addEventListener("click", ev => {
+  const ns = ev.target.closest("[data-wtns]");
+  if (ns) {
+    const e = M.entries.find(x => x.key === ns.dataset.wtns); if (!e) return;
+    if (ns.dataset.on === "1") change("result", {key: e.key, time_s: "", stat: "R", dq: ""});
+    else if (+e.pad || +e.backup || +e.watch || +e.watch2)      // undo: the time comes back by the usual rule
+      change("watches", {key: e.key, t1_s: e.watch ? fmt(e.watch) : "", t2_s: e.watch2 ? fmt(e.watch2) : "", tol: TOL});
+    else change("result", {key: e.key, time_s: "", stat: "", dq: ""});
+    return;
+  }
   const r = ev.target.closest("[data-wtrescore]"); if (!r) return;
   scoreReq({events: r.dataset.wtrescore.split(",").map(Number)});
 });

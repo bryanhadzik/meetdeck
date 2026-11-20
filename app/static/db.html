@@ -386,7 +386,7 @@ function show() {
   wtShow();
   lastMinShow();
   missingTeamsShow();
-  $("#problems").innerHTML = dateGapStrip() + recordsStrip() + scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "") + laneGapWarning() + buttonMissWarning();
+  $("#problems").innerHTML = dateGapStrip() + recordsStrip() + scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "") + laneGapWarning() + buttonMissWarning() + dupRaceWarning();
   render();
 }
 // ---- teams added in meet setup after the database was built: a database can't take new teams, so offer a rebuild ----
@@ -1368,6 +1368,31 @@ function savedRace(v, h) {
       return {lane: e.lane, final: +e.pad || 0, backup: avg(b.filter(x => x > 0)), buttons: b, splits: [],
               place: ["Q", "F", "D"].includes((e.stat || "").trim()) ? -1 : (e.place || 0)}; }).sort((a, b) => a.lane - b.lane)};
 }
+// the same console race saved for two heats (identical pad times lane by lane) - a race used twice
+const padSig = ents => ents.filter(e => +e.pad > 0).sort((a, b) => a.lane - b.lane).map(e => e.lane + ":" + Math.round(e.pad * 100)).join(",");
+function sameRaceAs(ptr, h, lanes) {     // lanes: [{lane, pad}] about to be saved for ptr/h -> the other heat it matches, or null
+  const sig = lanes.filter(l => l.pad > 0).sort((a, b) => a.lane - b.lane).map(l => l.lane + ":" + Math.round(l.pad * 100)).join(",");
+  if (sig.split(",").length < 2) return null;
+  const heats = new Map();
+  M.entries.forEach(e => { if (e.scr || !e.heat || !e.lane || (e.event === ptr && e.heat === h)) return;
+    const k = e.event + "|" + e.heat; if (!heats.has(k)) heats.set(k, []); heats.get(k).push(e); });
+  for (const [k, ents] of heats) if (padSig(ents) === sig) { const [p, hh] = k.split("|").map(Number); return {v: evOf(p), h: hh}; }
+  return null;
+}
+function dupRaceWarning() {
+  if (!M) return "";
+  const seen = new Map(), out = [];
+  const heats = new Map();
+  M.entries.forEach(e => { if (e.scr || !e.heat || !e.lane) return; const k = e.event + "|" + e.heat; if (!heats.has(k)) heats.set(k, []); heats.get(k).push(e); });
+  for (const [k, ents] of heats) {
+    const sig = padSig(ents); if (sig.split(",").length < 2) continue;
+    const lab = kk => { const [p, hh] = kk.split("|").map(Number); const v = evOf(p) || {}; return `#${v.no}${v.ltr || ""} heat ${hh}`; };
+    if (seen.has(sig)) out.push(`${lab(seen.get(sig))} and ${lab(k)}`); else seen.set(sig, k);
+  }
+  if (!out.length) return "";
+  return `<div class="issue" style="background:var(--err-bg);border-color:var(--err)"><b>Same console race saved twice:</b> ${out.map(esc).join(" &middot; ")} have identical pad times.
+    One of them got the wrong race from the console - check the race number on the console and press Get times again for the wrong heat.</div>`;
+}
 // heats whose times just came from the console: a big green "times in" bar on the heat (and a flash)
 const GOT = {};
 function gotBar(v, h) {
@@ -1412,6 +1437,12 @@ async function getTimes(h, saved) {
       return;
     }
     box.innerHTML = "";
+    const dup = sameRaceAs(v.ptr, h, r.lanes.map(l => ({lane: l.lane, pad: l.final || 0})));
+    if (dup) {
+      box.innerHTML = `<div class="issue" style="background:var(--err-bg);border-color:var(--err)"><b>Not saved: these are the same times already saved for #${dup.v ? dup.v.no : "?"} heat ${dup.h}</b> (console race ${esc(String(r.race_number || "?"))}). The console sent a race that was already used - check the race number on the console, then Get times again.</div>`;
+      const b = document.querySelector(`[data-gettimes="${h}"]`); if (b) { b.disabled = false; b.textContent = "Get times"; }
+      return;
+    }
     const lanes = r.lanes.map(l => ({lane: l.lane, pad: l.final || 0, backup: l.backup || 0, buttons: (l.buttons || []).filter(b => b > 0),
       place: l.place, splits: l.splits, use: "auto", tol: TOL}));
     const btn = document.querySelector(`[data-gettimes="${h}"]`); if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }

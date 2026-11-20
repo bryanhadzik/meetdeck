@@ -144,7 +144,7 @@ def sim_capture(sim, sent: list) -> str:
 
 # ---- remember the console's port; connect to it by itself -------------------------
 PREF_PATH = os.path.join(TIMING_DIR, "bridge.json")
-AUTO_EVERY = 10          # seconds between tries while not connected
+AUTO_EVERY = 3           # seconds between tries while not connected
 HEARTBEAT = 30           # seconds between "are you there?" checks while connected and idle
 
 
@@ -235,8 +235,11 @@ def start_auto():
 
     def loop():
         last_beat = time.time()
+        first = True
         while True:
-            time.sleep(AUTO_EVERY)
+            if not first:               # right away when MeetDeck starts, then every few seconds until connected
+                time.sleep(AUTO_EVERY if not STATE["console"] else 10)
+            first = False
             try:
                 if STATE["console"]:
                     if time.time() - last_beat >= HEARTBEAT:

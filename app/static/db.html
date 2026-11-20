@@ -1193,11 +1193,12 @@ async function bridge(path, body) {
   throw last;
 }
 function tmShow() {
-  $("#tmState").textContent = TM.connected ? `${TM.sim ? "simulator" : TM.port} · ${TM.identity || "connected"}` : (TM.err ? "bridge not running" : "not connected");
+  const connecting = !TM.connected && !TM.err && TM.auto && TM.auto.on && TM.auto.port;
+  $("#tmState").textContent = TM.connected ? `${TM.sim ? "simulator" : TM.port} · ${TM.identity || "connected"}` : (TM.err ? "bridge not running" : connecting ? `connecting to ${TM.auto.port}…` : "not connected");
   $("#tmState").title = TM.err ? "" : "Bridge on " + tmWhere();
   $("#tmState").className = "badge" + (TM.connected ? "" : "");
-  $("#tmState").style.background = TM.connected ? "var(--ok-bg)" : "";
-  $("#tmState").style.color = TM.connected ? "var(--ok)" : "";
+  $("#tmState").style.background = TM.connected ? "var(--ok-bg)" : connecting ? "var(--warn-bg)" : "";
+  $("#tmState").style.color = TM.connected ? "var(--ok)" : connecting ? "var(--warn)" : "";
   $("#tmDisc").classList.toggle("hidden", !TM.connected);
   const au = TM.auto || {};
   $("#tmAuto").innerHTML = au.on && au.port ? `Connects to <b>${esc(au.port)}</b> by itself when the console is plugged in and on${TM.connected ? "" : au.last ? ` &middot; last try ${esc(au.last)}` : ""}.`
@@ -1226,7 +1227,7 @@ $("#tmSim").onclick = async () => {
   catch (e) { tmMsg(e instanceof TypeError ? "Can't reach the bridge on the MeetDeck computer or this one — is MeetDeck (or start-bridge.bat / start-simulator.bat) running where the console is plugged in?" : e.message, true); }
 };
 // keep checking for the bridge until it's connected, so starting it after the page loads just works
-setInterval(() => { if (!TM.connected && !document.hidden) tmStatus(); }, 4000);
+setInterval(() => { if (!TM.connected && !document.hidden) tmStatus(); }, 2000);
 $("#tmRecon").onclick = async () => {
   tmMsg("Reconnecting on the MeetDeck computer…");
   try { TM = await bridge("/reconnect", $("#tmPort").value ? {port: $("#tmPort").value} : {}); tmShow(); tmMsg(`Reconnected: ${TM.identity} on ${TM.port}`); }
@@ -1381,6 +1382,9 @@ async function getTimes(h, saved) {
   let r = saved ? savedRace(v, h) : null;
   if (!r) {
   const noRace = e => /error code 3\b/.test(e.message);
+  if (!TM.connected && TM.auto && TM.auto.port && !TM.sim) {     // not connected yet: open the remembered port first
+    try { TM = await bridge("/reconnect", {}); tmShow(); } catch (e) {}
+  }
   const raceNo = (S.races || {})[`${v.ptr}:${h}`];
   // ask by event and heat, the way Meet Manager does (verified on the real console); the race number is only a fallback
   try { r = await bridge(`/race?event=${v.no}&heat=${h}`); }

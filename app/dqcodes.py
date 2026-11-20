@@ -316,6 +316,11 @@ CODES = [
   "group": "Misc"
  },
  {
+  "code": "7K",
+  "desc": "Pulling on lane line",
+  "group": "Misc"
+ },
+ {
   "code": "7X",
   "desc": "Finish in wrong lane",
   "group": "Misc"

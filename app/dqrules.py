@@ -78,6 +78,7 @@ CODE_RULES = {
     "7U": [("3-6-2d", "contacting the bottom of the pool for the purpose of gaining an advantage")],
     "7V": [("3-6-2d", "contacting the bottom of the pool for the purpose of gaining an advantage")],
     "7W": [("3-6-2", "No team personnel/competitor shall display unacceptable conduct")],
+    "7K": [("3-6-2", "No team personnel/competitor shall display unacceptable conduct")],
     "7X": [("3-6-2c", "failing to swim in an assigned lane")],
     "7Y": [("3-6-1", "No participant, team personnel or coach shall display unsporting conduct")],
 }
@@ -85,5 +86,6 @@ CODE_RULES = {
 # where the NFHS book has no rule written for that exact act - the referee decides under the general conduct rule
 NOTES = {
     "7W": "The Rules Book has no rule that names pulling on the lane line; it's judged under unacceptable conduct (3-6-2).",
+    "7K": "The Rules Book has no rule that names pulling on the lane line; it's judged under unacceptable conduct (3-6-2).",
     "7T": "No rule names coach assistance specifically; the referee judges it under 3-6-2 (or 3-6-1 if unsporting).",
 }

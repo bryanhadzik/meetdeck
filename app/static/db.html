@@ -863,11 +863,13 @@ function timerCells(e) {
   const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
   const pad = +e.pad || 0, tol = TOL || 0.30;
   const far = (a, b) => a && b && Math.abs(a - b) > tol + 1e-9;
-  const ref = pad || back;
+  // amber = disagrees with the time being used (once there's an official time); before that, pad vs button
+  const off = +e.time || 0, ref = off || pad || back;
+  const odd = t => off ? far(t, off) : far(pad, back);
   const ro = (t, title, warn) => `<td class="mono" style="text-align:right;white-space:nowrap${warn ? ";color:var(--warn);font-weight:600" : ""}" title="${esc(title)}">${t ? esc(fmt(t)) : '<span class="muted">&ndash;</span>'}</td>`;
   const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" title="Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)" style="width:72px${far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
-  return ro(pad, "Pad (touchpad) time", far(pad, back)) +
-    ro(back, btn.length > 1 ? "Backup buttons: " + btn.map(fmt).join(" / ") + " (average)" : "Backup button", far(pad, back)) +
+  return ro(pad, "Pad (touchpad) time", odd(pad)) +
+    ro(back, btn.length > 1 ? "Backup buttons: " + btn.map(fmt).join(" / ") + " (average)" : "Backup button", odd(back)) +
     w(1, e.watch) + w(2, e.watch2) +
     `<td style="white-space:nowrap"><input class="t" data-time="${e.key}" value="${esc(fmt(e.time))}" placeholder="time" title="Official time - type one in to override">${usedBadge(e)}</td>`;
 }

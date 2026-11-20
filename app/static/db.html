@@ -65,6 +65,9 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 .evlist button{display:flex;width:100%;text-align:left;background:transparent;color:var(--ink);border-radius:6px;padding:6px 8px;gap:6px;font-size:15px}
 .evlist button.on{background:var(--sel)}
 .evlist .cnt{margin-left:auto;color:var(--muted);font-size:13px}
+.gotbar{background:#1f883d;color:#fff;font-weight:700;font-size:15px;padding:8px 12px;border-radius:8px;margin:4px 0 6px}
+.gotbar.flash{animation:gotflash 1.2s ease-out 2}
+@keyframes gotflash{0%{box-shadow:0 0 0 0 rgba(31,136,61,.9);transform:scale(1.02)}100%{box-shadow:0 0 0 14px rgba(31,136,61,0);transform:scale(1)}}
 /* Run the meet: scrolling settles on a whole heat, just below the sticky header */
 html{scroll-snap-type:y proximity}
 .heat{margin-bottom:12px;scroll-snap-align:start;scroll-margin-top:calc(var(--abh,0px) + var(--hdh,56px) + 6px)}
@@ -923,7 +926,7 @@ function renderEvent() {
     }
     const hs = heatState(act.filter(e => e.heat === h));
     const hpill = hs.cls === "done" ? `<span class="pill timed">Timed</span>` : hs.cls === "part" ? `<span class="pill prog">${hs.r} of ${hs.n} lanes</span>` : `<span class="pill none">Waiting</span>`;
-    html += `<div class="heat"><h3>Heat ${h} of ${topHeat} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button>${ins}</h3><div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1, h)).join("")}
+    html += `<div class="heat"><h3>Heat ${h} of ${topHeat} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button>${ins}</h3>${gotBar(v, h)}<div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1, h)).join("")}
       ${inHeat.filter(e => !e.lane || e.lane > lanes).map(e => row(e)).join("")}</table>${finishOrder(inHeat)}</div>`;
   }
   if (MOVING) {   // an empty heat to drag swimmers into
@@ -1361,9 +1364,18 @@ function savedRace(v, h) {
       return {lane: e.lane, final: +e.pad || 0, backup: avg(b.filter(x => x > 0)), buttons: b, splits: [],
               place: ["Q", "F", "D"].includes((e.stat || "").trim()) ? -1 : (e.place || 0)}; }).sort((a, b) => a.lane - b.lane)};
 }
+// heats whose times just came from the console: a big green "times in" bar on the heat (and a flash)
+const GOT = {};
+function gotBar(v, h) {
+  const g = GOT[`${v.ptr}:${h}`]; if (!g) return "";
+  const at = new Date(g.at).toLocaleTimeString([], {hour: "numeric", minute: "2-digit", second: "2-digit"});
+  const used = (g.msg.match(/used (.*)$/) || [])[1];
+  return `<div class="gotbar${Date.now() - g.at < 4000 ? " flash" : ""}">&#10004; Times from the console saved &middot; ${g.n} lane${g.n !== 1 ? "s" : ""} &middot; ${at}${used ? ` <span style="font-weight:400">&middot; used ${esc(used)}</span>` : ""}</div>`;
+}
 async function getTimes(h, saved) {
   const v = evOf(EV), box = document.getElementById("tp-" + h);
   box.innerHTML = saved ? "" : `<div class="muted" style="font-size:12.5px">Asking the console for event ${v.no} heat ${h}…</div>`;
+  if (!saved) { const b = document.querySelector(`[data-gettimes="${h}"]`); if (b) { b.disabled = true; b.textContent = "Getting times…"; } }
   let r = saved ? savedRace(v, h) : null;
   if (!r) {
   const noRace = e => /error code 3\b/.test(e.message);
@@ -1380,6 +1392,7 @@ async function getTimes(h, saved) {
       const why = noRace(e) ? `The console has no stored race for event ${v.no} heat ${h}. On the console, make sure the race was stored (Store/Print) under this event and heat, then try again.`
         : TM.connected ? esc(e.message) : `Not connected &mdash; connect to the console (or the simulator) in the Timing console panel above.`;
       box.innerHTML = `<div class="issue">Couldn't get times: ${why}</div>`;
+      { const b = document.querySelector(`[data-gettimes="${h}"]`); if (b) { b.disabled = false; b.textContent = "Get times"; } }
       return;
     }
   }
@@ -1388,12 +1401,18 @@ async function getTimes(h, saved) {
     // straight into the heat's Pad / Button columns - the official time follows the usual rule; nothing to apply
     if ((r.event && r.event !== v.no) || (r.heat && r.heat !== h)) {
       box.innerHTML = `<div class="issue">Console race ${r.race_number} is <b>event ${r.event} heat ${r.heat}</b>, not event ${v.no} heat ${h}. Nothing was saved - check the race on the console.</div>`;
+      { const b = document.querySelector(`[data-gettimes="${h}"]`); if (b) { b.disabled = false; b.textContent = "Get times"; } }
       return;
     }
     box.innerHTML = "";
     const lanes = r.lanes.map(l => ({lane: l.lane, pad: l.final || 0, backup: l.backup || 0, buttons: (l.buttons || []).filter(b => b > 0),
       place: l.place, splits: l.splits, use: "auto", tol: TOL}));
-    change("heat_results", {ptr: v.ptr, heat: h, overwrite: true, lanes, raw: r});
+    const btn = document.querySelector(`[data-gettimes="${h}"]`); if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+    try {
+      S = await api(`${API}/op`, J({op: "heat_results", args: {ptr: v.ptr, heat: h, overwrite: true, lanes, raw: r}}));
+      GOT[`${v.ptr}:${h}`] = {at: Date.now(), n: lanes.filter(l => l.pad || l.backup).length, msg: S.log[0]?.msg || ""};
+      toast(S.log[0]?.msg || "Saved"); show();
+    } catch (e) { box.innerHTML = `<div class="issue">Times not saved: ${esc(e.message)}</div>`; if (btn) { btn.disabled = false; btn.textContent = "Get times"; } }
     return;
   }
   const inHeat = evEntries(v.ptr).filter(e => !e.scr && e.heat === h);

@@ -563,7 +563,7 @@ document.addEventListener("drop", ev => {
   change("move", {key, heat, lane});      // onto a swimmer = swap
 });
 async function change(op, args) {
-  try { S = await api(`${API}/op`, J({op, args})); toast(S.log[0]?.msg || "Saved"); show(); }
+  try { S = await api(`${API}/op`, J({op, args})); toast(S.log[0]?.msg || "Saved"); show(); if (["heat_results", "watches", "result"].includes(op)) wtLoad(); }
   catch (e) { toast("Not changed: " + e.message); }
 }
 function render() {
@@ -866,7 +866,7 @@ function usedPicker(key, anchor) {
 document.addEventListener("click", ev => { const u = ev.target.closest("[data-usedpick]"); if (u) { ev.stopPropagation(); usedPicker(u.dataset.usedpick, u); } }, true);
 document.addEventListener("click", async ev => {
   const c = ev.target.closest("[data-accept]"); if (!c) return;
-  try { S = await api(`${API}/time-ok`, J({key: c.dataset.accept, use: c.dataset.use || null})); toast(c.dataset.use ? (S.log[0]?.msg || "Accepted") : "Acceptance taken away"); show(); }
+  try { S = await api(`${API}/time-ok`, J({key: c.dataset.accept, use: c.dataset.use || null})); toast(c.dataset.use ? (S.log[0]?.msg || "Accepted") : "Acceptance taken away"); show(); wtLoad(); }
   catch (x) { toast(x.message); }
 });
 function timerCells(e) {
@@ -879,7 +879,9 @@ function timerCells(e) {
   // amber = disagrees with the time being used (once there's an official time); before that, pad vs button
   const off = +e.time || 0, ref = off || pad || back;
   const acc = (S.time_ok || {})[e.key];                // pad or button accepted by hand: nothing is amber any more
-  const odd = t => !acc && (off ? far(t, off) : far(pad, back));
+  const hasW = +e.watch > 0 || +e.watch2 > 0;
+  // until a watch time is in, pad and button that disagree both stay amber; after that amber = off the official time
+  const odd = t => !acc && (!hasW ? far(pad, back) : off ? far(t, off) : far(pad, back));
   // pad / button: click one to accept it as the official time (click again to undo)
   const ro = (t, title, warn, which) => {
     const on = acc === which, can = t && pad && back && far(pad, back);
@@ -1464,7 +1466,7 @@ async function getTimes(h, saved) {
     try {
       S = await api(`${API}/op`, J({op: "heat_results", args: {ptr: v.ptr, heat: h, overwrite: true, lanes, raw: r}}));
       GOT[`${v.ptr}:${h}`] = {at: Date.now(), n: lanes.filter(l => l.pad || l.backup).length, msg: S.log[0]?.msg || ""};
-      toast(S.log[0]?.msg || "Saved"); show();
+      toast(S.log[0]?.msg || "Saved"); show(); wtLoad();
     } catch (e) { box.innerHTML = `<div class="issue">Times not saved: ${esc(e.message)}</div>`; if (btn) { btn.disabled = false; btn.textContent = "Get times"; } }
     return;
   }
@@ -1603,7 +1605,12 @@ async function getTimes(h, saved) {
 
 // put a lane on the Watches needed list by hand (its time looks wrong even though pad and buttons agree)
 const wAsked = e => (S.watch_ask || []).includes(e.key);
-const wAskBtn = e => (S.record_watch || []).includes(e.key) && !(+e.watch > 0 || +e.watch2 > 0)
+const wDiffer = e => { const btn = [e.backup, e.back2, e.back3].filter(x => +x > 0), pad = +e.pad || 0;
+  const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
+  return !(+e.watch > 0 || +e.watch2 > 0) && !(S.time_ok || {})[e.key] && !["R", "F", "D"].includes((e.stat || "").trim()) && ((!pad && back) || (pad && back && Math.abs(pad - back) > (TOL || 0.30) + 1e-6)); };
+const wAskBtn = e => wDiffer(e) && !wAsked(e)
+  ? `<span class="badge" style="background:var(--warn-bg);color:var(--warn)" title="${+e.pad ? "Pad and button disagree" : "No pad touch"} - on the next Watches needed print by itself. Click the Pad or Button time to accept one instead.">&#9201; on next print</span>`
+  : (S.record_watch || []).includes(e.key) && !(+e.watch > 0 || +e.watch2 > 0)
   ? `<span class="badge" style="background:var(--warn-bg);color:var(--warn)" title="A record swim - its watch times are always on the next Watches needed print">&#9201; record: on next print</span>`
   : wAsked(e)
   ? `<button class="ghost small" data-wask="${e.key}" data-on="0" title="On the next Watches needed print (and Enter watch times) - click to take it off" style="color:var(--warn);border-color:var(--warn)">&#9201; On next print &#10003;</button>`
@@ -1631,7 +1638,7 @@ function wtShow() {
   const rows = WT.keys.map(k => M.entries.find(e => e.key === k)).filter(Boolean);
   box.classList.toggle("hidden", !rows.length);
   if (!rows.length) return;
-  $("#wtSub").textContent = `${WT.printed && WT.printed !== "-" ? "sheet printed " + WT.printed : "added by hand"} · ${rows.length} lane${rows.length > 1 ? "s" : ""}`;
+  $("#wtSub").textContent = `${WT.printed && WT.printed !== "-" ? "sheet printed " + WT.printed : "waiting for watch times"} · ${rows.length} lane${rows.length > 1 ? "s" : ""}`;
   const ae = document.activeElement, focus = ae && ae.dataset && ae.dataset.wk ? ae.dataset.wk + "|" + ae.dataset.wn : "", typing = focus ? ae.value : null;
   const rescore = new Set();
   let last = null;

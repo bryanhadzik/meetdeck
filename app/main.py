@@ -2839,12 +2839,20 @@ def db_watch_sheet(mid: str):
     d = _dir(mid)
     mt = _meta(d)
     ws, ask = mt.get("watch_sheet") or {}, list(mt.get("watch_ask") or [])
+    auto = []
     try:                                    # record swims always need watch times
-        rec = _record_watch(d, meetdb.load(_dbfile(d))) if _dbfile(d).exists() else []
-    except Exception:
+        m = meetdb.load(_dbfile(d)) if _dbfile(d).exists() else None
+        rec = _record_watch(d, m) if m else []
+        if m:                               # and every lane whose pad and button disagree (or has no pad) - by itself
+            import heatsheet
+            auto = [r["key"] for r in heatsheet.watches_needed(m, float(_settings().get("time_tolerance") or 0.30),
+                                                                 ok=set(mt.get("time_ok") or {}))]
+    except Exception as x:
+        print("watch sheet:", x)
         rec = []
     ask += [k for k in rec if k not in ask]
     keys = ws.get("keys", [])
+    keys = keys + [k for k in auto if k not in keys]
     return {"printed": ws.get("printed", "") or ("" if not ask else "-"), "keys": keys + [k for k in ask if k not in keys], "asked": ask, "record": rec}
 
 

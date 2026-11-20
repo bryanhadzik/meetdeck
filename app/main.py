@@ -3365,16 +3365,22 @@ def _replays(st: dict, meet: dict) -> dict:
         s = next((x for x in log.get("streams") or [] if x["start"] - 5 <= r["t"] <= x.get("end", x["start"]) + 5), None)
         if not s:
             continue
-        # the recording Cloudflare made of that broadcast: first seen live after OBS started streaming
-        v = min((x for x in vids if s["start"] - 120 <= x["first"] <= s.get("end", s["start"]) + 60),
-                key=lambda x: abs(x["first"] - s["start"]), default=None)
-        if not v:
+        # the recordings Cloudflare made of that broadcast. Usually one; a dropped connection that lasts longer than
+        # the live input's reconnect window starts a new one mid-broadcast, so a race goes with the newest recording
+        # that had started by then. The first one starts with the broadcast; a later one is timed from when it was
+        # first seen (polled every 10 s, so its replays start a few seconds early rather than late).
+        mine = sorted((x for x in vids if s["start"] - 120 <= x["first"] <= s.get("end", s["start"]) + 60), key=lambda x: x["first"])
+        if not mine:
             continue
+        first = min(mine, key=lambda x: abs(x["first"] - s["start"]))
+        later = [x for x in mine if x["first"] > first["first"] and x["first"] <= r["t"] + 5]
+        v = later[-1] if later else first
+        start = s["start"] if v is first else v["first"] - 10
         try:
             heat = int(r["heat"])
         except (TypeError, ValueError):
             continue
-        out[(str(r["event"]).strip(), heat)] = [v["uid"], max(0, int(r["t"] - s["start"] - REPLAY_LEAD))]
+        out[(str(r["event"]).strip(), heat)] = [v["uid"], max(0, int(r["t"] - start - REPLAY_LEAD))]
     return out
 
 
@@ -3386,8 +3392,6 @@ def _stream_watch():
         time.sleep(30)
         try:
             st = _settings()
-            if _pool(st) and st.get("stream_url"):
-                _note_video(st)               # which recording this broadcast is (race replay links)
             if not (_pool(st) and st.get("public_auto") and st.get("public_token") and st.get("meetboard_url")):
                 prev = None
                 continue
@@ -3407,7 +3411,20 @@ def _stream_watch():
             print("stream watch:", x)
 
 
+def _video_watch():
+    """Every 10 s: which Cloudflare recording the broadcast is going into (race replay links)."""
+    while True:
+        time.sleep(10)
+        try:
+            st = _settings()
+            if _pool(st) and st.get("stream_url"):
+                _note_video(st)
+        except Exception as x:
+            print("video watch:", x)
+
+
 threading.Thread(target=_stream_watch, daemon=True).start()
+threading.Thread(target=_video_watch, daemon=True).start()
 
 
 @app.get("/api/meets/{mid}/public/results.json")

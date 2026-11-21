@@ -3385,12 +3385,196 @@ def _pub_slug(meta: dict) -> str:
 
 
 def _public_auto(mid: str):
+    _mm_auto(mid)
     st = _settings()
     if st.get("public_auto") and st.get("public_token"):
         try:
             public_results.PUBLISHER.request(mid, lambda: _public_job(mid))
         except Exception as x:
             print("public results:", x)
+
+
+# ---- Meet Mobile (Active Network): Meet Manager's Meet Mobile upload, done by MeetDeck ----------------
+import meetmobile  # noqa: E402
+
+MM_LOCK = threading.Lock()
+
+
+def _mm_get(d: Path) -> dict:
+    return dict(_dbinfo(d).get("meetmobile") or {})
+
+
+def _mm_put(d: Path, mm: dict):
+    info = _dbinfo(d)
+    info["meetmobile"] = mm
+    (_dbdir(d) / "info.json").write_text(json.dumps(info))
+
+
+def _mm_license(d: Path) -> str:
+    st = _settings()
+    return (st.get("meetmobile_license") or _report_header(d) or "").strip()
+
+
+def _mm_build(d: Path):
+    """Everything Meet Manager sends, made from the meet database: (model, base files, event file maker)."""
+    import heatsheet
+    db = _dbfile(d)
+    m = meetdb.load(db)
+    raw = meetdb.read(db, ["Meet", "Records", "RecordTags"])
+    est = {}
+    try:
+        evno = {v["no"]: v["ptr"] for v in m["events"]}
+        for s in heatsheet.timeline(m):
+            for r in s["rows"]:
+                if r["no"] in evno:
+                    est[evno[r["no"]]] = heatsheet._clock(int(r.get("t0") or r["start"]) // 60 * 60)
+    except Exception as x:
+        print("meet mobile timeline:", x)
+    meet_row = (raw.get("Meet", {}).get("rows") or [{}])[0]
+    base = {"meet": meetmobile.meet_data(m, meet_row, _mm_license(d), est),
+            "ppl": meetmobile.ppl_file(m),
+            "std": meetmobile.std_file(m, raw.get("Records", {}).get("rows", []), raw.get("RecordTags", {}).get("rows", []))}
+    sp = results_mod.splits(db)
+    course = {1: "L", 2: "S", 3: "Y"}.get(m["meet"].get("course") or 3, "Y")
+    return m, base, (lambda v: meetmobile.hyi_file(m, v, sp, course))
+
+
+def _mm_scored(d: Path) -> set:
+    return set((_dbinfo(d).get("scoring") or {}).get("events") or [])
+
+
+def _mm_publish(mid: str, base: bool = False, events=None, only_changed: bool = True) -> dict:
+    """Send the meet to Meet Mobile: the meet, teams, athletes and records (base), then each scored event's
+    results. Events whose results didn't change since they were sent are skipped."""
+    d = _dir(mid)
+    st = _settings()
+    token = (st.get("meetmobile_token") or "").strip()
+    if not token:
+        raise HTTPException(400, "Set up Meet Mobile first (the app token from Meet Manager)")
+    with MM_LOCK:
+        mm = _mm_get(d)
+        m, files, hyi = _mm_build(d)
+        sig = meetmobile.signature(files["meet"].replace(time.strftime("%m/%d/%Y"), "") + files["ppl"] + files["std"])
+        try:
+            if base or not mm.get("meet_id") or mm.get("base_sig") != sig:
+                lic = _mm_license(d)
+                meetmobile.check_agency(token, lic)
+                mid_active = meetmobile.upload_meet(token, mm.get("meet_id") or "", files["meet"])
+                if not mid_active or not str(mid_active).strip().isdigit():
+                    raise RuntimeError("Meet Mobile didn't give the meet a number")
+                mm["meet_id"] = str(mid_active).strip()
+                meetmobile.upload_file(token, mm["meet_id"], "savePplFile", files["ppl"])
+                meetmobile.upload_file(token, mm["meet_id"], "saveStdFile", files["std"])
+                meetmobile.upload_file(token, mm["meet_id"], "saveStdFile", meetmobile.NO_STANDARDS)
+                mm.update(base_sig=sig, base_at=time.strftime("%Y-%m-%d %H:%M"), base_err="")
+                _dblog(d, f"Meet Mobile: published the meet (Meet Mobile meet {mm['meet_id']})", "export")
+        except Exception as x:
+            mm["base_err"] = str(x)
+            _mm_put(d, mm)
+            raise HTTPException(502, f"Meet Mobile: {x}")
+        want = set(events) if events is not None else _mm_scored(d)
+        sent = mm.setdefault("events", {})
+        done, failed = [], []
+        for v in m["events"]:
+            if v["ptr"] not in want:
+                continue
+            text = hyi(v)
+            if not text.strip():
+                continue
+            s = meetmobile.signature(text)
+            if only_changed and sent.get(str(v["ptr"]), {}).get("sig") == s:
+                continue
+            try:
+                meetmobile.upload_file(token, mm["meet_id"], "saveHyiFileSync", text)
+                sent[str(v["ptr"])] = {"sig": s, "at": time.strftime("%Y-%m-%d %H:%M"), "err": ""}
+                done.append(v["no"])
+            except Exception as x:
+                sent[str(v["ptr"])] = {**sent.get(str(v["ptr"]), {}), "err": str(x), "tried": time.strftime("%Y-%m-%d %H:%M")}
+                failed.append(v["no"])
+        _mm_put(d, mm)
+        if done:
+            _dblog(d, f"Meet Mobile: sent results for event{'s' if len(done) > 1 else ''} {', '.join(map(str, done))}", "export")
+        return {"sent": done, "failed": failed}
+
+
+def _mm_status(mid: str) -> dict:
+    d = _dir(mid)
+    st = _settings()
+    mm = _mm_get(d)
+    out = {"configured": bool(st.get("meetmobile_token")), "license": _mm_license(d), "meet_id": mm.get("meet_id", ""),
+           "auto": bool(mm.get("auto")), "base_at": mm.get("base_at", ""), "base_err": mm.get("base_err", ""), "events": []}
+    if not _dbfile(d).exists():
+        return out
+    try:
+        m, _, hyi = _mm_build(d)
+    except Exception as x:
+        out["error"] = str(x)
+        return out
+    scored, sent = _mm_scored(d), mm.get("events") or {}
+    for v in m["events"]:
+        r = sent.get(str(v["ptr"]), {})
+        state = "none"
+        if v["ptr"] in scored:
+            cur = meetmobile.signature(hyi(v))
+            state = "err" if r.get("err") else ("sent" if r.get("sig") == cur else ("changed" if r.get("sig") else "waiting"))
+        elif r.get("sig"):
+            state = "sent"
+        out["events"].append({"ptr": v["ptr"], "no": v["no"], "label": v["label"], "state": state, "at": r.get("at", ""), "err": r.get("err", "")})
+    return out
+
+
+def _mm_auto(mid: str):
+    """After scoring: send the events that changed, in the background (if this meet's automatic upload is on)."""
+    try:
+        d = _dir(mid)
+        if not (_mm_get(d).get("auto") and _mm_get(d).get("meet_id") and _settings().get("meetmobile_token")):
+            return
+    except Exception:
+        return
+
+    def job():
+        time.sleep(3)
+        try:
+            _mm_publish(mid)
+        except Exception as x:
+            print("meet mobile:", x)
+    threading.Thread(target=job, daemon=True).start()
+
+
+@app.get("/api/meets/{mid}/meetmobile")
+def mm_status(mid: str):
+    return _mm_status(mid)
+
+
+@app.post("/api/meetmobile/settings")
+def mm_settings(body: dict):
+    """{token, license}: the Meet Manager license name and app token (kept only on this PC)."""
+    st = _settings()
+    if "token" in body:
+        st["meetmobile_token"] = (body.get("token") or "").strip()
+    if "license" in body:
+        st["meetmobile_license"] = (body.get("license") or "").strip()
+    _write_settings(st)
+    return {"configured": bool(st.get("meetmobile_token")), "license": st.get("meetmobile_license", "")}
+
+
+@app.post("/api/meets/{mid}/meetmobile")
+def mm_action(mid: str, body: dict):
+    """{action: start | results | event, ptr?, auto?}"""
+    d = _dir(mid)
+    if "auto" in body:
+        mm = _mm_get(d)
+        mm["auto"] = bool(body["auto"])
+        _mm_put(d, mm)
+    a = body.get("action")
+    res = {}
+    if a == "start":
+        res = _mm_publish(mid, base=True, events=_mm_scored(d))
+    elif a == "results":
+        res = _mm_publish(mid, events=_mm_scored(d), only_changed=not body.get("all"))
+    elif a == "event":
+        res = _mm_publish(mid, events={int(body["ptr"])}, only_changed=False)
+    return {**_mm_status(mid), "result": res}
 
 
 # ---- race replays: each finished heat links to its moment in the stream recording ----

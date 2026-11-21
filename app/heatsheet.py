@@ -1263,7 +1263,7 @@ def timeline(m, gap_min=None) -> list:
             n_ent += len(ents)
             n_heat += nh
             rows.append({"no": v["no"], "ltr": v.get("ltr") or "", "title": _tl_title(v), "round": "Finals" if it["rnd"] == "F" else "Prelims",
-                         "entries": len(ents), "heats": nh, "projected": proj, "start": s["start"] + math.ceil(start / 60 - 1e-9) * 60,
+                         "entries": len(ents), "heats": nh, "projected": proj, "start": s["start"] + math.ceil(start / 60 - 1e-9) * 60, "t0": s["start"] + start,
                          "break": it["delay_desc"] if it["delay"] else ""})
         out.append({**{k: s[k] for k in ("no", "ltr", "name", "day", "start", "interval", "back")}, "rows": rows,
                     "swimmers": len(swimmers), "entries": n_ent, "heats": n_heat, "clash": clash,

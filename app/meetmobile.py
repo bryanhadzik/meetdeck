@@ -64,6 +64,15 @@ def event_name(v, course="Y", short=False) -> str:
     return f"{_gword(v['gender'] or v['sex'])} {v['dist']}{mid} {st}"
 
 
+def _team(name) -> str:
+    """Meet Manager writes an all-capitals word in a team name in mixed case: '(UT)' -> '(Ut)'."""
+    return re.sub(r"[A-Z]{2,}", lambda w: w.group(0).capitalize(), name or "")
+
+
+def _first(a) -> str:
+    return a.get("pref") or a.get("first", "")
+
+
 def _b64(text: str) -> str:
     b = base64.b64encode(text.encode("latin-1", "replace")).decode()
     return "\n".join(b[i:i + 72] for i in range(0, len(b), 72))
@@ -90,7 +99,8 @@ def meet_data(m, raw_meet: dict, licensee: str, est: dict | None = None, today=N
             str(imax), str(rmax), str(mt.get("course") or 3), str(mt.get("style") or 1), "H",
             _d(mt.get("calc_date")) or _d(mt["start"]), mt.get("addr1", ""), mt.get("addr2", ""), mt.get("city", ""),
             mt.get("state", ""), mt.get("zip", ""), mt.get("country", "") or "USA", (r.get("Meet_hostlsc") or mt.get("state") or "").strip(),
-            "N", "N", "0", _d(r.get("entry_OpenDate")) or _d(mt["start"]), "0", _d(mt["start"]), "MW", "0.00", "0", "6204u"]
+            "N", "N", "0", _d(r.get("athlete_earlysurchargedate")) or _d(mt["start"]), "0", _d(r.get("athlete_latesurchargedate")) or _d(mt["start"]),
+            "MW", "0.00", "0", "6204u"]
     lines = [";".join(str(x) for x in head)]
     sess = _sess_of(m)
     for v in m["events"]:
@@ -108,11 +118,11 @@ def ppl_file(m) -> str:
     """savePplFile: every team ($T) with its athletes ($A), teams by name, athletes by last/first name."""
     out = []
     for t in sorted(m["teams"].values(), key=lambda t: (t["name"] or "").lower()):
-        out.append(f"$T;{t['no']};{t['name']};{t['abbr']};{t['lsc']}")
+        out.append(f"$T;{t['no']};{_team(t['name'])};{t['abbr']};{t['lsc']}")
         aths = sorted((a for a in m["athletes"].values() if a["team"] == t["no"]),
                       key=lambda a: ((a["last"] or "").lower(), (a["first"] or "").lower()))
         for a in aths:
-            out.append(f"$A;{a['no']};{a['last']};{a['first']};{a['initial']};{a['sex']};{a['yr']};{t['no']}")
+            out.append(f"$A;{a['no']};{a['last']};{_first(a)};{a['initial']};{a['sex']};{a['yr']};{t['no']}")
     return "".join(x + "\r\n" for x in out)
 
 
@@ -185,20 +195,20 @@ def hyi_file(m, v, splits: dict, course="Y") -> str:
             if relay:
                 t = teams.get(e["team"], {})
                 g = "F" if _gsex(v["gender"] or v["sex"]) == "W" else ("X" if _gsex(v["gender"] or v["sex"]) == "X" else "M")
-                out.append(f"$L;{hp};0;{e['lane']};{over};{t.get('name', '')};{e.get('ltr') or 'A'};;{g};0;{t.get('no', '')};"
-                           f"{t.get('name', '')};{t.get('abbr', '')};{t.get('lsc', '')};{tail}")
+                out.append(f"$L;{hp};0;{e['lane']};{over};{_team(t.get('name', ''))};{e.get('ltr') or 'A'};;{g};0;{t.get('no', '')};"
+                           f"{_team(t.get('name', ''))};{t.get('abbr', '')};{t.get('lsc', '')};{tail}")
                 legs = []
                 for a in (e.get("legs") or [])[:4]:
                     p = aths.get(a)
-                    legs.append(f"{p['no']};{p['last']};{p['first']};{p['initial']};{p['sex']};{p['yr']}" if p else ";;;;;")
-                if legs:
-                    out.append(f"$N;{e['lane']};" + "; ;".join(legs) + "; ")
+                    legs.append(f"{p['no']};{p['last']};{_first(p)};{p['initial']};{p['sex']};{p['yr']}" if p else ";;;;;")
+                if legs:      # Meet Manager: the first two legs run together, the others are set apart by "; ;"
+                    out.append(f"$N;{e['lane']};" + ";".join(legs[:2]) + ("; ;" + "; ;".join(legs[2:]) if legs[2:] else "") + "; ")
                 key = f"R:{e['relay']}"
             else:
                 a = aths.get(e["ath"], {})
                 t = teams.get(a.get("team"), {})
-                out.append(f"$L;{hp};{a.get('no', '')};{e['lane']};{over};{a.get('last', '')};{a.get('first', '')};{a.get('initial', '')};"
-                           f"{a.get('sex', '')};{a.get('yr', '')};{t.get('no', '')};{t.get('name', '')};{t.get('abbr', '')};{t.get('lsc', '')};{tail}")
+                out.append(f"$L;{hp};{a.get('no', '')};{e['lane']};{over};{a.get('last', '')};{_first(a)};{a.get('initial', '')};"
+                           f"{a.get('sex', '')};{a.get('yr', '')};{t.get('no', '')};{_team(t.get('name', ''))};{t.get('abbr', '')};{t.get('lsc', '')};{tail}")
                 key = f"E:{e['event']}:{e['ath']}"
             cum = [x for _, x in splits.get(key, []) if x]
             if e["time"] and not (sp and sp != "EXH"):

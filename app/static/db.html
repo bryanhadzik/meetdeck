@@ -26,6 +26,9 @@ section{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 .shr > :first-child{font-size:12.5px}
 .shr > :first-child button:not(.shrBtn), .shr > :first-child a, .shr > :first-child label, .shr > :first-child select{display:none!important}
 #wtBox.wtPend{background:var(--warn-bg)!important;border:1px solid var(--warn)!important}
+.mmev{display:flex;flex-wrap:wrap;gap:4px}.mmev span{font-size:12px;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);cursor:default;white-space:nowrap}
+.mmev span.sent{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}.mmev span.changed,.mmev span.waiting{background:var(--warn-bg);color:var(--warn);border-color:var(--warn);cursor:pointer}
+.mmev span.err{background:var(--err-bg);color:var(--err);border-color:var(--err);cursor:pointer}.mmev span.sent{cursor:pointer}
 .shrBtn{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;font-size:12px;line-height:1;padding:3px 7px;cursor:pointer;margin-left:6px}
 /* one line that folds every status box at the top of Run the meet */
 .topstrip{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 10px;margin-bottom:8px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:12.5px;cursor:pointer;user-select:none}
@@ -203,6 +206,19 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
     <div id="pubStale" class="stalemsg hidden" style="font-size:13px;margin-top:4px"></div>
     <div id="pubMsg" class="muted" style="font-size:12.5px;margin-top:4px"></div>
     <div id="pubArch" class="muted" style="font-size:12.5px;margin-top:4px"></div></section>
+  <section id="mmBox" class="hidden" style="margin-bottom:14px"><div class="row"><b>Meet Mobile</b><span id="mmState" class="badge"></span>
+      <span class="muted" id="mmSub" style="font-size:12.5px"></span><span class="grow"></span>
+      <label style="font-size:12.5px;white-space:nowrap" title="Send each event's results to Meet Mobile as soon as it's scored (and again if it's rescored)"><input type="checkbox" id="mmAuto"> Upload when scored</label>
+      <button class="ghost small" id="mmSetup" title="The Meet Manager license name and its Meet Mobile app token">Set up</button>
+      <button class="small" id="mmStart" title="Send the meet, events, teams, swimmers and records to Meet Mobile - do this when you start running the meet">Publish meet info</button>
+      <button class="ghost small" id="mmSend" title="Send every scored event that hasn't gone out yet (or changed since)">Send results now</button></div>
+    <div id="mmForm" class="hidden" style="margin-top:8px;font-size:13px"><div class="row" style="gap:8px">
+      <label>License name <input id="mmLic" size="24" placeholder="as in Meet Manager"></label>
+      <label>App token <input id="mmTok" type="password" size="28" placeholder="from the Meet Manager upload" autocomplete="off"></label>
+      <button class="small" id="mmSave">Save</button></div>
+      <div class="muted" style="font-size:12px;margin-top:4px">The token comes from Meet Manager's own Meet Mobile upload and stays on this PC only.</div></div>
+    <div id="mmMsg" class="muted" style="font-size:12.5px;margin-top:4px"></div>
+    <div id="mmEvents" class="mmev" style="margin-top:6px"></div></section>
   <section id="timing" style="margin-bottom:14px"><div class="row"><b>Timing console</b><span id="tmState" class="badge">not connected</span><span class="grow"></span>
           <button class="ghost small" id="tmToggle">Hide</button></div>
           <div id="tmBody" style="margin-top:8px">
@@ -474,6 +490,52 @@ async function dpSetup() {
   } catch (e) {}
 }
 setTimeout(dpSetup, 800);
+// ---- Meet Mobile ----
+let MM = null;
+async function mmLoad() {
+  try { MM = await api(`/api/meets/${MID}/meetmobile`); } catch (e) { return; }
+  mmShow();
+}
+function mmShow() {
+  const box = $("#mmBox"); if (!box || !MM) return;
+  box.classList.toggle("hidden", !S || !S.exists);
+  const ev = MM.events || [], n = k => ev.filter(x => x.state === k).length;
+  const sent = n("sent"), pend = n("waiting") + n("changed"), err = n("err");
+  $("#mmState").textContent = !MM.configured ? "not set up" : !MM.meet_id ? "not published" : err ? `${err} failed` : pend ? `${pend} to send` : "up to date";
+  $("#mmState").style.cssText = !MM.configured || !MM.meet_id ? "" : err ? "background:var(--err-bg);color:var(--err)" : pend ? "background:var(--warn-bg);color:var(--warn)" : "background:var(--ok-bg);color:var(--ok)";
+  $("#mmSub").textContent = MM.meet_id ? `meet ${MM.meet_id} · meet info sent ${MM.base_at || "–"} · ${sent} event${sent === 1 ? "" : "s"} published` : "";
+  $("#mmAuto").checked = !!MM.auto; $("#mmAuto").disabled = !MM.meet_id;
+  $("#mmStart").textContent = MM.meet_id ? "Re-publish meet info" : "Publish meet info";
+  $("#mmStart").disabled = $("#mmSend").disabled = !MM.configured;
+  $("#mmSend").classList.toggle("hidden", !MM.meet_id);
+  $("#mmForm").classList.toggle("hidden", MM.configured && !MM._form);
+  if (!$("#mmLic").value) $("#mmLic").value = MM.license || "";
+  $("#mmMsg").textContent = MM.base_err ? "Last try: " + MM.base_err : "";
+  const tip = x => ({sent: `Published ${x.at} - click to send again`, changed: "Results changed since it was sent - click to send now",
+    waiting: "Scored, not sent yet - click to send now", err: `Failed: ${x.err} - click to try again`, none: "Not scored yet"}[x.state]);
+  $("#mmEvents").innerHTML = MM.meet_id ? ev.map(x => `<span class="${x.state}" ${x.state !== "none" ? `data-mmev="${x.ptr}"` : ""} title="#${x.no} ${esc(x.label)}: ${esc(tip(x))}">${x.state === "sent" ? "&#10003; " : x.state === "err" ? "&#9888; " : ""}${x.no}</span>`).join("") : "";
+}
+async function mmAct(body, busy) {
+  if (busy) { busy.disabled = true; }
+  toast("Meet Mobile…");
+  try { MM = await api(`/api/meets/${MID}/meetmobile`, J(body)); const r = MM.result || {};
+    toast(body.action === "start" ? `Published to Meet Mobile${r.sent && r.sent.length ? ` with ${r.sent.length} event${r.sent.length > 1 ? "s" : ""} of results` : ""}`
+      : r.failed && r.failed.length ? `Meet Mobile: event ${r.failed.join(", ")} failed` : r.sent && r.sent.length ? `Sent event ${r.sent.join(", ")} to Meet Mobile` : body.action ? "Nothing new to send" : "Saved"); }
+  catch (x) { toast(x.message); await mmLoad(); }
+  if (busy) busy.disabled = false;
+  mmShow();
+}
+$("#mmStart").onclick = ev => mmAct({action: "start"}, ev.target);
+$("#mmSend").onclick = ev => mmAct({action: "results"}, ev.target);
+$("#mmAuto").onchange = ev => mmAct({auto: ev.target.checked});
+$("#mmSetup").onclick = () => { if (MM) { MM._form = !MM._form; mmShow(); } };
+$("#mmSave").onclick = async () => {
+  const body = {license: $("#mmLic").value.trim()}; if ($("#mmTok").value.trim()) body.token = $("#mmTok").value.trim();
+  try { await api("/api/meetmobile/settings", J(body)); $("#mmTok").value = ""; toast("Meet Mobile set up"); if (MM) MM._form = false; mmLoad(); } catch (x) { toast(x.message); }
+};
+$("#mmEvents").addEventListener("click", ev => { const c = ev.target.closest("[data-mmev]"); if (c) mmAct({action: "event", ptr: +c.dataset.mmev}); });
+setTimeout(mmLoad, 1200);
+setInterval(() => { if (!document.hidden) mmLoad(); }, 30000);
 function printPdf(url) {
   // load the PDF in a hidden frame and open the browser's print dialog for it
   toast("Preparing to print…");
@@ -1897,7 +1959,7 @@ document.addEventListener("click", async ev => {
   catch (e) { toast(e.message); b.disabled = false; }
 });
 async function scoreReq(body, after) {
-  try { S = await api(`${API}/score`, J(body)); toast(S.log[0]?.msg || "Scored"); show(); if (after) after(); return true; }
+  try { S = await api(`${API}/score`, J(body)); toast(S.log[0]?.msg || "Scored"); show(); if (after) after(); setTimeout(mmLoad, 2000); setTimeout(mmLoad, 12000); return true; }
   catch (e) { toast(e.message); return false; }
 }
 const scSettings = () => ({method: $("#scMethod").value, ind_max: +$("#scInd").value || 0, rel_max: +$("#scRel").value || 0, fastest: $("#scFast").checked});
@@ -2150,7 +2212,7 @@ fetch("/api/version").then(r => r.json()).then(v => { const t = document.getElem
 })();
 /* shrink / expand the boxes at the top of Run the meet; remembered on this computer */
 (function () {
-  const BOXES = [["#mbBox", "mb"], ["#pubBox", "pub"], ["#timing", "tm"], ["#wtBox", "wt"], ["#lastMin > div", "lm"]];
+  const BOXES = [["#mbBox", "mb"], ["#pubBox", "pub"], ["#mmBox", "mm"], ["#timing", "tm"], ["#wtBox", "wt"], ["#lastMin > div", "lm"]];
   const DEF = {wt: true};       // Enter watch times starts shrunk (amber while lanes are still waiting)
   const get = k => { try { const v = localStorage.getItem("shr-" + k); return v === null ? !!DEF[k] : v === "1"; } catch (e) { return !!DEF[k]; } };
   const set = (k, v) => { try { localStorage.setItem("shr-" + k, v ? "1" : "0"); } catch (e) {} };

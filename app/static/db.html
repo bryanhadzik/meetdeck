@@ -1333,7 +1333,7 @@ $("#tmSend").onclick = async () => {
 function watchesNeeded() {
   if (!M) return 0;
   return M.entries.filter(e => {
-    if (e.scr || !e.heat || !e.lane || ["R", "F", "D"].includes((e.stat || "").trim()) || +e.watch > 0 || +e.watch2 > 0) return false;
+    if (e.scr || !e.heat || !e.lane || ["R", "F", "D", "Q"].includes((e.stat || "").trim()) || +e.watch > 0 || +e.watch2 > 0) return false;   // DQ'd: no watches needed (same as the printout)
     if ((S.time_ok || {})[e.key] && !(S.watch_ask || []).includes(e.key) && !(S.record_watch || []).includes(e.key)) return false;
     const pad = +e.pad || 0, btn = [e.backup, e.back2, e.back3].filter(x => +x > 0);
     const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
@@ -1633,7 +1633,7 @@ async function getTimes(h, saved) {
 const wAsked = e => (S.watch_ask || []).includes(e.key);
 const wDiffer = e => { const btn = [e.backup, e.back2, e.back3].filter(x => +x > 0), pad = +e.pad || 0;
   const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
-  return !(+e.watch > 0 || +e.watch2 > 0) && !(S.time_ok || {})[e.key] && !["R", "F", "D"].includes((e.stat || "").trim()) && ((!pad && back) || (pad && back && Math.abs(pad - back) > (TOL || 0.30) + 1e-6)); };
+  return !(+e.watch > 0 || +e.watch2 > 0) && !(S.time_ok || {})[e.key] && !["R", "F", "D", "Q"].includes((e.stat || "").trim()) && ((!pad && back) || (pad && back && Math.abs(pad - back) > (TOL || 0.30) + 1e-6)); };
 // compact: just the stopwatch (what it means is in the tooltip) so the heat table fits the page
 const wAskBtn = e => wDiffer(e) && !wAsked(e)
   ? `<span class="badge" style="background:var(--warn-bg);color:var(--warn)" title="${+e.pad ? "Pad and button disagree" : "No pad touch"} - on the next Watches needed print by itself. Click the Pad or Button time to accept one instead.">&#9201;&#10003;</span>`

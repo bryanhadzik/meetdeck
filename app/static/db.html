@@ -30,6 +30,7 @@ section{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 .mmev span.sent{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}.mmev span.changed,.mmev span.waiting{background:var(--warn-bg);color:var(--warn);border-color:var(--warn);cursor:pointer}
 .mmev span.err{background:var(--err-bg);color:var(--err);border-color:var(--err);cursor:pointer}.mmev span.sent{cursor:pointer}
 td.seedc,th.seedc{padding-right:22px!important;border-right:2px solid var(--line)}td.seedc+td,th.seedc+th{padding-left:22px!important}
+.nsbox{font-size:12.5px;white-space:nowrap;cursor:pointer;color:var(--muted);display:inline-flex;align-items:center;gap:4px}.nsbox:has(input:checked){color:var(--warn);font-weight:600}
 .shrBtn{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;font-size:12px;line-height:1;padding:3px 7px;cursor:pointer;margin-left:6px}
 /* one line that folds every status box at the top of Run the meet */
 .topstrip{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 10px;margin-bottom:8px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:12.5px;cursor:pointer;user-select:none}
@@ -1042,7 +1043,7 @@ function renderEvent() {
       ${e.scr ? '<td colspan="6"></td>' : timerCells(e)}
       <td class="plc" data-plc="${e.key}">${e.place || ""} ${(e.stat || "").trim() === "R" ? statBadge(e) : ""}</td>
       <td class="st" style="white-space:nowrap">${e.scr ? "" : isDfs(e) ? `<span class="badge dq" data-tip="${TIP.dfs}">DFS</span> <button class="ghost small" data-undfs="${e.key}" data-tip="${TIP.undfs}">Undo DFS</button>` : (e.stat === "Q" || e.stat === "F" || e.stat === "D") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" || e.stat === "D" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
-        : `<select data-stat="${e.key}" data-tip="${TIP.noshow}"><option value="">OK</option><option value="R" ${e.stat === "R" ? "selected" : ""}>No show</option></select> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>${e.time ? "" : ` <button class="ghost small" data-dfs="${e.key}" data-tip="${TIP.dfs}">DFS</button>`}`}
+        : `<label class="nsbox" data-tip="${TIP.noshow}"><input type="checkbox" data-stat="${e.key}" ${e.stat === "R" ? "checked" : ""}> No show</label> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>${e.time ? "" : ` <button class="ghost small" data-dfs="${e.key}" data-tip="${TIP.dfs}">DFS</button>`}`}
         ${(e.stat === "Q" || e.stat === "F" || e.stat === "D") && e.dq ? `<div class="legs" style="color:var(--err)">${esc(dqText(e))}</div>` : ""}</td>
       <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}" title="Change the relay's swimmers">Legs</button> ` : ""}${e.scr ? `<button class="ghost small" data-scr="${e.key}" data-on="0" data-tip="${TIP.putback}">Put back</button>`
         : S.started ? ""
@@ -2111,7 +2112,7 @@ document.addEventListener("change", async ev => {
   else if (d.time) { const e = M.entries.find(x => x.key === d.time); change("result", {key: d.time, time_s: ev.target.value, stat: e.stat === "R" ? "" : (e.stat === "F" || e.stat === "D") && ev.target.value ? "Q" : e.stat, dq: e.dq}); }
   else if (d.stat) {
     const e = M.entries.find(x => x.key === d.stat);
-    await change("result", {key: d.stat, time_s: fmt(e.time), stat: ev.target.value, dq: ""});
+    await change("result", {key: d.stat, time_s: fmt(e.time), stat: ev.target.type === "checkbox" ? (ev.target.checked ? "R" : "") : ev.target.value, dq: ""});
     // championship rules: a no-show is out of the rest of the meet (NFHS 3-2-2 penalty 3), unless excused for illness/injury
     if (ev.target.value === "R" && S.championship && e.kind === "I") {
       const a = M.athletes[e.ath] || {};

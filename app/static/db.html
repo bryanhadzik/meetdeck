@@ -590,9 +590,21 @@ document.addEventListener("drop", ev => {
   const [heat, lane] = tr.dataset.dto.split("|").map(Number);
   change("move", {key, heat, lane});      // onto a swimmer = swap
 });
-async function change(op, args) {
-  try { S = await api(`${API}/op`, J({op, args})); toast(S.log[0]?.msg || "Saved"); show(); if (["heat_results", "watches", "result"].includes(op)) wtLoad(); }
-  catch (e) { toast("Not changed: " + e.message); }
+// changes go to the server one at a time, in the order they were made, and the page redraws once the last one
+// is back: typing several watch times and tabbing on quickly no longer redraws from an older answer (which
+// wiped times that were typed but not saved yet)
+let CHQ = Promise.resolve(), CHN = 0, CHW = false;
+function change(op, args) {
+  CHN++;
+  if (["heat_results", "watches", "result"].includes(op)) CHW = true;
+  CHQ = CHQ.then(async () => {
+    try { S = await api(`${API}/op`, J({op, args})); toast(S.log[0]?.msg || "Saved"); }
+    catch (e) { toast("Not changed: " + e.message); }
+    finally {
+      if (--CHN === 0) { show(); if (CHW) { CHW = false; wtLoad(); } }
+    }
+  });
+  return CHQ;
 }
 function render() {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === TAB));

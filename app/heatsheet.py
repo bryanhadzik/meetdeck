@@ -944,40 +944,45 @@ class _Results(_Sheet):
             self.header(v, cont=cont)
 
     def team_scores(self):
-        """Meet Manager's "Scores" block at the end: each team's women's, men's and combined points."""
+        """Meet Manager's "Scores" blocks at the end: "Scores - Women" and "Scores - Men", each a ranked list of
+        teams (long school names) "Through Event N"."""
         evs, aths, teams = {v["ptr"]: v for v in self.m["events"]}, self.m["athletes"], self.m["teams"]
-        tot = {}
+        tot, last = {}, [0, 0]
         for e in self.m["entries"]:
             pts = e.get("points") or 0
             if pts <= 0 or e["scr"]:
                 continue
             tno = e["team"] if e["kind"] == "R" else aths.get(e["ath"], {}).get("team")
             v = evs.get(e["event"], {})
-            women = (v.get("sex") or v.get("gender") or "").upper() in ("F", "W", "G")
+            g = 0 if (v.get("sex") or v.get("gender") or "").upper() in ("F", "W", "G") else 1
             t = tot.setdefault(tno, [0.0, 0.0])
-            t[0 if women else 1] += pts
+            t[g] += pts
+            last[g] = max(last[g], v.get("no") or 0)
         if not tot:
             return
-        rows = sorted(tot.items(), key=lambda kv: -(kv[1][0] + kv[1][1]))
-        need = 24.2 + 11.5 * (len(rows) + 1)
-        self.y += 10.0
-        if self.y + need > R_LAST:
-            self.next_area(None, False)
-        c, T = self.col_x(), self.y
-        self.text(c, T, "Scores - Team", bold=True, size=RTSZ)
-        h = T + 12.0
-        for x, lab, al in ((24.0, "Team", "l"), (190.0, "Women", "r"), (232.0, "Men", "r"), (RW, "Total", "r")):
-            self.text(c + x, h, lab, bold=True, size=RTSZ, align=al)
-        self.c.setLineWidth(0.75)
-        self.c.line(c, PAGE_H - (T + 20.0), c + RW, PAGE_H - (T + 20.0))
-        self.y = T + 24.2
         f = lambda x: f"{x:g}"
-        for i, (tno, (w, mpts)) in enumerate(rows, 1):
-            t = teams.get(tno, {})
-            for x, txt, al, ww in ((18.0, str(i), "r", None), (24.0, t.get("name") or t.get("abbr", ""), "l", 150), (190.0, f(w), "r", None),
-                                   (232.0, f(mpts), "r", None), (RW, f(w + mpts), "r", None)):
-                self.text(c + x, self.y, txt, bold=(x == RW), size=RSZ, align=al, w=ww)
-            self.y += 11.5
+        for g, lab in ((0, "Women"), (1, "Men")):
+            if not last[g]:
+                continue
+            rows = sorted(tot.items(), key=lambda kv: -kv[1][g])
+            need = 24.2 + 11.5 * len(rows)
+            self.y += 10.0
+            if self.y + need > R_LAST:
+                self.next_area(None, False)
+            c, T = self.col_x(), self.y
+            self.text(c, T, f"Scores - {lab}", bold=True, size=RTSZ)
+            self.text(c + RW / 2, T + 12.0, f"{lab} - Team Rankings - Through Event {last[g]}", bold=True, size=RSZ, align="c")
+            self.y = T + 24.2
+            place, prev = 0, None
+            for i, (tno, pts) in enumerate(rows, 1):
+                if prev is None or abs(pts[g] - prev) > 0.001:
+                    place = i
+                prev = pts[g]
+                t = teams.get(tno, {})
+                for x, txt, al, ww in ((18.0, f"{place}.", "r", None), (24.0, t.get("name") or t.get("short") or t.get("abbr", ""), "l", 200),
+                                       (RW, f(pts[g]), "r", None)):
+                    self.text(c + x, self.y, txt, size=RSZ, align=al, w=ww)
+                self.y += 11.5
 
     def render(self):
         self.new_page()

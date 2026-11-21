@@ -961,7 +961,20 @@ function renderEvent() {
   }
   if (unseeded.length) html += `<div class="heat"><h3 style="color:var(--warn)">&#9888; Not in a heat yet ${MOVING ? "" : '<span class="muted" style="font-weight:400;font-size:12.5px">&middot; press Move swimmers to place them</span>'}</h3><table>${head}${unseeded.filter(e => !e.heat).map(e => row(e)).join("")}</table></div>`;
   if (scr.length) html += `<div class="heat"><h3>Dropped / pulled from the meet</h3><table>${head}${scr.map(e => row(e)).join("")}</table></div>`;
+  // a save finishing re-draws the heats: keep the box being typed in (tabbed to) focused, with what's typed so far
+  const ae = document.activeElement, keepSel = ae && ae.closest && ae.closest("#evDetail") && ae.matches("input[data-wt],input[data-time],input[data-seed]")
+    ? (ae.dataset.wt ? `input[data-wt="${ae.dataset.wt}"][data-key="${CSS.escape(ae.dataset.key)}"]` : ae.dataset.time ? `input[data-time="${CSS.escape(ae.dataset.time)}"]` : `input[data-seed="${CSS.escape(ae.dataset.seed)}"]`) : null;
+  const keepVal = keepSel ? ae.value : null, keepWas = keepSel ? ae.defaultValue : null;
+  let keepPos = null; try { keepPos = keepSel ? [ae.selectionStart, ae.selectionEnd] : null; } catch (x) {}
   $("#evDetail").innerHTML = html;
+  if (keepSel) {
+    const el = document.querySelector("#evDetail " + keepSel);
+    if (el) {
+      if (keepVal !== keepWas) el.value = keepVal;        // typed something already: keep it, not the saved value
+      el.dataset.keepcaret = 1; el.focus();
+      try { if (keepPos) el.setSelectionRange(keepPos[0], keepPos[1]); } catch (x) {}
+    }
+  }
   $("#addEntryBtn").onclick = () => addEntryForm(v);
   $("#moveBtn").onclick = () => { MOVING = !MOVING; renderEvent(); };
 }

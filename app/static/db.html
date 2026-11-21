@@ -1009,7 +1009,7 @@ function timerCells(e) {
   const wOut = t => t > 0 && off > 0 && far(t, off) && (settled || (pad > 0 && back > 0));
   const outTip = t => settled ? `Not used: ${(Math.abs(t - off)).toFixed(2)} s off the official time, which ${srcs.filter(x => !far(x, off)).length} of the times agree on`
     : `Not used: ${(Math.abs(t - off)).toFixed(2)} s off the official time (this lane has a pad and a button time, so the watches are only a check)`;
-  const OUT = ";color:var(--muted);text-decoration:line-through;opacity:.75";
+  const OUT = ";color:var(--muted);opacity:.6";
   // pad / button: click one to accept it as the official time (click again to undo)
   const ro = (t, title, warn, which) => {
     const on = acc === which, can = t && pad && back && far(pad, back);

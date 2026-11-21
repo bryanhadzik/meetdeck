@@ -1472,14 +1472,15 @@ async function getTimes(h, saved) {
   }
   if (!saved) {
     // straight into the heat's Pad / Button columns - the official time follows the usual rule; nothing to apply
-    if ((r.event && r.event !== v.no) || (r.heat && r.heat !== h)) {
+    if (((r.event && r.event !== v.no) || (r.heat && r.heat !== h)) &&
+        !confirm(`The console's race ${r.race_number || "?"} is event ${r.event} heat ${r.heat}, not event ${v.no} heat ${h}.\n\nSave its times to event ${v.no} heat ${h} anyway?`)) {
       box.innerHTML = `<div class="issue">Console race ${r.race_number} is <b>event ${r.event} heat ${r.heat}</b>, not event ${v.no} heat ${h}. Nothing was saved - check the race on the console.</div>`;
       { const b = document.querySelector(`[data-gettimes="${h}"]`); if (b) { b.disabled = false; b.textContent = "Get times"; } }
       return;
     }
     box.innerHTML = "";
     const dup = sameRaceAs(v.ptr, h, r.lanes.map(l => ({lane: l.lane, pad: l.final || 0})));
-    if (dup) {
+    if (dup && !confirm(`These times are exactly the same as the ones already saved for #${dup.v ? dup.v.no : "?"} heat ${dup.h} - the console probably sent a race that was already used.\n\nSave them to event ${v.no} heat ${h} anyway?`)) {
       box.innerHTML = `<div class="issue" style="background:var(--err-bg);border-color:var(--err)"><b>Not saved: these are the same times already saved for #${dup.v ? dup.v.no : "?"} heat ${dup.h}</b> (console race ${esc(String(r.race_number || "?"))}). The console sent a race that was already used - check the race number on the console, then Get times again.</div>`;
       const b = document.querySelector(`[data-gettimes="${h}"]`); if (b) { b.disabled = false; b.textContent = "Get times"; }
       return;

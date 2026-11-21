@@ -119,7 +119,7 @@ tr.relaybad td{background:rgba(248,81,73,.10)} tr.relaybad td:first-child{box-sh
 .grid2 label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
 .evlist button{flex-wrap:wrap;row-gap:2px}
 .evlist .st{display:flex;align-items:center;gap:6px;width:100%;padding-left:22px;font-size:12.5px;color:var(--muted)}
-.seg{display:inline-flex;gap:2px}.seg i{display:inline-block;width:12px;height:6px;border-radius:2px;background:var(--line)}
+.seg{display:inline-flex;gap:2px}.evlist .hrow{display:flex;flex-wrap:wrap;gap:3px;width:100%;margin:4px 0 2px;padding-left:22px}.evlist .hrow i{display:inline-block;width:18px;height:8px;border-radius:2px;background:var(--line);cursor:pointer}.evlist .hrow i:hover{outline:2px solid var(--accent);outline-offset:1px}.evlist .hrow i.done{background:var(--ok)}.evlist .hrow i.part{background:var(--warn)}.seg i{display:inline-block;width:12px;height:6px;border-radius:2px;background:var(--line)}
 .seg.many i{width:6px}.evlist .st>span:last-child{white-space:nowrap}
 .seg i.done{background:var(--ok)}.seg i.part{background:var(--warn)}
 .pill{display:inline-block;font-size:11px;font-weight:600;border-radius:9px;padding:0 7px;line-height:17px;white-space:nowrap}
@@ -659,9 +659,9 @@ function renderEvents() {
       const st = states[i];
       const extra = [st.bad ? `<b style="color:var(--err)" title="A relay has a scratched swimmer or an open leg">&#9888; relay</b>` : "", st.dq ? `${st.dq} DQ` : "", st.ns ? `${st.ns} NS` : ""].filter(Boolean).join(" · ");
       return `<button data-ev="${v.ptr}" class="${v.ptr === EV ? "on" : ""}" title="${esc(st.label)}${st.status === "timed" ? " - places set; points come from Meet Manager's scoring" : ""}">
-        <b>${v.no}</b> ${esc(v.label)}<span class="cnt">${st.entered}</span>
-        <span class="st"><span class="seg${st.heats.length > 7 ? " many" : ""}">${st.heats.map(x => `<i class="${x.cls}" title="Heat ${x.h}: ${x.r}/${x.n}"></i>`).join("")}</span>
-          <span class="pill ${st.status}">${st.label}</span>${extra ? `<span>${extra}</span>` : ""}</span></button>`;
+        <b>${v.no}</b> ${esc(v.label)}
+        ${st.heats.length > 1 ? `<span class="hrow">${st.heats.map(x => `<i class="${x.cls}" data-goheat="${x.h}" title="Heat ${x.h}: ${x.r} of ${x.n} done - click to go to it"></i>`).join("")}</span>` : ""}
+        <span class="st"><span class="pill ${st.status}">${st.label}</span>${extra ? `<span>${extra}</span>` : ""}</span></button>`;
     }).join("");
   $("#evlist").scrollTop = listTop;
   renderEvent();
@@ -999,12 +999,12 @@ function renderEvent() {
     const inHeat = act.filter(e => e.heat === h);
     const ins = MOVING && !swumHeat(h) ? ` <button class="ghost small" data-insheat="${v.ptr}|${h}" title="Meet Manager's Add Heat: open an empty heat here (heat ${h} and later move up one number) for late entries">+ Empty heat before</button>` : "";
     if (!inHeat.length) {
-      html += `<div class="heat"><h3>Heat ${h} <span class="pill none">Empty</span>${ins}</h3><table>${head}${Array.from({length: lanes}, (_, i) => row(null, i + 1, h)).join("")}</table></div>`;
+      html += `<div class="heat" id="heat-${h}"><h3>Heat ${h} <span class="pill none">Empty</span>${ins}</h3><table>${head}${Array.from({length: lanes}, (_, i) => row(null, i + 1, h)).join("")}</table></div>`;
       continue;
     }
     const hs = heatState(act.filter(e => e.heat === h));
     const hpill = hs.cls === "done" ? `<span class="pill timed">Timed</span>` : hs.cls === "part" ? `<span class="pill prog">${hs.r} of ${hs.n} lanes</span>` : `<span class="pill none">Waiting</span>`;
-    html += `<div class="heat"><h3>Heat ${h} of ${topHeat} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button>${ins}</h3>${gotBar(v, h)}<div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1, h)).join("")}
+    html += `<div class="heat" id="heat-${h}"><h3>Heat ${h} of ${topHeat} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button>${ins}</h3>${gotBar(v, h)}<div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1, h)).join("")}
       ${inHeat.filter(e => !e.lane || e.lane > lanes).map(e => row(e)).join("")}</table>${finishOrder(inHeat)}</div>`;
   }
   if (MOVING) {   // an empty heat to drag swimmers into
@@ -1941,7 +1941,18 @@ function renderScores() {
 // ---------------- events wiring ----------------
 document.addEventListener("click", async ev => {
   const d = ev.target.dataset || {};
-  if (ev.target.closest("#evlist") && ev.target.closest("button")) { EV = +ev.target.closest("button").dataset.ev; MOVING = false; renderEvents(); return; }   // no jumping: the list and the page stay where they are
+  if (ev.target.closest("#evlist") && ev.target.closest("button")) {
+    const gh = ev.target.closest("[data-goheat]");
+    EV = +ev.target.closest("button").dataset.ev; MOVING = false; renderEvents();
+    if (gh) {      // a heat bar: straight to that heat, just under the sticky event header
+      const el = document.getElementById("heat-" + gh.dataset.goheat);
+      if (el) {
+        const hd = document.querySelector(".evhead"), off = hd ? hd.getBoundingClientRect().height + 8 : 60;
+        window.scrollTo({top: el.getBoundingClientRect().top + scrollY - off, behavior: "smooth"});
+      }
+    }
+    return;
+  }   // no jumping: the list and the page stay where they are
   if (d.goev) { ev.preventDefault(); EV = +d.goev; TAB = "events"; MOVING = false; render(); return; }
   if (d.insheat) { const [ptr, h] = d.insheat.split("|").map(Number); change("insert_heat", {ptr, before: h}); return; }
   if (d.closeheats) { change("close_heats", {ptr: +d.closeheats}); return; }

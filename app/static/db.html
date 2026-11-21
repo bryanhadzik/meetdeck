@@ -101,7 +101,7 @@ tr.relaybad td{background:rgba(248,81,73,.10)} tr.relaybad td:first-child{box-sh
 .badge.dq{background:var(--err-bg);color:var(--err);border-color:transparent}
 .badge.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn);font-weight:700}
 .badge.ok{color:#2ea043;border-color:#2ea043}.badge.bad{background:var(--err-bg);color:var(--err);border-color:transparent}
-.prow{display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:13px}.menu .pop .prow button{width:auto;flex:none;margin:0}.prow span{flex:1;white-space:nowrap}.prow select{font-size:12px}
+.pgrp{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);padding:8px 4px 2px;border-top:1px solid var(--line);margin-top:4px}.pgrp .muted{text-transform:none;letter-spacing:0;font-weight:400}.prow{display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:13px}.menu .pop .prow button{width:auto;flex:none;margin:0}.prow span{flex:1;white-space:nowrap}.prow select{font-size:12px}
 .mf{display:flex;flex-direction:column;gap:3px;font-size:13px;min-width:0}.mf span{color:var(--muted)}
 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-bottom:10px}
 .mgrid4{display:flex;flex-wrap:wrap;gap:10px 16px;margin-bottom:10px;align-items:flex-end}
@@ -157,19 +157,23 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
       <div class="prow hidden" id="dpRow" style="border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:4px"><span><b>Print now</b> <span class="muted" style="font-size:11px">(straight to the printer, no dialog)</span></span>
         <select id="dpPrinter" title="The printer Print now sends to (remembered)" style="max-width:170px"></select>
         <label style="font-size:12px;white-space:nowrap" title="How many copies Print now prints">&times; <input id="dpCopies" type="number" min="1" max="50" value="1" style="width:44px;font-size:12px"></label></div>
+      <div class="pgrp">Heat sheets <span class="muted">before the meet</span></div>
       <div class="prow"><span>Heat sheet</span><button class="small" data-pr="heatsheet">Print</button><button class="ghost small" data-pdf="heatsheet">PDF</button></div>
+      <div class="prow"><span>Psych sheet <span class="muted" style="font-size:11px">(entries ranked by seed time)</span></span><button class="small" data-pr="psych">Print</button><button class="ghost small" data-pdf="psych">PDF</button></div>
+      <div class="prow"><span>Lane assignments <span class="muted" style="font-size:11px">(NFHS 5-3, for the coaches)</span></span><button class="small" data-pr="lanes">Print</button><button class="ghost small" data-pdf="lanes">PDF</button></div>
+      <div class="prow"><span>Timeline <span class="muted" style="font-size:11px">(session report)</span></span><button class="small" data-pr="timeline">Print</button><button class="ghost small" data-pdf="timeline">PDF</button></div>
+      <div class="prow"><span>Results sign <span class="muted">(QR code to the phone page)</span></span><button class="small" data-pr="qrsign">Print</button><button class="ghost small" data-pdf="qrsign">PDF</button></div>
+      <div class="pgrp">Referee</div>
       <div class="prow"><span>Referee program</span><button class="small" data-pr="referee">Print</button><button class="ghost small" data-pdf="referee">PDF</button></div>
       <div class="prow"><span>Referee program v2 <span class="muted">(DQ + order of finish)</span></span><button class="small" data-pr="referee2">Print</button><button class="ghost small" data-pdf="referee2">PDF</button></div>
-      <div class="prow"><span>Results sign <span class="muted">(QR code to the phone page)</span></span><button class="small" data-pr="qrsign">Print</button><button class="ghost small" data-pdf="qrsign">PDF</button></div>
-      <div class="prow"><span>Timeline <span class="muted" style="font-size:11px">(session report)</span></span><button class="small" data-pr="timeline">Print</button><button class="ghost small" data-pdf="timeline">PDF</button></div>
-      <div class="prow"><span>Psych sheet <span class="muted" style="font-size:11px">(entries ranked by seed time)</span></span><button class="small" data-pr="psych">Print</button><button class="ghost small" data-pdf="psych">PDF</button></div>
-      <div class="prow"><span>Results</span><button class="small" data-pr="results">Print</button><button class="ghost small" data-pdf="results">PDF</button></div>
-      <div class="prow"><span>Team scores</span><button class="small" data-pr="scores">Print</button><button class="ghost small" data-pdf="scores">PDF</button></div>
       <div class="prow"><span>DQ summary</span><button class="small" data-pr="dq">Print</button><button class="ghost small" data-pdf="dq">PDF</button></div>
+      <div class="pgrp">Timers</div>
+      <div class="prow"><span>Timer sheets <select id="prLane" title="All lanes, or just one lane's sheets"><option value="">all lanes</option></select></span><button class="small" data-pr="timer">Print</button><button class="ghost small" data-pdf="timer">PDF</button></div>
       <div class="prow"><span>Watches needed <span class="muted" style="font-size:11px" id="watchCount">(lanes to get watch times for)</span></span><button class="small" data-pr="watches">Print</button><button class="ghost small" data-pdf="watches">PDF</button></div>
       <div class="prow"><span>Soft touch backup times <span class="muted" style="font-size:11px">(blank log)</span></span><button class="small" data-pr="softtouch">Print</button><button class="ghost small" data-pdf="softtouch">PDF</button></div>
-      <div class="prow"><span>Lane assignments <span class="muted" style="font-size:11px">(NFHS 5-3, for the coaches)</span></span><button class="small" data-pr="lanes">Print</button><button class="ghost small" data-pdf="lanes">PDF</button></div>
-      <div class="prow"><span>Timer sheets <select id="prLane" title="All lanes, or just one lane's sheets"><option value="">all lanes</option></select></span><button class="small" data-pr="timer">Print</button><button class="ghost small" data-pdf="timer">PDF</button></div>
+      <div class="pgrp">Results</div>
+      <div class="prow"><span>Results</span><button class="small" data-pr="results">Print</button><button class="ghost small" data-pdf="results">PDF</button></div>
+      <div class="prow"><span>Team scores</span><button class="small" data-pr="scores">Print</button><button class="ghost small" data-pdf="scores">PDF</button></div>
     </div></div>
   <button class="small hidden" id="watchBadge" type="button" title="Lanes still waiting for the timers' watch times (no pad touch, or pad and backup button apart). Click to go to Enter watch times, or print the Watches needed sheet."></button>
   <span class="muted" id="verTag" style="font-size:11.5px;white-space:nowrap" title="MeetDeck version"></span>

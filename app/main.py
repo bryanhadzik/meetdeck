@@ -3845,6 +3845,7 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
             m["records_broken"] = _records_broken(d, m)
         except Exception as x:
             print("results records:", x)
+        m["score_limits"] = _dbinfo(d).get("scoring") or {}
         pdf, label = heatsheet.results_pdf(m, db, licensee), "results"
     elif kind == "psych":
         import reports
@@ -4078,6 +4079,7 @@ def send_zip(mid: str, group: str):
     m = meetdb.load(_dbfile(d))
     lic = (_dbinfo(d).get("hyb") or "")[28:78].strip() or _any_licensee()
     stem = _stem(m["meet"]["name"])
+    m["score_limits"] = _dbinfo(d).get("scoring") or {}
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         if group in ("coaches", "final", "keep"):

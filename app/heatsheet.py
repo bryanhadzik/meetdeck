@@ -867,24 +867,35 @@ class _Results(_Sheet):
         fin = sorted((e for e in ents if e["time"] and stat(e) == "" and not e.get("exh")), key=lambda e: e["time"])
         exh = sorted((e for e in ents if e["time"] and stat(e) == "" and e.get("exh")), key=lambda e: e["time"])   # exhibition: no place (Meet Manager: ---)
         dqs = sorted((e for e in ents if stat(e) in ("Q", "F", "D")), key=lambda e: (e["time"] or 9e9))
+        # Meet Manager marks a swim that can't score because its team already has its max scorers with "x"
+        lim = self.m.get("score_limits") or {}
+        tmax = (lim.get("rel_max") if relay else lim.get("ind_max")) or 0
+        scored = tmax > 0 and any((e.get("points") or 0) > 0 for e in fin)
+        team_of = lambda e: e["team"] if relay else aths.get(e["ath"], {}).get("team")
+        seen, over = {}, set()
+        for e in fin:
+            seen[team_of(e)] = seen.get(team_of(e), 0) + 1
+            if scored and seen[team_of(e)] > tmax and not (e.get("points") or 0) > 0:
+                over.add(e["key"])
+        tied = lambda t: sum(1 for x in fin if abs(x["time"] - t) <= 0.001) > 1
         blocks, place, prev_t = [], 0, None
         for i, e in enumerate(fin):
             if prev_t is None or abs(e["time"] - prev_t) > 0.001:
                 place = i + 1
             prev_t = e["time"]
-            blocks.append(self.block(v, e, str(place), relay, aths, teams))
+            blocks.append(self.block(v, e, ("*" if tied(e["time"]) else "") + str(place), relay, aths, teams, e["key"] in over))
         for e in exh + dqs:
             blocks.append(self.block(v, e, "---", relay, aths, teams))
         return blocks
 
-    def block(self, v, e, place, relay, aths, teams):
+    def block(self, v, e, place, relay, aths, teams, nonscoring=False):
         lines = []          # (dy, [(x, text, align)])
         st = (e["stat"] or "").strip()
         dfs = st == "F" or (st in ("Q", "D") and (e.get("dq") or "").upper() in ("7B", "7P") and not e["time"])   # F = declared false start
         if st in ("Q", "F", "D"):
             tm = "DFS" if dfs else "DQ"
         else:
-            tm = ("x" if e.get("exh") else "") + meetdb.fmt_time(e["time"])
+            tm = ("X" if e.get("exh") else "x" if nonscoring else "") + meetdb.fmt_time(e["time"])   # X exhibition, x over the team's max scorers
             flags = "".join(r.get("flag") or "*" for r in self.m.get("records_broken") or [] if r["key"] == e["key"])
             if flags:
                 tm = f"{flags} {tm}"          # Meet Manager prints the record tag's flag by the time
@@ -896,7 +907,7 @@ class _Results(_Sheet):
                               (RW, pts, "r")]))
         else:
             a = aths.get(e["ath"], {})
-            lines.append((0, [(18.0, place, "r"), (24.0, nm(a), "l", 108), (138.0, a.get("grade", ""), "r"),
+            lines.append((0, [(18.0, place, "r"), (24.0, nm(a), "l", 108), (138.0, a.get("yr") or "", "r"),
                               (150.0, teams.get(a.get("team"), {}).get("abbr", ""), "l", 54), (240.0, tm, "r"), (RW, pts, "r")]))
         y = 11.5
         for r in [r for r in self.m.get("records_broken") or [] if r["key"] == e["key"]]:
@@ -911,7 +922,7 @@ class _Results(_Sheet):
             y += 11.5
         if relay:
             legs = (e.get("legs") or [])[:4]
-            leg = lambda k: (lambda a: f"{k + 1}) {nm(a)}" + (f" {a['grade']}" if a and a.get("grade") else ""))(aths.get(legs[k]) if k < len(legs) else None)
+            leg = lambda k: (lambda a: f"{k + 1}) {nm(a)}" + (f" {a['yr']}" if a and a.get("yr") else ""))(aths.get(legs[k]) if k < len(legs) else None)
             if any(legs):
                 lines.append((y, [(24.0, leg(0), "l", 116), (144.0, leg(1), "l", 128)]))
                 lines.append((y + 11.0, [(24.0, leg(2), "l", 116), (144.0, leg(3), "l", 128)]))

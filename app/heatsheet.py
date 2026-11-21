@@ -1020,7 +1020,157 @@ class _Results(_Sheet):
         return self.buf.getvalue()
 
 
-def results_pdf(m, db, licensee="", printed=None) -> bytes:
+class _Results1(_Results):
+    """Meet Manager's default one-column results: full school names, seed and finals times, relay swimmers on
+    one line, no splits or DQ reasons; team scores on their own page, two teams per line."""
+    SZ1 = 9.4
+    X_NAME, X_YR, X_SCHOOL, X_SEED, X_FIN, X_PTS, X_RIGHT = 48.0, 204.0, 210.0, 402.0, 480.0, 544.5, 554.0
+    LAST = 721.0
+
+    def finish_page(self):
+        self.c.showPage()
+
+    def col_x(self):
+        return 0.0
+
+    def next_area(self, v, cont):
+        self.new_page()
+        self.y = 72.0 if cont else 76.8
+        if v is not None:
+            self.header(v, cont=cont)
+
+    def header(self, v, cont=False):
+        T, z = self.y, self.SZ1
+        label = event_title(v, self.m["meet"].get("course") or 3).split(" ", 1)[1]
+        no = f"{v['no']}{v.get('ltr') or ''}"
+        self.text(18.0, T, f"(Event {no} {label})" if cont else f"Event {no} {label}", bold=True, size=z)
+        h = T + 11.1
+        if v["ind_rel"] == "R":
+            self.text(self.X_NAME, h, "Team", bold=True, size=8.6)
+            self.text(self.X_SCHOOL, h, "Relay", bold=True, size=8.6)
+        else:
+            self.text(self.X_NAME, h, "Name", bold=True, size=8.6)
+            self.text(self.X_YR, h, "Yr", bold=True, size=8.6, align="r")
+            self.text(self.X_SCHOOL, h, "School", bold=True, size=8.6)
+        self.text(self.X_SEED, h, "Seed Time", bold=True, size=8.6, align="r")
+        self.text(self.X_FIN, h, "Finals Time", bold=True, size=8.6, align="r")
+        if self.has_pts:
+            self.text(552.1, h, "Points", bold=True, size=8.6, align="r")
+        self.c.setLineWidth(0.75)
+        self.c.line(18.0, PAGE_H - (h + 10.6), self.X_RIGHT, PAGE_H - (h + 10.6))
+        self.y = h + 13.1
+
+    def block(self, v, e, place, relay, aths, teams, nonscoring=False):
+        lines = []
+        st = (e["stat"] or "").strip()
+        dfs = st == "F" or (st in ("Q", "D") and (e.get("dq") or "").upper() in ("7B", "7P") and not e["time"])
+        if st in ("Q", "F", "D"):
+            tm = "DFS" if dfs else "DQ"
+        else:
+            tm = ("X" if e.get("exh") else "x" if nonscoring else "") + meetdb.fmt_time(e["time"])
+            flags = "".join(r.get("flag") or "*" for r in self.m.get("records_broken") or [] if r["key"] == e["key"])
+            if flags:
+                tm = f"{flags} {tm}"
+        nm = lambda a: (f"{a.get('last', '')}, {a.get('pref') or a.get('first', '')}" + (f" {a['initial']}" if a.get("initial") else "")) if a else ""
+        pts = f"{e['points']:g}" if self.has_pts and (e.get("points") or 0) > 0 and st == "" else ""
+        seed = meetdb.fmt_time(e.get("seed")) if e.get("seed") else "NT"
+        if relay:
+            tmn = teams.get(e["team"], {})
+            lines.append((0, [(42.0, place, "r"), (self.X_NAME, tmn.get("name") or tmn.get("abbr", ""), "l", 160), (220.2, e.get("ltr") or "", "c"),
+                              (self.X_SEED, seed, "r"), (self.X_FIN, tm, "r"), (self.X_PTS, pts, "r")]))
+        else:
+            a = aths.get(e["ath"], {})
+            tmn = teams.get(a.get("team"), {})
+            lines.append((0, [(42.0, place, "r"), (self.X_NAME, nm(a), "l", 140), (self.X_YR, a.get("yr") or "", "r"),
+                              (self.X_SCHOOL, tmn.get("name") or tmn.get("abbr", ""), "l", 155), (self.X_SEED, seed, "r"),
+                              (self.X_FIN, tm, "r"), (self.X_PTS, pts, "r")]))
+        y = 11.1
+        for r in [r for r in self.m.get("records_broken") or [] if r["key"] == e["key"]]:
+            old = f"{meetdb.fmt_time(r['old'])}" + (f" {r['old_year']}" if r.get("old_year") else "") + (f" {r['old_who']}" if r.get("old_who") else "")
+            lines.append((y, [(54.0, f"{'Ties' if r['tie'] else 'New'} {r['tag']}! (was {old})", "l", 400)]))
+            y += 11.1
+        if relay:
+            legs = (e.get("legs") or [])[:4]
+            leg = lambda k: (lambda a: f"{k + 1}) {nm(a)}" + (f" {a['yr']}" if a and a.get("yr") else ""))(aths.get(legs[k]) if k < len(legs) else None)
+            if any(legs):
+                lines.append((y, [(54.0 + 132.0 * k, leg(k), "l", 128) for k in range(4)]))
+                y += 11.1
+        return {"lines": lines, "h": (lines[-1][0] if lines else 0)}
+
+    def draw_block(self, b):
+        for dy, items in b["lines"]:
+            for it in items:
+                self.text(it[0], self.y + dy, str(it[1]), size=self.SZ1, align=it[2], w=it[3] if len(it) > 3 else None)
+        self.y += b["h"] + (12.6 if len(b["lines"]) > 1 else 12.2)
+
+    def team_scores(self):
+        evs, aths, teams = {v["ptr"]: v for v in self.m["events"]}, self.m["athletes"], self.m["teams"]
+        tot, last = {}, [0, 0]
+        for e in self.m["entries"]:
+            pts = e.get("points") or 0
+            if pts <= 0 or e["scr"]:
+                continue
+            tno = e["team"] if e["kind"] == "R" else aths.get(e["ath"], {}).get("team")
+            v = evs.get(e["event"], {})
+            g = 0 if (v.get("sex") or v.get("gender") or "").upper() in ("F", "W", "G") else 1
+            t = tot.setdefault(tno, [0.0, 0.0])
+            t[g] += pts
+            last[g] = max(last[g], v.get("no") or 0)
+        if not tot:
+            return
+        self.new_page()
+        z, f = self.SZ1, (lambda x: f"{x:g}")
+        for g, lab in ((0, "Women"), (1, "Men")):
+            if not last[g]:
+                continue
+            rows = sorted(tot.items(), key=lambda kv: -kv[1][g])
+            if self.y + 37.6 + 12.2 * ((len(rows) + 1) // 2) > self.LAST:
+                self.new_page()
+            T = self.y
+            self.text(18.0, T, f"Scores - {lab}", bold=True, size=z)
+            self.text(286.0, T + 18.2, f"{lab} - Team Rankings - Through Event {last[g]}", bold=True, size=z, align="c")
+            self.y = T + 37.6
+            place, prev = 0, None
+            for i, (tno, pts) in enumerate(rows):
+                if prev is None or abs(pts[g] - prev) > 0.001:
+                    place = i + 1
+                prev = pts[g]
+                t = teams.get(tno, {})
+                x0 = 0.0 if i % 2 == 0 else 277.5
+                self.text(42.0 + x0, self.y, f"{place}.", size=z, align="r")
+                self.text((48.0 if i % 2 == 0 else 324.0), self.y, t.get("name") or t.get("abbr", ""), size=z, w=200)
+                self.text(272.5 + (273.5 if i % 2 else 0), self.y, f(pts[g]), size=z, align="r")
+                if i % 2 == 1 or i == len(rows) - 1:
+                    self.y += 12.2
+            self.y += 4.3
+
+    def render(self):
+        self.new_page()
+        first = True
+        for v in sorted(self.m["events"], key=lambda v: (v.get("order") or (99, v["no"]), v["no"])):
+            blocks = self.rows(v)
+            if not blocks:
+                continue
+            if not first:
+                self.y += 4.3
+            first = False
+            if self.y + 24.2 + blocks[0]["h"] > self.LAST:
+                self.next_area(None, False)
+            self.header(v)
+            for b in blocks:
+                if self.y + b["h"] > self.LAST:
+                    self.next_area(v, cont=True)
+                self.draw_block(b)
+        if self.has_pts:
+            self.team_scores()
+        self.finish_page()
+        self.c.save()
+        return self.buf.getvalue()
+
+
+def results_pdf(m, db, licensee="", printed=None, splits=False) -> bytes:
+    """Results printout. Default: Meet Manager's one-column results (no splits); splits=True gives the
+    two-column version with splits and DQ reasons."""
     import results as results_mod
     if printed is None:
         try:
@@ -1028,7 +1178,7 @@ def results_pdf(m, db, licensee="", printed=None) -> bytes:
             printed = dt.datetime.now(ZoneInfo("America/Denver"))
         except Exception:
             printed = dt.datetime.now()
-    return _Results(m, licensee, printed, results_mod.splits(db)).render()
+    return (_Results if splits else _Results1)(m, licensee, printed, results_mod.splits(db) if splits else {}).render()
 
 
 # ---------------- timeline (Meet Manager's Session Report) ----------------

@@ -242,9 +242,24 @@ async function seekTo(f, t) {
     ["loadedmetadata", "canplay", "play"].forEach(ev => p.addEventListener(ev, go));
   } catch (e) {}
 }
+// the meet's recording (the video the race replays come from), for a "watch the recording" card when nothing is live
+function recording() {
+  const base = D && D.stream && D.stream.url ? (() => { try { return new URL(D.stream.url).origin; } catch (e) { return ""; } })() : "";
+  if (!base || (D.stream.live && !D.archive)) return null;
+  let best = null;
+  (D.events || []).forEach(v => Object.values(v.watch || {}).forEach(w => { if (w && w[0] && (!best || w[1] < best[1])) best = w; }));
+  return best ? {src: `${base}/${best[0]}/iframe?autoplay=true`, t: Math.max(0, best[1] - 60)} : null;
+}
+function recCard(w, box) {
+  WATCH = false; w.dataset.u = "";
+  w.querySelector(".stop")?.remove(); w.querySelector(".rcap")?.remove();
+  if (!box.querySelector("[data-rec]")) box.innerHTML = `<button class="tap" data-rec="1" aria-label="Watch the meet recording"><span class="pl"></span><b>Watch the meet recording</b><small>Tap to play &middot; or use &#9654; Watch on any race to jump to it</small></button>`;
+}
 function player(u, offline) {
   const w = $("#watch"), box = w.querySelector(".vid");
   if (REPLAY) { w.classList.remove("hide"); }
+  const rec = !REPLAY && (!u || offline) ? recording() : null;
+  if (rec) { w.classList.remove("hide"); recCard(w, box); return; }      // no live stream: offer the recording right away
   if (!u && !REPLAY) { WATCH = false; w.classList.add("hide"); box.innerHTML = ""; w.dataset.u = ""; return; }
   w.classList.remove("hide");
   if (offline && !REPLAY) {       // a stream is set up but not on right now: keep its spot, say it's offline
@@ -304,7 +319,7 @@ function seeWatch() {                    // scroll only when the player isn't al
   });
 }
 document.addEventListener("click", e => {
-  if (e.target.closest("#watch .tap")) { track("stream/watch-tap", "Watch the stream (player)"); watch(true); }
+  if (e.target.closest("#watch .tap") && !e.target.closest("[data-rec]")) { track("stream/watch-tap", "Watch the stream (player)"); watch(true); }
   else if (e.target.closest("#watch .stop")) { track("stream/stop", "Stopped watching"); watch(false); }
   else if (e.target.closest("#liveBtn")) { e.preventDefault(); watch(true); }
 });
@@ -427,6 +442,12 @@ document.addEventListener("click", e => {
     player(...LAST_P);
     seeWatch();
     track(`replay/event-${no}-heat-${h}`, `Replay: event ${no} heat ${h}`);
+    return;
+  }
+  if (e.target.closest("[data-rec]")) {
+    const r = recording(); if (!r) return;
+    REPLAY = {t: r.t, src: r.src, label: "Meet recording"};
+    player(...LAST_P); seeWatch(); track("replay/recording", "Replay: whole meet");
     return;
   }
   if (e.target.closest("[data-rpclose]")) { REPLAY = null; $("#watch .vid").innerHTML = ""; WATCH = !!(LAST_P[0] && !LAST_P[1]); player(...LAST_P); return; }

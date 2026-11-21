@@ -448,16 +448,16 @@ def _rows(m):
         rows = []
         for e in done + other:
             st = (e["stat"] or "").strip()
-            mark = {"Q": "DQ", "F": "DQ", "R": "NS"}.get(st, "")
+            mark = {"Q": "DQ", "F": "DFS", "R": "NS"}.get(st, "")
             if e["kind"] == "I":
                 a = aths.get(e["ath"], {})
-                name, yr, team = f"{a.get('last', '')}, {a.get('first', '')}", a.get("grade", a.get("yr", "")), teams.get(a.get("team"), {}).get("abbr", "")
+                name, yr, team = f"{a.get('last', '')}, {a.get('pref') or a.get('first', '')}", a.get("grade", a.get("yr", "")), teams.get(a.get("team"), {}).get("abbr", "")
                 legs = ""
                 who = {"last": a.get("last", ""), "first": a.get("first", ""), "pref": a.get("pref", ""), "school": teams.get(a.get("team"), {}).get("name", "")}
             else:
                 tm = teams.get(e["team"], {})
                 name, yr, team = f"{tm.get('name', '')} \"{e['ltr']}\"", "", tm.get("abbr", "")
-                legs = ", ".join(f"{aths.get(x, {}).get('first', '')} {aths.get(x, {}).get('last', '')}" for x in e["legs"] if x)
+                legs = ", ".join(f"{aths.get(x, {}).get('pref') or aths.get(x, {}).get('first', '')} {aths.get(x, {}).get('last', '')}" for x in e["legs"] if x)
                 who = {"last": "", "first": "", "pref": "", "school": tm.get("name", ""), "ltr": e.get("ltr", "")}
             result = mark if st == "R" else meetdb.fmt_time(e["time"]) if e["time"] else ("NT" if not mark else mark)
             if st in ("Q", "F", "D") and e["time"]:

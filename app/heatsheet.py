@@ -864,7 +864,8 @@ class _Results(_Sheet):
         relay = v["ind_rel"] == "R"
         ents = [e for e in self.m["entries"] if e["event"] == v["ptr"] and not e["scr"]]
         stat = lambda e: (e["stat"] or "").strip()
-        fin = sorted((e for e in ents if e["time"] and stat(e) == ""), key=lambda e: e["time"])
+        fin = sorted((e for e in ents if e["time"] and stat(e) == "" and not e.get("exh")), key=lambda e: e["time"])
+        exh = sorted((e for e in ents if e["time"] and stat(e) == "" and e.get("exh")), key=lambda e: e["time"])   # exhibition: no place (Meet Manager: ---)
         dqs = sorted((e for e in ents if stat(e) in ("Q", "F", "D")), key=lambda e: (e["time"] or 9e9))
         blocks, place, prev_t = [], 0, None
         for i, e in enumerate(fin):
@@ -872,14 +873,14 @@ class _Results(_Sheet):
                 place = i + 1
             prev_t = e["time"]
             blocks.append(self.block(v, e, str(place), relay, aths, teams))
-        for e in dqs:
+        for e in exh + dqs:
             blocks.append(self.block(v, e, "---", relay, aths, teams))
         return blocks
 
     def block(self, v, e, place, relay, aths, teams):
         lines = []          # (dy, [(x, text, align)])
         st = (e["stat"] or "").strip()
-        dfs = st in ("Q", "F", "D") and (e.get("dq") or "").upper() in ("7B", "7P") and not e["time"]
+        dfs = st == "F" or (st in ("Q", "D") and (e.get("dq") or "").upper() in ("7B", "7P") and not e["time"])   # F = declared false start
         if st in ("Q", "F", "D"):
             tm = "DFS" if dfs else "DQ"
         else:
@@ -887,7 +888,7 @@ class _Results(_Sheet):
             flags = "".join(r.get("flag") or "*" for r in self.m.get("records_broken") or [] if r["key"] == e["key"])
             if flags:
                 tm = f"{flags} {tm}"          # Meet Manager prints the record tag's flag by the time
-        nm = lambda a: (f"{a.get('last', '')}, {a.get('first', '')}" + (f" {a['initial']}" if a.get("initial") else "")) if a else ""
+        nm = lambda a: (f"{a.get('last', '')}, {a.get('pref') or a.get('first', '')}" + (f" {a['initial']}" if a.get("initial") else "")) if a else ""   # preferred name, like Meet Manager
         pts = f"{e['points']:g}" if self.has_pts and (e.get("points") or 0) > 0 and st == "" else ""
         if relay:
             tmn = teams.get(e["team"], {})

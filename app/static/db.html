@@ -892,14 +892,23 @@ function timerCells(e) {
   const acc = acc0 && (acc0 !== "watch" || +e.watch > 0 || +e.watch2 > 0) ? acc0 : "";
   const hasW = +e.watch > 0 || +e.watch2 > 0;
   // until a watch time is in, pad and button that disagree both stay amber; after that amber = off the official time
-  const odd = t => !acc && (!hasW ? far(pad, back) : off ? far(t, off) : far(pad, back));
+  const odd0 = t => !acc && (!hasW ? far(pad, back) : off ? far(t, off) : far(pad, back));
+  // the official time is settled when at least two of pad / button / watches agree with it: a time that's off
+  // from it then isn't a problem, just not used - shown greyed and struck through instead of amber
+  const srcs = [pad, back, +e.watch || 0, +e.watch2 || 0].filter(t => t > 0);
+  const settled = off > 0 && srcs.filter(t => !far(t, off)).length >= 2;
+  const odd = t => odd0(t) && !settled;
+  const outl = t => t > 0 && off > 0 && settled && far(t, off);
+  const outTip = t => `Not used: ${(Math.abs(t - off)).toFixed(2)} s off the official time, which ${srcs.filter(x => !far(x, off)).length} of the times agree on`;
+  const OUT = ";color:var(--muted);text-decoration:line-through;opacity:.75";
   // pad / button: click one to accept it as the official time (click again to undo)
   const ro = (t, title, warn, which) => {
     const on = acc === which, can = t && pad && back && far(pad, back);
-    return `<td class="mono${can || on ? " accpick" : ""}" ${can || on ? `data-accept="${e.key}" data-use="${on ? "" : which}"` : ""} style="text-align:right;white-space:nowrap${warn ? ";color:var(--warn);font-weight:600" : ""}${on ? ";color:var(--ok);font-weight:700" : ""}"
-      title="${esc(title)}${on ? " - accepted as the official time (click to undo)" : can ? " - click to accept this as the official time" : ""}">${on ? "&#10004; " : ""}${t ? esc(fmt(t)) : '<span class="muted">&ndash;</span>'}</td>`;
+    const ign = !on && outl(t);
+    return `<td class="mono${can || on ? " accpick" : ""}" ${can || on ? `data-accept="${e.key}" data-use="${on ? "" : which}"` : ""} style="text-align:right;white-space:nowrap${warn ? ";color:var(--warn);font-weight:600" : ""}${ign ? OUT : ""}${on ? ";color:var(--ok);font-weight:700" : ""}"
+      title="${esc(title)}${ign ? " - " + esc(outTip(t)) : ""}${on ? " - accepted as the official time (click to undo)" : can ? " - click to accept this as the official time" : ""}">${on ? "&#10004; " : ""}${t ? esc(fmt(t)) : '<span class="muted">&ndash;</span>'}</td>`;
   };
-  const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" title="Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)" style="width:72px${!acc && far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
+  const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" title="${outl(+val) ? esc(outTip(+val)) + " - " : ""}Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)" style="width:72px${outl(+val) ? OUT : !acc && far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
   return ro(pad, "Pad (touchpad) time", odd(pad), "pad") +
     ro(back, btn.length > 1 ? "Backup buttons: " + btn.map(fmt).join(" / ") + " (average)" : "Backup button", odd(back), "backup") +
     w(1, e.watch) + `<td style="white-space:nowrap">${w(2, e.watch2).slice(4, -5)}${e.heat && e.lane ? " " + wAskBtn(e) : ""}</td>` +

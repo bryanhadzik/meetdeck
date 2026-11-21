@@ -73,8 +73,8 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 .gotbar.flash{animation:gotflash 1.2s ease-out 2}
 @keyframes gotflash{0%{box-shadow:0 0 0 0 rgba(31,136,61,.9);transform:scale(1.02)}100%{box-shadow:0 0 0 14px rgba(31,136,61,0);transform:scale(1)}}
 /* Run the meet: scrolling settles on a whole heat, just below the sticky header */
-html{scroll-snap-type:y proximity}
-.heat{margin-bottom:12px;max-width:100%;overflow-x:auto;scroll-snap-align:start;scroll-margin-top:calc(var(--abh,0px) + var(--hdh,56px) + var(--evh,0px) + 6px)}
+
+.heat{margin-bottom:12px;max-width:100%;overflow-x:auto;scroll-margin-top:calc(var(--abh,0px) + var(--hdh,56px) + var(--evh,0px) + 6px)}
 /* the event number and name stay at the top while its heats scroll */
 .evhead{position:sticky;top:calc(var(--abh,0px) + var(--hdh,56px));z-index:4;background:var(--bg);padding:6px 0;box-shadow:0 1px 0 var(--line)}
 .heat h3{font-size:13px;margin:6px 0 2px;color:var(--muted)}
@@ -2104,6 +2104,29 @@ fetch("/api/version").then(r => r.json()).then(v => { const t = document.getElem
 })();
 </script>
 <script>
+// heats settle under the sticky header when scrolling stops - only when one is already close, and only in the
+// direction you were scrolling, so scrolling back up to the status boxes is never pulled back down (CSS snapping did that)
+(function () {
+  let lastY = scrollY, dir = 0, t = null, busy = false;
+  addEventListener("scroll", () => {
+    if (busy) return;
+    const y = scrollY; if (y !== lastY) dir = y > lastY ? 1 : -1; lastY = y;
+    clearTimeout(t);
+    t = setTimeout(() => {
+      if (!document.querySelector("#tab-events:not(.hidden)")) return;
+      const css = getComputedStyle(document.documentElement);
+      const top = (parseFloat(css.getPropertyValue("--abh")) || 0) + (parseFloat(css.getPropertyValue("--hdh")) || 56) + (parseFloat(css.getPropertyValue("--evh")) || 0) + 6;
+      let best = null;
+      document.querySelectorAll("#evDetail .heat").forEach(h => {
+        const d = h.getBoundingClientRect().top - top;     // + : heat below the line, - : above
+        if (Math.abs(d) > 70 || (dir > 0 && d < -70) || (dir < 0 && d > 70)) return;
+        if ((dir > 0 && d < 0) || (dir < 0 && d > 0)) return;  // never pull against the way you scrolled
+        if (!best || Math.abs(d) < Math.abs(best)) best = d;
+      });
+      if (best !== null && Math.abs(best) > 2) { busy = true; scrollBy({top: best, behavior: "smooth"}); setTimeout(() => { busy = false; lastY = scrollY; }, 500); }
+    }, 180);
+  }, {passive: true});
+})();
 (function () {   // header height, for where a heat snaps to
   const fit = () => { const h = document.querySelector("header"), ev = document.querySelector(".evhead");
     if (h) document.documentElement.style.setProperty("--hdh", h.offsetHeight + "px");

@@ -828,8 +828,9 @@ function usedSource(e) {
   return "Manual";
 }
 function usedBadge(e) {
-  const src = usedSource(e);
-  if (!src) return "";
+  let src = usedSource(e);
+  if ((S.time_ok || {})[e.key] === "watch" && !(+e.watch > 0 || +e.watch2 > 0)) src = "Timers";
+  if (!src) return e.heat && e.lane && !e.scr ? ` <span class="used" data-usedpick="${e.key}" title="Pick where the time comes from - e.g. the timers, before their watch times are in" style="cursor:pointer;display:inline-block;min-width:44px;font-size:11.5px;color:var(--muted);border:1px dashed currentColor;border-radius:9px;padding:0 6px;text-align:center">from ▾</span>` : "";
   const parts = [["Pad", e.pad], ["Backup button", [e.backup, e.back2, e.back3].filter(x => +x > 0).map(fmt).join(" / ")], ["Timers", [e.watch, e.watch2].filter(x => +x > 0).map(fmt).join(" / ")]]
     .map(([k, v]) => `${k}: ${typeof v === "number" ? (v ? fmt(v) : "—") : (v || "—")}`).join(" · ");
   const col = {Pad: "var(--ok)", Button: "var(--accent)", Timers: "var(--warn)", Manual: "var(--muted)"}[src];
@@ -849,17 +850,23 @@ function savedTimes(e) {
 function usedPicker(key, anchor) {
   const e = M.entries.find(x => x.key === key); if (!e) return;
   document.getElementById("usedPop")?.remove();
-  const opts = savedTimes(e);
-  if (!opts.length) return toast("No pad, button or watch times are saved for this swimmer - type the time in.");
+  const opts = savedTimes(e), chose = (S.time_ok || {})[key];
   const pop = document.createElement("div");
   pop.id = "usedPop";
   pop.style.cssText = "position:absolute;z-index:50;background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);padding:4px;font-size:13px";
   pop.innerHTML = `<div class="muted" style="padding:4px 8px;font-size:12px">Official time (now ${esc(fmt(e.time) || "none")})</div>` +
-    opts.map(([k, t]) => `<button class="ghost small" data-usedset="${t}" style="display:block;width:100%;text-align:left${Math.abs(t - e.time) < 0.005 ? ";font-weight:700" : ""}">${esc(k)} &nbsp;<b>${esc(fmt(t))}</b></button>`).join("");
+    opts.map(([k, t]) => `<button class="ghost small" data-usedset="${t}" style="display:block;width:100%;text-align:left${Math.abs(t - e.time) < 0.005 ? ";font-weight:700" : ""}">${esc(k)} &nbsp;<b>${esc(fmt(t))}</b></button>`).join("") +
+    (+e.watch > 0 || +e.watch2 > 0 ? "" : `<button class="ghost small" data-useduse="watch" style="display:block;width:100%;text-align:left${chose === "watch" ? ";font-weight:700" : ""}">Timers &nbsp;<span class="muted">(watch times to come - goes on the Watches needed sheet)</span></button>`) +
+    (chose ? `<button class="ghost small" data-useduse="" style="display:block;width:100%;text-align:left">Back to the usual rule</button>` : "");
   const r = anchor.getBoundingClientRect();
   pop.style.left = (r.left + scrollX) + "px"; pop.style.top = (r.bottom + scrollY + 4) + "px";
   document.body.appendChild(pop);
-  pop.onclick = ev => { const b = ev.target.closest("[data-usedset]"); if (!b) return; pop.remove();
+  pop.onclick = async ev => {
+    const u = ev.target.closest("[data-useduse]");
+    if (u) { pop.remove();
+      try { S = await api(`${API}/time-ok`, J({key, use: u.dataset.useduse || null})); toast(u.dataset.useduse ? "Using the timers - on the Watches needed sheet" : "Back to the usual rule"); show(); wtLoad(); } catch (x) { toast(x.message); }
+      return; }
+    const b = ev.target.closest("[data-usedset]"); if (!b) return; pop.remove();
     change("result", {key, time_s: fmt(+b.dataset.usedset), stat: e.stat === "R" ? "" : e.stat, dq: e.dq}); };
   setTimeout(() => document.addEventListener("click", function off(ev) { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener("click", off); } }), 0);
 }
@@ -878,7 +885,8 @@ function timerCells(e) {
   const far = (a, b) => a && b && Math.abs(a - b) > tol + 1e-9;
   // amber = disagrees with the time being used (once there's an official time); before that, pad vs button
   const off = +e.time || 0, ref = off || pad || back;
-  const acc = (S.time_ok || {})[e.key];                // pad or button accepted by hand: nothing is amber any more
+  const acc0 = (S.time_ok || {})[e.key];               // pad or button accepted by hand: nothing is amber any more
+  const acc = acc0 && (acc0 !== "watch" || +e.watch > 0 || +e.watch2 > 0) ? acc0 : "";
   const hasW = +e.watch > 0 || +e.watch2 > 0;
   // until a watch time is in, pad and button that disagree both stay amber; after that amber = off the official time
   const odd = t => !acc && (!hasW ? far(pad, back) : off ? far(t, off) : far(pad, back));
@@ -1460,8 +1468,10 @@ async function getTimes(h, saved) {
       const b = document.querySelector(`[data-gettimes="${h}"]`); if (b) { b.disabled = false; b.textContent = "Get times"; }
       return;
     }
-    const lanes = r.lanes.map(l => ({lane: l.lane, pad: l.final || 0, backup: l.backup || 0, buttons: (l.buttons || []).filter(b => b > 0),
-      place: l.place, splits: l.splits, use: "auto", tol: TOL}));
+    const inH = evEntries(v.ptr).filter(e => !e.scr && e.heat === h);
+    const lanes = r.lanes.map(l => { const e = inH.find(x => x.lane === l.lane), ch = e && (S.time_ok || {})[e.key];
+      return {lane: l.lane, pad: l.final || 0, backup: l.backup || 0, buttons: (l.buttons || []).filter(b => b > 0),
+        place: l.place, splits: l.splits, use: ["pad", "backup", "watch"].includes(ch) ? ch : "auto", tol: TOL}; });
     const btn = document.querySelector(`[data-gettimes="${h}"]`); if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
     try {
       S = await api(`${API}/op`, J({op: "heat_results", args: {ptr: v.ptr, heat: h, overwrite: true, lanes, raw: r}}));
@@ -1678,7 +1688,7 @@ $("#wtTable").addEventListener("change", ev => {
   if (t.value.trim()) t.value = fmt(w);
   const k = t.dataset.wk, a = document.querySelector(`#wtTable [data-wk="${CSS.escape(k)}"][data-wn="1"]`).value,
     b = document.querySelector(`#wtTable [data-wk="${CSS.escape(k)}"][data-wn="2"]`).value;
-  change("watches", {key: k, t1_s: a, t2_s: b, tol: TOL});
+  change("watches", {key: k, t1_s: a, t2_s: b, tol: TOL, ...(["pad", "backup", "watch"].includes((S.time_ok || {})[k]) ? {use: S.time_ok[k]} : {})});
 });
 $("#wtBox").addEventListener("click", ev => {
   const ns = ev.target.closest("[data-wtns]");
@@ -1930,7 +1940,7 @@ document.addEventListener("change", async ev => {
   else if (d.wt) {
     const tr = ev.target.closest("tr"), a = tr.querySelector('[data-wt="1"]'), b = tr.querySelector('[data-wt="2"]');
     for (const x of [a, b]) { if (x.value.trim() && isNaN(parseTime(x.value))) return toast("That watch time isn't a time"); if (x.value.trim()) x.value = fmt(parseTime(x.value)); }
-    change("watches", {key: d.key, t1_s: a.value.trim(), t2_s: b.value.trim(), tol: TOL});
+    change("watches", {key: d.key, t1_s: a.value.trim(), t2_s: b.value.trim(), tol: TOL, ...(["pad", "backup", "watch"].includes((S.time_ok || {})[d.key]) ? {use: S.time_ok[d.key]} : {})});
   }
   else if (d.timer) {
     const e = M.entries.find(x => x.key === d.key);

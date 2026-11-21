@@ -263,38 +263,42 @@ class Publisher:
 
     def __init__(self):
         self.lock = threading.Lock()
+        self.running = threading.Lock()
         self.last = {}            # meet id -> time of last publish
         self.timer = {}
         self.status = {}          # meet id -> {ok, at, url | error}
 
     def request(self, mid: str, job, force=False):
+        """force (the Publish button): publish now and return the result. Otherwise it happens in the background -
+        whoever asked carries on straight away (scoring, accepting a time) and never waits on GitHub."""
         with self.lock:
             wait = 0 if force else max(0, self.last.get(mid, 0) + MIN_GAP - time.time())
             if mid in self.timer and not force:
                 return {"queued": True, "in": round(wait)}
             if mid in self.timer:
                 self.timer.pop(mid).cancel()
-            if wait <= 0:
-                return self._run(mid, job)
-            t = threading.Timer(wait, self._timed, (mid, job))
-            t.daemon = True
-            self.timer[mid] = t
-            t.start()
-            return {"queued": True, "in": round(wait)}
+            if not force:
+                t = threading.Timer(wait, self._timed, (mid, job))
+                t.daemon = True
+                self.timer[mid] = t
+                t.start()
+                return {"queued": True, "in": round(wait)}
+        return self._run(mid, job)
 
     def _timed(self, mid, job):
         with self.lock:
             self.timer.pop(mid, None)
-            self._run(mid, job)
+        self._run(mid, job)
 
     def _run(self, mid, job):
-        self.last[mid] = time.time()
-        try:
-            out = job()
-            self.status[mid] = {"ok": True, "at": time.strftime("%H:%M:%S"), "ts": time.time(), **out}
-        except Exception as e:
-            self.status[mid] = {"ok": False, "at": time.strftime("%H:%M:%S"), "error": str(e)}
-        return self.status[mid]
+        with self.running:              # one publish at a time; requests meanwhile don't wait for it
+            self.last[mid] = time.time()
+            try:
+                out = job()
+                self.status[mid] = {"ok": True, "at": time.strftime("%H:%M:%S"), "ts": time.time(), **out}
+            except Exception as e:
+                self.status[mid] = {"ok": False, "at": time.strftime("%H:%M:%S"), "error": str(e)}
+            return self.status[mid]
 
 
 PUBLISHER = Publisher()

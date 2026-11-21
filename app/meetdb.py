@@ -453,7 +453,9 @@ def op_watches(m, key, t1_s="", t2_s="", tol=0.30, use="auto"):
     back = (sum(round(b * 100) for b in btn) // len(btn)) / 100 if btn else 0
     if use not in ("pad", "backup", "watch"):
         use = pick_time(pad, back, watch, tol)
-    final = {"pad": pad, "backup": back, "watch": watch}[use] or pad or back or watch
+        final = {"pad": pad, "backup": back, "watch": watch}[use] or pad or back or watch
+    else:                               # chosen by hand: that time or nothing (timers picked before their watches are in)
+        final = {"pad": pad, "backup": back, "watch": watch}[use] or 0
     stat = (e.get("stat") or "").strip()
     if stat == "R" and final:
         stat = ""                       # had no time (no-show) - now it has one

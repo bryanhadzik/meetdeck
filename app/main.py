@@ -2873,7 +2873,7 @@ def db_time_ok(mid: str, body: dict):
     key, use = body.get("key"), body.get("use")
     mt = _meta(d)
     ok = dict(mt.get("time_ok") or {})
-    if use in ("pad", "backup"):
+    if use in ("pad", "backup", "watch"):
         db = _dbfile(d)
         m = meetdb.load(db)
         e = meetdb.find(m, key)
@@ -2882,10 +2882,13 @@ def db_time_ok(mid: str, body: dict):
         _snapshot(d, "before: " + msg)
         meetdb.apply(db, ops)
         ok[key] = use
-        _dblog(d, f"Accepted the {'pad' if use == 'pad' else 'backup button'}: " + msg.split(": ", 1)[0].replace("Watches for ", "")
+        if use == "watch" and key not in (mt.get("watch_ask") or []):     # on the next Watches needed print
+            mt["watch_ask"] = list(mt.get("watch_ask") or []) + [key]
+        _dblog(d, f"Using the {'pad' if use == 'pad' else 'backup button' if use == 'backup' else 'timers'}: " + msg.split(": ", 1)[0].replace("Watches for ", "")
                   + " - official " + (msg.split("official ", 1)[1] if "official " in msg else ""))
     else:
-        ok.pop(key, None)
+        if ok.pop(key, None) == "watch":
+            mt["watch_ask"] = [k for k in (mt.get("watch_ask") or []) if k != key]
     mt["time_ok"] = ok
     _save(d, mt)
     _public_auto(mid)

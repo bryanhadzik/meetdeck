@@ -49,9 +49,14 @@ def test_throttle(monkeypatch):
     monkeypatch.setattr(pr, "MIN_GAP", 0.3)
     p = pr.Publisher()
     runs = []
-    assert p.request("m", lambda: runs.append(1) or {"url": "u"})["ok"]
+    t = time.time()
+    q = p.request("m", lambda: time.sleep(0.2) or runs.append(1) or {"url": "u"})
+    assert q["queued"] and time.time() - t < 0.1                  # in the background: the caller doesn't wait
+    time.sleep(0.35)
+    assert runs == [1] and p.status["m"]["ok"]
     q = p.request("m", lambda: runs.append(2) or {"url": "u"})
     assert q["queued"] and runs == [1]
     p.request("m", lambda: runs.append(3) or {"url": "u"})      # folds into the queued one
     time.sleep(0.6)
     assert runs == [1, 2]
+    assert p.request("m", lambda: runs.append(4) or {"url": "u"}, force=True)["ok"] and runs[-1] == 4   # Publish button: now

@@ -1325,9 +1325,9 @@ async function pubStatus() {
     if (!p.token) { st.className = "badge no"; st.textContent = "not set up"; $("#pubMsg").innerHTML = `Add a GitHub token in <a href="/#setup">Setup &rarr; Phone results</a>.`; return; }
     st.className = "badge " + (p.last && !p.last.ok ? "no" : "ok");
     st.textContent = p.queued ? "update queued" : p.last ? (p.last.ok ? "published " + p.last.at : "failed") : p.auto ? "auto" : "manual";
-    $("#pubMsg").textContent = p.last && !p.last.ok ? p.last.error : p.queued ? "The next update goes out within a minute." : p.auto ? "Publishes by itself after each scored race." : "";
+    $("#pubMsg").textContent = p.last && !p.last.ok ? p.last.error : p.queued ? "The next update goes out within a minute." : p.auto ? (p.changed ? "Changes go out by themselves within a minute (results once the event is scored)." : "Publishes by itself: scored results, heats and scratches, within a minute.") : "";
     if (p.other_meet && !p.queued) staleMark("pub", true, p.live ? `Phones are showing another meet: ${p.live.name || "?"}${p.live.date ? " (" + p.live.date + ")" : ""}. Publish to switch them to this one.` : "");
-    else staleMark("pub", p.changed, "Something changed since the last publish (entries, heats, teams or results) - phones still show the old version. Press Publish now.");
+    else staleMark("pub", p.changed && !p.auto, "Something changed since the last publish (entries, heats, teams or scored results) - phones still show the old version. Press Publish now.");
     if (p.changed) { st.className = "badge warn"; st.textContent = "out of date"; }
     $("#pubArch").innerHTML = p.test ? "Test meet: no permanent copy is kept."
       : p.archive_url ? `Link for coaches (stays up after the next meet): <a href="${esc(p.archive_url)}" target="_blank" rel="noopener">${esc(p.archive_url.replace(/^https:\/\//, ""))}</a> <button class="ghost small" data-copyarch="${esc(p.archive_url)}">Copy</button>`

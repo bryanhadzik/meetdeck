@@ -3311,7 +3311,11 @@ def _public_doc(mid: str, stream: bool = True) -> dict:
     if not db.exists():
         raise HTTPException(400, "No meet database yet - open Run the meet first")
     _usc.refresh()
-    doc = public_results.build(meetdb.load(db), _dbinfo(d).get("scoring"), _usc if _settings().get("usc_on", True) else None)
+    m_ = meetdb.load(db)
+    sc_ = _dbinfo(d).get("scoring") or {}
+    sigs_ = sc_.get("sigs") or {}           # results go out once an event is scored (and unchanged since)
+    only = {v["ptr"] for v in m_["events"] if sigs_.get(str(v["ptr"])) and sigs_.get(str(v["ptr"])) == meetdb.event_sig(m_, v["ptr"])}
+    doc = public_results.build(m_, sc_, _usc if _settings().get("usc_on", True) else None, only=only)
     if stream:
         doc["stream"] = _stream_link()
         if doc["stream"] and doc["stream"].get("live"):          # the recording being made right now (replays from it
@@ -3532,6 +3536,31 @@ def _video_watch():
             print("video watch:", x)
 
 
+def _pub_watch():
+    """Every 45 s: if the meet on the phone page has changed (scored results, heats, scratches, entries), publish it -
+    no Publish button needed. Unscored results never go out, so entering times doesn't publish anything."""
+    while True:
+        time.sleep(45)
+        try:
+            st = _settings()
+            if not (st.get("public_auto") and st.get("public_token")):
+                continue
+            last = public_results.PUBLISHER.last
+            mid = max(last, key=last.get) if last and time.time() - max(last.values()) < 12 * 3600 else None
+            if not mid:                     # after a restart: the meet the phone page is showing
+                url = _pub_url(st)
+                mid = (public_results.live_meet(url) or {}).get("id") if url else None
+            if not mid or not _dir(mid).exists() or not _dbfile(_dir(mid)).exists():
+                continue
+            sent = _meta(_dir(mid)).get("pub_sig")
+            if sent and _doc_sig(_public_doc(mid, stream=False), PUB_VOLATILE) != sent:
+                print("phone results changed - publishing")
+                _public_auto(mid)
+        except Exception as x:
+            print("pub watch:", x)
+
+
+threading.Thread(target=_pub_watch, daemon=True).start()
 threading.Thread(target=_stream_watch, daemon=True).start()
 threading.Thread(target=_video_watch, daemon=True).start()
 

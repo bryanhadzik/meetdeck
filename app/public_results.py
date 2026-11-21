@@ -63,8 +63,9 @@ def state_row(store, k, r) -> dict | None:
     return st
 
 
-def build(m: dict, scoring: dict | None = None, store=None) -> dict:
-    """results.json for the public page: meet, team scores and every event's results so far."""
+def build(m: dict, scoring: dict | None = None, store=None, only: set | None = None) -> dict:
+    """results.json for the public page: meet, team scores and every event's results so far.
+    only = the events whose results may go out (scored ones); the rest show their heats as if not swum yet."""
     meet = m["meet"]
     teams = m["teams"]
     names = {t.get("abbr", ""): t.get("name", "") for t in teams.values()}
@@ -72,7 +73,7 @@ def build(m: dict, scoring: dict | None = None, store=None) -> dict:
     with_rows = {v["ptr"]: rows for v, rows in results_mod._rows(m)}
     for v in m["events"]:
         every = with_rows.get(v["ptr"], [])
-        rows = [r for r in every if r["place"] or r["result"]]
+        rows = [r for r in every if r["place"] or r["result"]] if only is None or v["ptr"] in only else []
         k = _ev_key(v) if store else None
         out = []
         for r in rows:

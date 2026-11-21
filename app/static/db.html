@@ -25,6 +25,7 @@ section{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 .shrO{padding:0!important;border:0!important;background:transparent!important;margin-bottom:0!important}
 .shr > :first-child{font-size:12.5px}
 .shr > :first-child button:not(.shrBtn), .shr > :first-child a, .shr > :first-child label, .shr > :first-child select{display:none!important}
+#wtBox.wtPend{background:var(--warn-bg)!important;border:1px solid var(--warn)!important}
 .shrBtn{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;font-size:12px;line-height:1;padding:3px 7px;cursor:pointer;margin-left:6px}
 /* one line that folds every status box at the top of Run the meet */
 .topstrip{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 10px;margin-bottom:8px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:12.5px;cursor:pointer;user-select:none}
@@ -1703,7 +1704,9 @@ function wtShow() {
   const rows = WT.keys.map(k => M.entries.find(e => e.key === k)).filter(Boolean);
   box.classList.toggle("hidden", !rows.length);
   if (!rows.length) return;
-  $("#wtSub").textContent = `${WT.printed && WT.printed !== "-" ? "sheet printed " + WT.printed : "waiting for watch times"} · ${rows.length} lane${rows.length > 1 ? "s" : ""}`;
+  const pend = rows.filter(e => !(+e.watch > 0 || +e.watch2 > 0) && (e.stat || "").trim() !== "R").length;
+  box.classList.toggle("wtPend", pend > 0);
+  $("#wtSub").innerHTML = `${pend ? `<b style="color:var(--warn)">${pend} waiting for watch times</b> · ` : "all entered · "}${esc(WT.printed && WT.printed !== "-" ? "sheet printed " + WT.printed : "")}${WT.printed && WT.printed !== "-" ? " · " : ""}${rows.length} lane${rows.length > 1 ? "s" : ""}`;
   const ae = document.activeElement, focus = ae && ae.dataset && ae.dataset.wk ? ae.dataset.wk + "|" + ae.dataset.wn : "", typing = focus ? ae.value : null;
   const rescore = new Set();
   let last = null;
@@ -2126,7 +2129,8 @@ fetch("/api/version").then(r => r.json()).then(v => { const t = document.getElem
 /* shrink / expand the boxes at the top of Run the meet; remembered on this computer */
 (function () {
   const BOXES = [["#mbBox", "mb"], ["#pubBox", "pub"], ["#timing", "tm"], ["#wtBox", "wt"], ["#lastMin > div", "lm"]];
-  const get = k => { try { return localStorage.getItem("shr-" + k) === "1"; } catch (e) { return false; } };
+  const DEF = {wt: true};       // Enter watch times starts shrunk (amber while lanes are still waiting)
+  const get = k => { try { const v = localStorage.getItem("shr-" + k); return v === null ? !!DEF[k] : v === "1"; } catch (e) { return !!DEF[k]; } };
   const set = (k, v) => { try { localStorage.setItem("shr-" + k, v ? "1" : "0"); } catch (e) {} };
   function apply() {
     BOXES.forEach(([sel, k]) => {

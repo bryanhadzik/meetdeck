@@ -29,6 +29,7 @@ section{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 .mmev{display:flex;flex-wrap:wrap;gap:4px}.mmev span{font-size:12px;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);cursor:default;white-space:nowrap}
 .mmev span.sent{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}.mmev span.changed,.mmev span.waiting{background:var(--warn-bg);color:var(--warn);border-color:var(--warn);cursor:pointer}
 .mmev span.err{background:var(--err-bg);color:var(--err);border-color:var(--err);cursor:pointer}.mmev span.sent{cursor:pointer}
+td.seedc,th.seedc{padding-right:22px!important;border-right:2px solid var(--line)}td.seedc+td,th.seedc+th{padding-left:22px!important}
 .shrBtn{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;font-size:12px;line-height:1;padding:3px 7px;cursor:pointer;margin-left:6px}
 /* one line that folds every status box at the top of Run the meet */
 .topstrip{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 10px;margin-bottom:8px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:12.5px;cursor:pointer;user-select:none}
@@ -1036,7 +1037,7 @@ function renderEvent() {
   const grip = e => MOVING && !e.scr ? `<span class="grip" title="Drag to another lane or heat">&#10303;</span>` : "";
   const row = (e, lane, h) => !e ? `<tr class="empty"${dto(h, lane)}><td class="ln">${lane}</td><td colspan="${MOVING ? 14 : 13}" class="muted">${MOVING ? "empty &middot; drop here" : "empty"}</td></tr>` :
     `<tr class="${e.scr ? "scr" : relayIssues(e).length ? "relaybad" : ""}"${MOVING && !e.scr ? ` draggable="true" data-dkey="${e.key}"` : ""}${e.scr ? "" : dto(e.heat, e.lane <= lanes ? e.lane : 0)}><td class="ln">${grip(e)}${e.lane || ""}</td><td class="nm">${nameCell(e)}${e.exh ? ' <span class="badge">exh</span>' : ""}${recBadge(e)}</td><td>${esc(teamAbbr(e.team))}</td>
-      <td><input class="t" data-seed="${e.key}" value="${esc(fmt(e.seed) || "NT")}" title="Seed time"></td>
+      <td class="seedc"><input class="t" data-seed="${e.key}" value="${esc(fmt(e.seed) || "NT")}" title="Seed time"></td>
       ${MOVING ? `<td style="white-space:nowrap">${e.scr ? "" : hsel(e) + " " + lsel(e)}</td>` : ""}
       ${e.scr ? '<td colspan="6"></td>' : timerCells(e)}
       <td class="plc" data-plc="${e.key}">${e.place || ""} ${(e.stat || "").trim() === "R" ? statBadge(e) : ""}</td>
@@ -1046,7 +1047,7 @@ function renderEvent() {
       <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}" title="Change the relay's swimmers">Legs</button> ` : ""}${e.scr ? `<button class="ghost small" data-scr="${e.key}" data-on="0" data-tip="${TIP.putback}">Put back</button>`
         : S.started ? ""
         : `<button class="ghost small" data-scr="${e.key}" data-on="1" data-tip="${TIP.drop}">Drop</button>`}</td></tr>`;
-  const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th>Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>Pad</th><th>Button</th><th>Timer 1</th><th>Timer 2</th><th>Official time</th><th>Source</th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
+  const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th class="seedc">Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>Pad</th><th>Button</th><th>Timer 1</th><th>Timer 2</th><th>Official time</th><th>Source</th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
   const unseeded = act.filter(e => !e.heat || !e.lane);
   let html = `<div class="row" style="justify-content:flex-end;margin-bottom:6px;font-size:13px"><label>Timers per lane <select id="timersSel" title="How many timers work each lane at this meet"><option value="1" ${TIMERS() === 1 ? "selected" : ""}>1 timer</option><option value="2" ${TIMERS() === 2 ? "selected" : ""}>2 timers</option></select></label></div>
     <div class="row evhead" style="margin-bottom:4px"><h2 style="margin:0">Event ${v.no} &nbsp;${esc(v.label)}</h2><span class="pill ${eventState(v).status}">${eventState(v).label}</span><span class="muted">${act.length} entered${scr.length ? ` · ${scr.length} scratched` : ""}${v.day > 1 ? ` · day ${v.day}` : ""}</span>

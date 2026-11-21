@@ -1038,7 +1038,7 @@ function renderEvent() {
   const grip = e => MOVING && !e.scr ? `<span class="grip" title="Drag to another lane or heat">&#10303;</span>` : "";
   const row = (e, lane, h) => !e ? `<tr class="empty"${dto(h, lane)}><td class="ln">${lane}</td><td colspan="${MOVING ? 14 : 13}" class="muted">${MOVING ? "empty &middot; drop here" : "empty"}</td></tr>` :
     `<tr class="${e.scr ? "scr" : relayIssues(e).length ? "relaybad" : ""}"${MOVING && !e.scr ? ` draggable="true" data-dkey="${e.key}"` : ""}${e.scr ? "" : dto(e.heat, e.lane <= lanes ? e.lane : 0)}><td class="ln">${grip(e)}${e.lane || ""}</td><td class="nm">${nameCell(e)}${e.exh ? ' <span class="badge">exh</span>' : ""}${recBadge(e)}</td><td>${esc(teamAbbr(e.team))}</td>
-      <td class="seedc"><input class="t" data-seed="${e.key}" value="${esc(fmt(e.seed) || "NT")}" title="Seed time"></td>
+      <td class="seedc mono" style="text-align:right;white-space:nowrap" title="Seed time (change seeds in Set up meet)">${esc(fmt(e.seed) || "NT")}</td>
       ${MOVING ? `<td style="white-space:nowrap">${e.scr ? "" : hsel(e) + " " + lsel(e)}</td>` : ""}
       ${e.scr ? '<td colspan="6"></td>' : timerCells(e)}
       <td class="plc" data-plc="${e.key}">${e.place || ""} ${(e.stat || "").trim() === "R" ? statBadge(e) : ""}</td>

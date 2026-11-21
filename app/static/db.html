@@ -1012,14 +1012,33 @@ function timerCells(e) {
   const outTip = t => settled ? `Not used: ${(Math.abs(t - off)).toFixed(2)} s off the official time, which ${srcs.filter(x => !far(x, off)).length} of the times agree on`
     : `Not used: ${(Math.abs(t - off)).toFixed(2)} s off the official time (this lane has a pad and a button time, so the watches are only a check)`;
   const OUT = ";color:var(--muted);opacity:.6";
+  // hover pop-up for a greyed time: every time grouped - the ones that agree with the official time, then the odd
+  // one(s) out with how far off and what that usually means
+  const srcName = {Pad: "the pad", Button: "the backup button", Timers: "the timers' watches", Manual: "a time typed in"}[usedSource(e)] || "the usual rule";
+  const all = [["Pad", pad, "pad"], [btn.length > 1 ? "Buttons (avg)" : "Button", back, "button"], ["Timer 1", +e.watch || 0, "watch"], ["Timer 2", +e.watch2 || 0, "watch"]].filter(x => x[1] > 0);
+  const why = (name, t, kind) => {
+    const d = t - off, a = Math.abs(d).toFixed(2);
+    if (kind === "pad") return d > 0 ? `${a} s slower: usually a soft or missed touch on the pad, so it caught a later touch` : `${a} s faster: usually the pad was set off early - a splash, a wave or the swimmer in the next lane`;
+    if (kind === "button") return d > 0 ? `${a} s slower: the button was pushed late` : `${a} s faster: the button was pushed early`;
+    return `${a} s ${d > 0 ? "slower" : "faster"}: a slow ${d > 0 ? "stop" : "start"} on the watch`;
+  };
+  const row = (name, t, extra, col) => `<tr><td style="padding:1px 10px 1px 0">${name}</td><td style="text-align:right;font-family:ui-monospace,monospace;padding-right:10px">${fmt(t)}</td><td style="color:${col};font-size:12px">${extra}</td></tr>`;
+  const whyTip = () => {
+    const good = all.filter(x => !far(x[1], off)), bad = all.filter(x => far(x[1], off));
+    const sd = x => { const d = x[1] - off; return Math.abs(d) < 0.005 ? "used" : `${d > 0 ? "+" : "\u2212"}${Math.abs(d).toFixed(2)}`; };
+    return `<div style="font-weight:700;margin-bottom:4px">Official time ${fmt(off)} <span style="font-weight:400;opacity:.8">from ${srcName}</span></div>` +
+      `<div style="font-size:11.5px;opacity:.75;margin:4px 0 2px">AGREE (within ${tol.toFixed(2)} s)</div><table>${good.map(x => row(x[0], x[1], sd(x), "#8fd9a8")).join("")}</table>` +
+      (bad.length ? `<div style="font-size:11.5px;opacity:.75;margin:6px 0 2px">NOT USED</div><table>${bad.map(x => row(x[0], x[1], why(...x), "#f5c26b")).join("")}</table>` : "") +
+      `<div style="margin-top:6px;font-size:12px;opacity:.85">${good.length >= 2 ? `${good.map(x => x[0]).join(" and ")} agree, so that time is used and ${bad.map(x => x[0]).join(" and ") || "nothing"} ${bad.length > 1 ? "are" : "is"} left out.` : "The watches are only a check here: this lane has a pad and a button time."}</div>`;
+  };
   // pad / button: click one to accept it as the official time (click again to undo)
   const ro = (t, title, warn, which) => {
     const on = acc === which, can = t && pad && back && far(pad, back);
     const ign = !on && outl(t);
     return `<td class="mono${can || on ? " accpick" : ""}" ${can || on ? `data-accept="${e.key}" data-use="${on ? "" : which}"` : ""} style="text-align:right;white-space:nowrap${warn ? ";color:var(--warn);font-weight:600" : ""}${ign ? OUT : ""}${on ? ";color:var(--ok);font-weight:700" : ""}"
-      title="${esc(title)}${ign ? " - " + esc(outTip(t)) : ""}${on ? " - accepted as the official time (click to undo)" : can ? " - click to accept this as the official time" : ""}">${on ? "&#10004; " : ""}${t ? esc(fmt(t)) : '<span class="muted">&ndash;</span>'}</td>`;
+      ${ign ? `data-tip="${esc(whyTip())}"` : ""} title="${ign ? "" : esc(title)}${on ? " - accepted as the official time (click to undo)" : can ? " - click to accept this as the official time" : ""}">${on ? "&#10004; " : ""}${t ? esc(fmt(t)) : '<span class="muted">&ndash;</span>'}</td>`;
   };
-  const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" title="${wOut(+val) ? esc(outTip(+val)) + " - " : ""}Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)" style="width:72px${wOut(+val) ? OUT : !acc && far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
+  const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" ${wOut(+val) ? `data-tip="${esc(whyTip())}"` : `title="Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)"`} style="width:72px${wOut(+val) ? OUT : !acc && far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
   return ro(pad, "Pad (touchpad) time", odd(pad), "pad") +
     ro(back, btn.length > 1 ? "Backup buttons: " + btn.map(fmt).join(" / ") + " (average)" : "Backup button", odd(back), "backup") +
     w(1, e.watch) + `<td style="white-space:nowrap">${w(2, e.watch2).slice(4, -5)}${e.heat && e.lane ? " " + wAskBtn(e) : ""}</td>` +

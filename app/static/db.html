@@ -728,7 +728,7 @@ function renderEvents() {
       const extra = [st.bad ? `<b style="color:var(--err)" title="A relay has a scratched swimmer or an open leg">&#9888; relay</b>` : "", st.dq ? `${st.dq} DQ` : "", st.ns ? `${st.ns} NS` : ""].filter(Boolean).join(" · ");
       return `<button data-ev="${v.ptr}" class="${v.ptr === EV ? "on" : ""}" title="${esc(st.label)}${st.status === "timed" ? " - places set; points come from Meet Manager's scoring" : ""}">
         <b>${v.no}</b> ${esc(v.label)}
-        ${st.heats.length > 1 ? `<span class="hrow">${st.heats.map(x => `<i class="${x.cls}" data-goheat="${x.h}" title="Heat ${x.h}: ${x.r} of ${x.n} done - click to go to it"></i>`).join("")}</span>` : ""}
+        ${st.heats.length ? `<span class="hrow">${st.heats.map(x => `<i class="${x.cls}" data-goheat="${x.h}" title="Heat ${x.h}: ${x.r} of ${x.n} done - click to go to it"></i>`).join("")}</span>` : ""}
         <span class="st"><span class="pill ${st.status}">${st.label}</span>${extra ? `<span>${extra}</span>` : ""}</span></button>`;
     }).join("");
   $("#evlist").scrollTop = listTop;

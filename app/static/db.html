@@ -154,6 +154,9 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
   <button class="ghost small hidden" id="undoBtn" title="Undo the last change">Undo</button>
   <div class="menu hidden" id="printMenu"><button class="ghost small" id="printBtn">Print ▾</button>
     <div class="pop hidden" id="printPop">
+      <div class="prow hidden" id="dpRow" style="border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:4px"><span><b>Print now</b> <span class="muted" style="font-size:11px">(straight to the printer, no dialog)</span></span>
+        <select id="dpPrinter" title="The printer Print now sends to (remembered)" style="max-width:170px"></select>
+        <label style="font-size:12px;white-space:nowrap" title="How many copies Print now prints">&times; <input id="dpCopies" type="number" min="1" max="50" value="1" style="width:44px;font-size:12px"></label></div>
       <div class="prow"><span>Heat sheet</span><button class="small" data-pr="heatsheet">Print</button><button class="ghost small" data-pdf="heatsheet">PDF</button></div>
       <div class="prow"><span>Referee program</span><button class="small" data-pr="referee">Print</button><button class="ghost small" data-pdf="referee">PDF</button></div>
       <div class="prow"><span>Referee program v2 <span class="muted">(DQ + order of finish)</span></span><button class="small" data-pr="referee2">Print</button><button class="ghost small" data-pdf="referee2">PDF</button></div>
@@ -449,6 +452,23 @@ document.addEventListener("click", async e => {
     catch (x) { toast("Not re-seeded: " + x.message); }
   }
 });
+// direct printing (Windows PC with the bundled SumatraPDF): a "Print now" button next to each report's Print
+async function dpSetup() {
+  try {
+    const r = await (await fetch("/api/printers")).json();
+    if (!r.available || !r.printers.length) return;
+    const sel = $("#dpPrinter");
+    sel.innerHTML = r.printers.map(p => `<option value="${esc(p.name)}" ${(r.chosen ? p.name === r.chosen : p.default) ? "selected" : ""}>${esc(p.name)}${p.default ? " (default)" : ""}${p.offline ? " - offline" : ""}</option>`).join("");
+    $("#dpRow").classList.remove("hidden");
+    document.querySelectorAll("#printPop button[data-pr]").forEach(b => {
+      if (b.nextElementSibling && b.nextElementSibling.dataset.dp) return;
+      b.textContent = "Print…"; b.title = "Open the browser's print dialog";
+      b.classList.add("ghost");
+      b.insertAdjacentHTML("beforebegin", `<button class="small" data-dp="${b.dataset.pr}" title="Print straight to the printer chosen above">Print now</button>`);
+    });
+  } catch (e) {}
+}
+setTimeout(dpSetup, 800);
 function printPdf(url) {
   // load the PDF in a hidden frame and open the browser's print dialog for it
   toast("Preparing to print…");
@@ -899,7 +919,11 @@ function timerCells(e) {
   const settled = off > 0 && srcs.filter(t => !far(t, off)).length >= 2;
   const odd = t => odd0(t) && !settled;
   const outl = t => t > 0 && off > 0 && settled && far(t, off);
-  const outTip = t => `Not used: ${(Math.abs(t - off)).toFixed(2)} s off the official time, which ${srcs.filter(x => !far(x, off)).length} of the times agree on`;
+  // watches are only the backup to the backup: with both a pad and a button time, a watch that's off from the
+  // official time just means a slow timer - greyed, never amber
+  const wOut = t => t > 0 && off > 0 && far(t, off) && (settled || (pad > 0 && back > 0));
+  const outTip = t => settled ? `Not used: ${(Math.abs(t - off)).toFixed(2)} s off the official time, which ${srcs.filter(x => !far(x, off)).length} of the times agree on`
+    : `Not used: ${(Math.abs(t - off)).toFixed(2)} s off the official time (this lane has a pad and a button time, so the watches are only a check)`;
   const OUT = ";color:var(--muted);text-decoration:line-through;opacity:.75";
   // pad / button: click one to accept it as the official time (click again to undo)
   const ro = (t, title, warn, which) => {
@@ -908,7 +932,7 @@ function timerCells(e) {
     return `<td class="mono${can || on ? " accpick" : ""}" ${can || on ? `data-accept="${e.key}" data-use="${on ? "" : which}"` : ""} style="text-align:right;white-space:nowrap${warn ? ";color:var(--warn);font-weight:600" : ""}${ign ? OUT : ""}${on ? ";color:var(--ok);font-weight:700" : ""}"
       title="${esc(title)}${ign ? " - " + esc(outTip(t)) : ""}${on ? " - accepted as the official time (click to undo)" : can ? " - click to accept this as the official time" : ""}">${on ? "&#10004; " : ""}${t ? esc(fmt(t)) : '<span class="muted">&ndash;</span>'}</td>`;
   };
-  const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" title="${outl(+val) ? esc(outTip(+val)) + " - " : ""}Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)" style="width:72px${outl(+val) ? OUT : !acc && far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
+  const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" title="${wOut(+val) ? esc(outTip(+val)) + " - " : ""}Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)" style="width:72px${wOut(+val) ? OUT : !acc && far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
   return ro(pad, "Pad (touchpad) time", odd(pad), "pad") +
     ro(back, btn.length > 1 ? "Backup buttons: " + btn.map(fmt).join(" / ") + " (average)" : "Backup button", odd(back), "backup") +
     w(1, e.watch) + `<td style="white-space:nowrap">${w(2, e.watch2).slice(4, -5)}${e.heat && e.lane ? " " + wAskBtn(e) : ""}</td>` +
@@ -1945,6 +1969,17 @@ document.addEventListener("click", async ev => {
   if (ev.target.closest("#moreBtn")) { $("#morePop").classList.toggle("hidden"); return; }
   if (ev.target.id === "finishBtn") { ev.preventDefault(); try { localStorage.setItem("meet", MID); } catch (x) {} location.href = "/?meet=" + encodeURIComponent(MID) + "#send"; return; }
   if (ev.target.id === "printBtn") { $("#printPop").classList.toggle("hidden"); $("#exportPop").classList.add("hidden"); return; }
+  if (d.dp) {
+    const kind = d.dp, lane = kind === "timer" && $("#prLane").value ? +$("#prLane").value : 0;
+    const copies = Math.max(1, Math.min(50, +$("#dpCopies").value || 1)), printer = $("#dpPrinter").value;
+    $("#printPop").classList.add("hidden");
+    toast(`Printing ${copies > 1 ? copies + " copies" : ""}…`);
+    try {
+      const r = await api(`${API}/print/${kind}`, J({copies, printer, lane}));
+      toast(`Sent to ${r.printer}${r.copies > 1 ? ` (${r.copies} copies)` : ""}`);
+    } catch (x) { toast(x.message); }
+    return;
+  }
   if (d.pr || d.pdf) {
     const kind = d.pr || d.pdf, lane = kind === "timer" && $("#prLane").value ? `?lane=${$("#prLane").value}` : "";
     const url = `${API}/report/${kind}.pdf${lane}`;

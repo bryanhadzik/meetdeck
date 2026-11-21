@@ -31,6 +31,9 @@ cp -r app/rules_seed "$B/MeetDeck/app/rules_seed"     # official rules documents
 mkdir -p "$B/MeetDeck/app/timing" && cp timing/*.py timing/README.txt "timing/Console emulator.bat" "$B/MeetDeck/app/timing/"
 cp windows/launcher.py "$B/MeetDeck/app/launcher.py"
 mkdir -p "$B/MeetDeck/app/tools" && cp windows/MeetDeck-Launcher.ps1 "$B/MeetDeck/app/tools/"
+# SumatraPDF (free, GPLv3) for MeetDeck's "Print now": silent printing straight to the printer
+[ -f windows/cache/sumatra.zip ] || curl -sSfL -o windows/cache/sumatra.zip https://www.sumatrapdfreader.org/dl/rel/3.5.2/SumatraPDF-3.5.2.zip
+python3 -c "import zipfile,sys;z=zipfile.ZipFile(sys.argv[1]);n=[i for i in z.namelist() if i.lower().endswith('.exe')][0];open(sys.argv[2],'wb').write(z.read(n))" windows/cache/sumatra.zip "$B/MeetDeck/app/tools/SumatraPDF.exe"
 # "MeetDeck Launcher.exe": a tiny stub with the MeetDeck icon that opens the launcher script
 # (source: windows/launcher-exe/launcher.c). Updates carry it in app/tools; the launcher copies it to the root.
 cp "windows/launcher-exe/MeetDeck Launcher.exe" "$B/MeetDeck/MeetDeck Launcher.exe"

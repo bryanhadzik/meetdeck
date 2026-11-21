@@ -3889,6 +3889,36 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'{disp}; filename="{name}"'})
 
 
+# ---- direct printing: straight to the Windows printer, no browser or print dialog ---------
+import printing  # noqa: E402
+
+
+@app.get("/api/printers")
+def printers_list():
+    st = _settings()
+    ps = printing.printers()
+    return {"available": printing.available(), "printers": ps, "chosen": st.get("print_printer") or ""}
+
+
+@app.post("/api/meets/{mid}/db/print/{kind}")
+def db_print(mid: str, kind: str, body: dict):
+    """Print a report straight to the printer: {copies, printer, lane}. The printer choice is remembered."""
+    copies = max(1, min(50, int(body.get("copies") or 1)))
+    printer = (body.get("printer") or "").strip()
+    st = _settings()
+    if printer != st.get("print_printer", ""):
+        st["print_printer"] = printer
+        _write_settings(st)
+    r = db_report(mid, kind, 0, int(body.get("lane") or 0))
+    name = re.search(r'filename="([^"]+)"', r.headers.get("content-disposition", ""))
+    try:
+        out = printing.print_pdf(r.body, printer, copies, name.group(1)[:-4] if name else kind)
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    _dblog(_dir(mid), f"Printed {name.group(1)[:-4] if name else kind} x{copies} on {out['printer']}", "print")
+    return out
+
+
 # ---- send results: every file that goes out after the meet ---------------------------------
 def _fmr(d: Path):
     """The signed Final Meet Report the user added to the meet's documents (scan / photo / PDF)."""

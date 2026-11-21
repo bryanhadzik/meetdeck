@@ -3566,6 +3566,14 @@ def mm_action(mid: str, body: dict):
         mm = _mm_get(d)
         mm["auto"] = bool(body["auto"])
         _mm_put(d, mm)
+    if "meet_id" in body:          # link this meet to one already on Meet Mobile (e.g. published from Meet Manager)
+        v = str(body.get("meet_id") or "").strip()
+        if v and not v.isdigit():
+            raise HTTPException(400, "The Meet Mobile meet number is digits only")
+        mm = _mm_get(d)
+        if v != mm.get("meet_id", ""):
+            mm.update(meet_id=v, events={}, base_sig="", base_at="")
+        _mm_put(d, mm)
     a = body.get("action")
     res = {}
     if a == "start":

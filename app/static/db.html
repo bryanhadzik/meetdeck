@@ -215,6 +215,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
     <div id="mmForm" class="hidden" style="margin-top:8px;font-size:13px"><div class="row" style="gap:8px">
       <label>License name <input id="mmLic" size="24" placeholder="as in Meet Manager"></label>
       <label>App token <input id="mmTok" type="password" size="28" placeholder="from the Meet Manager upload" autocomplete="off"></label>
+      <label title="Only to update a meet that's already on Meet Mobile (published from Meet Manager): its number. Leave empty for a new one.">Meet Mobile meet # <input id="mmMeet" size="9" inputmode="numeric" placeholder="new meet"></label>
       <button class="small" id="mmSave">Save</button></div>
       <div class="muted" style="font-size:12px;margin-top:4px">The token comes from Meet Manager's own Meet Mobile upload and stays on this PC only.</div></div>
     <div id="mmMsg" class="muted" style="font-size:12.5px;margin-top:4px"></div>
@@ -510,6 +511,7 @@ function mmShow() {
   $("#mmSend").classList.toggle("hidden", !MM.meet_id);
   $("#mmForm").classList.toggle("hidden", MM.configured && !MM._form);
   if (!$("#mmLic").value) $("#mmLic").value = MM.license || "";
+  if (document.activeElement !== $("#mmMeet")) $("#mmMeet").value = MM.meet_id || "";
   $("#mmMsg").textContent = MM.base_err ? "Last try: " + MM.base_err : "";
   const tip = x => ({sent: `Published ${x.at} - click to send again`, changed: "Results changed since it was sent - click to send now",
     waiting: "Scored, not sent yet - click to send now", err: `Failed: ${x.err} - click to try again`, none: "Not scored yet"}[x.state]);
@@ -531,7 +533,11 @@ $("#mmAuto").onchange = ev => mmAct({auto: ev.target.checked});
 $("#mmSetup").onclick = () => { if (MM) { MM._form = !MM._form; mmShow(); } };
 $("#mmSave").onclick = async () => {
   const body = {license: $("#mmLic").value.trim()}; if ($("#mmTok").value.trim()) body.token = $("#mmTok").value.trim();
-  try { await api("/api/meetmobile/settings", J(body)); $("#mmTok").value = ""; toast("Meet Mobile set up"); if (MM) MM._form = false; mmLoad(); } catch (x) { toast(x.message); }
+  try {
+    await api("/api/meetmobile/settings", J(body)); $("#mmTok").value = "";
+    if ($("#mmMeet").value.trim() !== (MM && MM.meet_id || "")) await api(`/api/meets/${MID}/meetmobile`, J({meet_id: $("#mmMeet").value.trim()}));
+    toast("Meet Mobile set up"); if (MM) MM._form = false; mmLoad();
+  } catch (x) { toast(x.message); }
 };
 $("#mmEvents").addEventListener("click", ev => { const c = ev.target.closest("[data-mmev]"); if (c) mmAct({action: "event", ptr: +c.dataset.mmev}); });
 setTimeout(mmLoad, 1200);

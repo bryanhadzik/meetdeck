@@ -26,6 +26,20 @@ section{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 .shr > :first-child{font-size:12.5px}
 .shr > :first-child button:not(.shrBtn), .shr > :first-child a, .shr > :first-child label, .shr > :first-child select{display:none!important}
 #wtBox.wtPend{background:var(--warn-bg)!important;border:1px solid var(--warn)!important}
+#exBox.exPend{background:var(--warn-bg)!important;border:1px solid var(--warn)!important}
+#exTable table{font-size:16px;border-collapse:separate;border-spacing:0 10px;width:100%}
+#exTable td{padding:8px 8px;vertical-align:middle;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+#exTable td:first-child{border-left:1px solid var(--line);border-radius:8px 0 0 8px}
+#exTable td:last-child{border-right:1px solid var(--line);border-radius:0 8px 8px 0}
+#exTable th{font-size:12px;text-align:left;color:var(--muted);font-weight:600;padding:0 8px}
+#exTable .xt{display:inline-block;min-width:84px;text-align:right;font-family:ui-monospace,monospace;font-size:17px;padding:6px 9px;border-radius:7px;border:2px solid transparent}
+#exTable .xt.ag{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+#exTable .xt.no{background:var(--err-bg);color:var(--err);border-color:var(--err);font-weight:700}
+#exTable .xt.na{color:var(--muted);border:2px dashed var(--line)}
+#exTable .xt.of{border-color:var(--ink);font-weight:700}
+#exTable .xt .xl{display:block;font-size:10.5px;font-family:inherit;font-weight:600;opacity:.75;text-align:left}
+#exTable .why{font-size:13.5px;line-height:1.45;max-width:300px}
+#exTable tr.acked td{opacity:.55}
 .mmev{display:flex;flex-wrap:wrap;gap:4px}.mmev span{font-size:12px;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);cursor:default;white-space:nowrap}
 .mmev span.sent{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}.mmev span.changed,.mmev span.waiting{background:var(--warn-bg);color:var(--warn);border-color:var(--warn);cursor:pointer}
 .mmev span.err{background:var(--err-bg);color:var(--err);border-color:var(--err);cursor:pointer}.mmev span.sent{cursor:pointer}
@@ -249,6 +263,13 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
               <div id="tmDbgBody"></div>
             </div>
           </div></section>
+  <section id="exBox" class="hidden" style="margin-bottom:14px"><div class="row"><b>Exceptions</b><span class="muted" id="exSub" style="font-size:12.5px"></span>
+      <span class="grow"></span><label style="font-size:12.5px"><input type="checkbox" id="exAll"> show checked ones</label></div>
+    <div class="muted" style="font-size:12.5px;margin:4px 0 2px">Lanes where something looks off. Each time is compared with the official time:
+      <span style="background:var(--ok-bg);color:var(--ok);padding:0 5px;border-radius:4px;font-weight:600">agrees</span> (within the tolerance),
+      <span style="background:var(--err-bg);color:var(--err);padding:0 5px;border-radius:4px;font-weight:600">doesn't agree</span>, dashed = missing.
+      <b>Checked</b> takes a lane off the list until one of its times changes; <b>Timer sheet</b> puts it on the next Watches needed print.</div>
+    <div id="exTable" class="scroll"></div></section>
   <section id="wtBox" class="hidden" style="margin-bottom:14px"><div class="row"><b>Enter watch times</b><span class="muted" id="wtSub" style="font-size:12.5px"></span>
       <span class="grow"></span><span id="wtRescore"></span><button class="ghost small" id="wtDone" title="Take this list away (print Watches needed again for a new one)">Done with this sheet</button></div>
     <div class="muted" style="font-size:12.5px;margin:4px 0 6px">Same order as the printed sheet. Type each watch as digits (2:17.53 = 21753) and Tab on. MeetDeck keeps both watches and picks the official
@@ -415,6 +436,7 @@ function show() {
   $("#undoBtn").title = S.versions.length ? "Undo: " + (S.versions[0].label || "").replace(/^before: /, "") : "Nothing to undo";
   mbShow(); mbWatch();
   wtShow();
+  exShow();
   lastMinShow();
   missingTeamsShow();
   $("#problems").innerHTML = dateGapStrip() + recordsStrip() + scoreStrip() + (S.problems.length ? `<div class="issue"><b>Check:</b> ${S.problems.map(esc).join(" &middot; ")}</div>` : "") + laneGapWarning() + buttonMissWarning() + dupRaceWarning();
@@ -509,6 +531,7 @@ async function ccLoad() {
   let r; try { r = await api(`/api/meets/${MID}/console_check`); } catch (e) { return; }
   CC = r.heats || {};
   document.querySelectorAll("[data-cc]").forEach(x => { const [p, h] = x.dataset.cc.split(":"); x.innerHTML = ccChip(+p, +h); });
+  exShow();
 }
 setInterval(() => { if (!document.hidden) ccLoad(); }, 15000);
 setTimeout(ccLoad, 1500);
@@ -1833,6 +1856,80 @@ document.addEventListener("click", async ev => {
   } catch (x) { alert(x.message); b.disabled = false; }
 });
 
+// ---------------- Exceptions: only the lanes whose times look off ----------------
+function exInfo(e) {
+  if (e.scr || !e.heat || !e.lane || ["R", "F", "D", "Q"].includes((e.stat || "").trim())) return null;
+  const pad = +e.pad || 0, btn = [e.backup, e.back2, e.back3].filter(x => +x > 0);
+  const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
+  const w1 = +e.watch || 0, w2 = +e.watch2 || 0, off = +e.time || 0;
+  if (!pad && !back && !w1 && !w2 && !off) return null;           // not swum yet
+  const base = off || pad || back || w1 || w2, tol = (TOL || 0.30) + 1e-6;
+  const items = [["Pad", pad], [btn.length > 1 ? "Buttons" : "Button", back], ["Watch 1", w1], ["Watch 2", w2]];
+  const why = [];
+  if (!off) why.push("No official time");
+  if (!pad && (back || w1 || w2)) why.push("No pad touch");
+  items.forEach(([n, t]) => { if (t && Math.abs(t - base) > tol) why.push(`${n} ${t > base ? "+" : "−"}${Math.abs(t - base).toFixed(2)} s from the ${off ? "official time" : "others"}`); });
+  const seed = +e.seed || 0;
+  if (off && seed && off < seed * 0.85) why.push(`${Math.round((1 - off / seed) * 100)}% faster than the seed (${fmt(seed)}) - an early touch?`);
+  const v = evOf(e.event) || {}, cc = CC[`${e.event}:${e.heat}`];
+  if (cc) cc.notes.filter(n => n.startsWith(`Lane ${e.lane}:`)).forEach(n => why.push("Console: " + n.replace(/^Lane \d+: /, "")));
+  if (!why.length) return null;
+  const sig = [pad, back, w1, w2, off].map(x => x.toFixed(2)).join("|");
+  const acc = (S.time_ok || {})[e.key];
+  const acked = !!acc || (S.exc_ack || {})[e.key] === sig;
+  return {e, v, pad, back, w1, w2, off, base, tol, items, why, sig, acked, acc};
+}
+function exShow() {
+  const box = $("#exBox"); if (!box || !M || !S) return;
+  const all = M.entries.map(exInfo).filter(Boolean);
+  const open = all.filter(x => !x.acked), showAll = $("#exAll").checked;
+  box.classList.toggle("hidden", !S.started && !all.length);
+  box.classList.toggle("exPend", open.length > 0);
+  const nAck = all.length - open.length;
+  $("#exSub").innerHTML = open.length ? `<b style="color:var(--warn)">${open.length} to check</b>${nAck ? ` · ${nAck} checked` : ""}` : all.length ? `none to check · ${nAck} checked` : "nothing looks off";
+  const rows = (showAll ? all : open).sort((a, b) => (a.v.order ? 0 : 0) || (a.v.no - b.v.no) || (a.e.heat - b.e.heat) || (a.e.lane - b.e.lane));
+  if (!rows.length) { $("#exTable").innerHTML = `<div class="muted" style="padding:10px 2px;font-size:15px">${all.length ? "Everything here has been checked." : "No lanes look off."}</div>`; return; }
+  const cell = (x, n, t, isOff) => {
+    const cls = !t ? "na" : isOff ? "xt of" : Math.abs(t - x.base) <= x.tol ? "ag" : "no";
+    return `<span class="xt ${cls}"><span class="xl">${n}</span>${t ? fmt(t) : "&ndash;"}</span>`;
+  };
+  const team = e => e.kind === "R" ? (M.teams[e.team] || {}).abbr : (M.teams[(M.athletes[e.ath] || {}).team] || {}).abbr;
+  $("#exTable").innerHTML = `<table><tr><th>Event / heat / lane</th><th>Swimmer</th><th>Pad</th><th>Button</th><th>Watch 1</th><th>Watch 2</th><th>Official</th><th>Why it's here</th><th></th></tr>` +
+    rows.map(x => {
+      const e = x.e, hasW = x.w1 || x.w2, asked = (S.watch_ask || []).includes(e.key);
+      const src = usedSource(e);
+      const sheet = hasW ? "" : asked
+        ? `<button class="ghost small" data-wask="${e.key}" data-on="0" style="color:var(--warn);border-color:var(--warn)" title="On the next Watches needed print - click to take it off">&#9201;&#10003; On timer sheet</button>`
+        : `<button class="ghost small" data-wask="${e.key}" data-on="1" title="Put this lane on the next Watches needed print so the timers' watch times get collected">&#9201; Timer sheet</button>`;
+      const ack = x.acc ? `<span class="muted" style="font-size:12px">accepted: ${esc(x.acc === "watch" ? "timers" : x.acc)}</span>`
+        : x.acked ? `<button class="ghost small" data-exack="${e.key}" data-on="0" title="Put it back on the list">Undo checked</button>`
+        : `<button class="small" data-exack="${e.key}" data-sig="${x.sig}" data-on="1" title="Looked at it and it's fine: take it off the list (it comes back if any of its times change)">&#10003; Checked</button>`;
+      return `<tr class="${x.acked ? "acked" : ""}"><td style="white-space:nowrap"><a href="#" data-exgo="${e.event}|${e.heat}" title="Go to this heat" style="font-size:17px;font-weight:700">E${x.v.no} &middot; H${e.heat} &middot; L${e.lane}</a><div class="muted" style="font-size:12px">${esc(x.v.label || "")}</div></td>
+        <td><b>${esc(wtWho(e))}</b><div class="muted" style="font-size:12.5px">${esc(team(e) || "")}${+e.seed ? " · seed " + fmt(+e.seed) : ""}</div></td>
+        <td>${cell(x, "PAD", x.pad)}</td><td>${cell(x, x.items[1][0].toUpperCase(), x.back)}</td><td>${cell(x, "WATCH 1", x.w1)}</td><td>${cell(x, "WATCH 2", x.w2)}</td>
+        <td>${cell(x, src ? "OFFICIAL · " + src.toUpperCase() : "OFFICIAL", x.off, true)}</td>
+        <td class="why">${x.why.map(esc).join("<br>")}</td>
+        <td style="white-space:nowrap;text-align:right">${ack}<div style="margin-top:6px">${sheet}</div></td></tr>`;
+    }).join("") + `</table>`;
+}
+$("#exAll").onchange = exShow;
+document.addEventListener("click", async ev => {
+  const g = ev.target.closest("[data-exgo]");
+  if (g) {
+    ev.preventDefault();
+    const [ptr, h] = g.dataset.exgo.split("|").map(Number);
+    EV = ptr; TAB = "events"; MOVING = false; render();
+    setTimeout(() => { const el = document.getElementById("heat-" + h); if (!el) return;
+      const hd = document.querySelector(".evhead"), offY = hd ? hd.getBoundingClientRect().height + 8 : 60;
+      window.scrollTo({top: el.getBoundingClientRect().top + scrollY - offY, behavior: "smooth"}); }, 60);
+    return;
+  }
+  const a = ev.target.closest("[data-exack]"); if (!a) return;
+  a.disabled = true;
+  try { S = await api(`${API}/exc-ack`, J({key: a.dataset.exack, sig: a.dataset.sig || "", on: a.dataset.on === "1"})); M = S.model || M; show(); }
+  catch (x) { toast(x.message); a.disabled = false; }
+});
+
 // ---------------- Enter watch times (the last printed Watches needed sheet) ----------------
 let WT = {printed: "", keys: []};
 async function wtLoad() { try { WT = await api(`${API}/watch-sheet`); } catch (e) { WT = {printed: "", keys: []}; } wtShow(); }
@@ -2284,8 +2381,8 @@ fetch("/api/version").then(r => r.json()).then(v => { const t = document.getElem
 })();
 /* shrink / expand the boxes at the top of Run the meet; remembered on this computer */
 (function () {
-  const BOXES = [["#mbBox", "mb"], ["#pubBox", "pub"], ["#mmBox", "mm"], ["#timing", "tm"], ["#wtBox", "wt"], ["#lastMin > div", "lm"]];
-  const DEF = {wt: true};       // Enter watch times starts shrunk (amber while lanes are still waiting)
+  const BOXES = [["#mbBox", "mb"], ["#exBox", "ex"], ["#pubBox", "pub"], ["#mmBox", "mm"], ["#timing", "tm"], ["#wtBox", "wt"], ["#lastMin > div", "lm"]];
+  const DEF = {wt: true, ex: true};       // Enter watch times starts shrunk (amber while lanes are still waiting)
   const get = k => { try { const v = localStorage.getItem("shr-" + k); return v === null ? !!DEF[k] : v === "1"; } catch (e) { return !!DEF[k]; } };
   const set = (k, v) => { try { localStorage.setItem("shr-" + k, v ? "1" : "0"); } catch (e) {} };
   function apply() {

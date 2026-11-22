@@ -2372,7 +2372,7 @@ def db_get(mid: str):
         print("records broken:", x)
         broken = []
     return {"exists": True, "started": _meet_started(m), "records_broken": broken, "test": _is_test(_meta(d)), "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
-            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "time_ok": _meta(d).get("time_ok") or {}, "record_watch": _record_watch(d, m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
+            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "exc_ack": _meta(d).get("exc_ack") or {}, "time_ok": _meta(d).get("time_ok") or {}, "record_watch": _record_watch(d, m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
             "scoring_methods": {k: {"name": c["name"], "ind_max": c["ind_max"], "rel_max": c["rel_max"]} for k, c in meetdb.SCORING.items()},
@@ -2892,6 +2892,25 @@ def db_time_ok(mid: str, body: dict):
     mt["time_ok"] = ok
     _save(d, mt)
     _public_auto(mid)
+    return db_get(mid)
+
+
+@app.post("/api/meets/{mid}/db/exc-ack")
+def db_exc_ack(mid: str, body: dict):
+    """Exceptions view: mark a lane's odd-looking times as checked (on) or bring it back (off). sig is the lane's
+    times when it was checked - if any of them change later, the lane shows up again."""
+    d = _dir(mid)
+    mt = _meta(d)
+    ack = dict(mt.get("exc_ack") or {})
+    key = str(body.get("key") or "")
+    if not key:
+        raise HTTPException(400, "key missing")
+    if body.get("on"):
+        ack[key] = str(body.get("sig") or "")
+    else:
+        ack.pop(key, None)
+    mt["exc_ack"] = ack
+    _save(d, mt)
     return db_get(mid)
 
 

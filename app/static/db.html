@@ -1865,10 +1865,10 @@ function exInfo(e) {
   if (!pad && !back && !w1 && !w2 && !off) return null;           // not swum yet
   const base = off || pad || back || w1 || w2, tol = (TOL || 0.30) + 1e-6;
   const items = [["Pad", pad], [btn.length > 1 ? "Buttons" : "Button", back], ["Watch 1", w1], ["Watch 2", w2]];
-  const why = [];
+  const why = [], offN = [];
   if (!off) why.push("No official time");
   if (!pad && (back || w1 || w2)) why.push("No pad touch");
-  items.forEach(([n, t]) => { if (t && Math.abs(t - base) > tol) why.push(`${n} ${t > base ? "+" : "−"}${Math.abs(t - base).toFixed(2)} s from the ${off ? "official time" : "others"}`); });
+  items.forEach(([n, t]) => { if (t && Math.abs(t - base) > tol) offN.push(n), why.push(`${n} ${t > base ? "+" : "−"}${Math.abs(t - base).toFixed(2)} s from the ${off ? "official time" : "others"}`); });
   const seed = +e.seed || 0;
   if (off && seed && off < seed * 0.85) why.push(`${Math.round((1 - off / seed) * 100)}% faster than the seed (${fmt(seed)}) - an early touch?`);
   const v = evOf(e.event) || {}, cc = CC[`${e.event}:${e.heat}`];
@@ -1876,8 +1876,11 @@ function exInfo(e) {
   if (!why.length) return null;
   const sig = [pad, back, w1, w2, off].map(x => x.toFixed(2)).join("|");
   const acc = (S.time_ok || {})[e.key];
-  const acked = !!acc || (S.exc_ack || {})[e.key] === sig;
-  return {e, v, pad, back, w1, w2, off, base, tol, items, why, sig, acked, acc};
+  // one watch off, but the pad and/or button agree with the other watch: a slow watch - checked by itself
+  const ok = t => t && Math.abs(t - base) <= tol;
+  const auto = off && offN.length === 1 && offN[0].startsWith("Watch") && why.length === 1 && (ok(pad) || ok(back)) && (ok(w1) || ok(w2));
+  const acked = !!acc || auto || (S.exc_ack || {})[e.key] === sig;
+  return {e, v, pad, back, w1, w2, off, base, tol, items, why, sig, acked, acc, auto};
 }
 function exShow() {
   const box = $("#exBox"); if (!box || !M || !S) return;
@@ -1901,7 +1904,7 @@ function exShow() {
       const sheet = hasW ? "" : asked
         ? `<button class="ghost small" data-wask="${e.key}" data-on="0" style="color:var(--warn);border-color:var(--warn)" title="On the next Watches needed print - click to take it off">&#9201;&#10003; On timer sheet</button>`
         : `<button class="ghost small" data-wask="${e.key}" data-on="1" title="Put this lane on the next Watches needed print so the timers' watch times get collected">&#9201; Timer sheet</button>`;
-      const ack = x.acc ? `<span class="muted" style="font-size:12px">accepted: ${esc(x.acc === "watch" ? "timers" : x.acc)}</span>`
+      const ack = x.auto ? `<span class="muted" style="font-size:12px" title="One watch is off, but the pad or button agrees with the other watch">auto-checked: one slow watch</span>` : x.acc ? `<span class="muted" style="font-size:12px">accepted: ${esc(x.acc === "watch" ? "timers" : x.acc)}</span>`
         : x.acked ? `<button class="ghost small" data-exack="${e.key}" data-on="0" title="Put it back on the list">Undo checked</button>`
         : `<button class="small" data-exack="${e.key}" data-sig="${x.sig}" data-on="1" title="Looked at it and it's fine: take it off the list (it comes back if any of its times change)">&#10003; Checked</button>`;
       return `<tr class="${x.acked ? "acked" : ""}"><td style="white-space:nowrap"><a href="#" data-exgo="${e.event}|${e.heat}" title="Go to this heat" style="font-size:17px;font-weight:700">E${x.v.no} &middot; H${e.heat} &middot; L${e.lane}</a><div class="muted" style="font-size:12px">${esc(x.v.label || "")}</div></td>

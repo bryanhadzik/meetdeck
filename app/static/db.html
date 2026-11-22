@@ -26,6 +26,9 @@ section{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 .shr > :first-child{font-size:12.5px}
 .shr > :first-child button:not(.shrBtn), .shr > :first-child a, .shr > :first-child label, .shr > :first-child select{display:none!important}
 #wtBox.wtPend{background:var(--warn-bg)!important;border:1px solid var(--warn)!important}
+.vidc{color:#2f6fb6;font-style:italic}
+.vidc.rough{opacity:.65}
+#exTable .xt.vd{color:#2f6fb6;border:2px dashed #7aa7dc;font-style:italic}
 #exBox.exPend{background:var(--warn-bg)!important;border:1px solid var(--warn)!important}
 #exTable table{font-size:16px;border-collapse:separate;border-spacing:0 10px;width:100%}
 #exTable td{padding:8px 8px;vertical-align:middle;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
@@ -1034,6 +1037,23 @@ document.addEventListener("click", async ev => {
   try { S = await api(`${API}/time-ok`, J({key: c.dataset.accept, use: c.dataset.use || null})); toast(c.dataset.use ? (S.log[0]?.msg || "Accepted") : "Acceptance taken away"); show(); wtLoad(); }
   catch (x) { toast(x.message); }
 });
+// Video verify: touch time read off the pool camera - shown for reference, never used for a time
+const hasVid = () => !!(S && S.video && Object.keys(S.video).length);
+const vidOf = e => (S && S.video || {})[e.key];
+function vidTipLine(e, base) {
+  const v = vidOf(e); if (!v || !v.t) return "";
+  const d = base ? v.t - base : 0;
+  return `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #3a4a5e;font-size:12px"><span style="color:#8cc4ff;font-weight:700">Video ${fmt(v.t)}</span>` +
+    (base ? ` <span style="opacity:.8">(${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(2)})</span>` : "") +
+    ` <span style="opacity:.7">- reference only, from the pool camera${v.conf === "rough" ? "; this lane is hard to see from the camera, so treat it as rough" : ""}</span>` +
+    (v.note ? `<div style="margin-top:3px">${esc(v.note)}</div>` : "") + `</div>`;
+}
+function vidCell(e, tipFn) {
+  const v = vidOf(e);
+  if (!v || !v.t) return `<td class="mono muted" style="text-align:right" title="No video time for this lane">&ndash;</td>`;
+  return `<td class="mono vidc${v.conf === "rough" ? " rough" : ""}" style="text-align:right;white-space:nowrap" data-tip="${esc(tipFn(null))}" data-tipdelay="600">` +
+    `${v.note ? "&#9673; " : ""}${esc(fmt(v.t))}</td>`;
+}
 function timerCells(e) {
   // every time the lane has, each in its own column (blank when there's none yet): pad, backup button, both
   // timers' watches (typed here - the official time then follows the same rule as Get times), the official time
@@ -1091,7 +1111,7 @@ function timerCells(e) {
     return `<div style="font-weight:700;margin-bottom:4px">${head}</div>` +
       (good.length ? `<div style="font-size:11.5px;opacity:.75;margin:4px 0 2px">AGREE (within ${tol.toFixed(2)} s)</div><table>${good.map(x => row(x[0], x[1], sd(x), "#8fd9a8")).join("")}</table>` : "") +
       (bad.length ? `<div style="font-size:11.5px;opacity:.75;margin:6px 0 2px">${off ? "NOT USED" : good.length ? "OFF" : "TIMES"}</div><table>${bad.map(x => row(x[0], x[1], base ? why(...x) : "", "#f5c26b")).join("")}</table>` : "") +
-      (note ? `<div style="margin-top:6px;font-size:12px;opacity:.9">${note}</div>` : "");
+      (note ? `<div style="margin-top:6px;font-size:12px;opacity:.9">${note}</div>` : "") + vidTipLine(e, base);
   };
 
   // pad / button: click one to accept it as the official time (click again to undo)
@@ -1106,6 +1126,7 @@ function timerCells(e) {
   return ro(pad, "Pad (touchpad) time", odd(pad), "pad") +
     ro(back, btn.length > 1 ? "Backup buttons: " + btn.map(fmt).join(" / ") + " (average)" : "Backup button", odd(back), "backup") +
     w(1, e.watch) + `<td style="white-space:nowrap">${w(2, e.watch2).slice(4, -5)}${e.heat && e.lane ? " " + wAskBtn(e) : ""}</td>` +
+    (hasVid() ? vidCell(e, whyTip) : "") +
     `<td style="white-space:nowrap"><input class="t" data-time="${e.key}" value="${esc(fmt(e.time))}" placeholder="time" ${e.time ? `data-tip="${esc(whyTip(null) + '<div style="margin-top:6px;font-size:12px;opacity:.75">Type a time here to override it.</div>')}" data-tipdelay="1000"` : 'title="Official time - type one in to override"'}></td><td style="white-space:nowrap">${usedBadge(e)}</td>`;
 }
 function renderEvent() {
@@ -1119,11 +1140,11 @@ function renderEvent() {
   // Move mode: drag a row onto any lane (an empty one, or another swimmer to swap); the selects still work
   const dto = (h, l) => MOVING && h && l ? ` data-dto="${h}|${l}"` : "";
   const grip = e => MOVING && !e.scr ? `<span class="grip" title="Drag to another lane or heat">&#10303;</span>` : "";
-  const row = (e, lane, h) => !e ? `<tr class="empty"${dto(h, lane)}><td class="ln">${lane}</td><td colspan="${MOVING ? 14 : 13}" class="muted">${MOVING ? "empty &middot; drop here" : "empty"}</td></tr>` :
+  const row = (e, lane, h) => !e ? `<tr class="empty"${dto(h, lane)}><td class="ln">${lane}</td><td colspan="${(MOVING ? 14 : 13) + (hasVid() ? 1 : 0)}" class="muted">${MOVING ? "empty &middot; drop here" : "empty"}</td></tr>` :
     `<tr class="${e.scr ? "scr" : relayIssues(e).length ? "relaybad" : ""}"${MOVING && !e.scr ? ` draggable="true" data-dkey="${e.key}"` : ""}${e.scr ? "" : dto(e.heat, e.lane <= lanes ? e.lane : 0)}><td class="ln">${grip(e)}${e.lane || ""}</td><td class="nm">${nameCell(e)}${e.exh ? ' <span class="badge">exh</span>' : ""}${recBadge(e)}</td><td>${esc(teamAbbr(e.team))}</td>
       <td class="seedc mono" style="text-align:right;white-space:nowrap" title="Seed time (change seeds in Set up meet)">${esc(fmt(e.seed) || "NT")}</td>
       ${MOVING ? `<td style="white-space:nowrap">${e.scr ? "" : hsel(e) + " " + lsel(e)}</td>` : ""}
-      ${e.scr ? '<td colspan="6"></td>' : timerCells(e)}
+      ${e.scr ? `<td colspan="${hasVid() ? 7 : 6}"></td>` : timerCells(e)}
       <td class="plc" data-plc="${e.key}">${e.place || ""} ${(e.stat || "").trim() === "R" ? statBadge(e) : ""}</td>
       <td class="st" style="white-space:nowrap">${e.scr ? "" : isDfs(e) ? `<span class="badge dq" data-tip="${TIP.dfs}">DFS</span> <button class="ghost small" data-undfs="${e.key}" data-tip="${TIP.undfs}">Undo DFS</button>` : (e.stat === "Q" || e.stat === "F" || e.stat === "D") ? `<span class="badge dq" title="${esc(dqText(e))}">DQ ${esc(e.dq || "?")}${e.dq2 ? " + " + esc(e.dq2) : ""}${e.stat === "F" || e.stat === "D" ? " · no time" : ""}</span> <button class="ghost small" data-dqedit="${e.key}">Change</button> <button class="ghost small" data-undq="${e.key}">Remove</button>`
         : `<label class="nsbox" data-tip="${TIP.noshow}"><input type="checkbox" data-stat="${e.key}" ${e.stat === "R" ? "checked" : ""}> No show</label> <button class="ghost small danger" data-dqedit="${e.key}" title="Disqualify">DQ</button>${e.time ? "" : ` <button class="ghost small" data-dfs="${e.key}" data-tip="${TIP.dfs}">DFS</button>`}`}
@@ -1131,7 +1152,7 @@ function renderEvent() {
       <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}" title="Change the relay's swimmers">Legs</button> ` : ""}${e.scr ? `<button class="ghost small" data-scr="${e.key}" data-on="0" data-tip="${TIP.putback}">Put back</button>`
         : S.started ? ""
         : `<button class="ghost small" data-scr="${e.key}" data-on="1" data-tip="${TIP.drop}">Drop</button>`}</td></tr>`;
-  const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th class="seedc">Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>Pad</th><th>Button</th><th>Timer 1</th><th>Timer 2</th><th>Official time</th><th>Source</th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
+  const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th class="seedc">Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>Pad</th><th>Button</th><th>Timer 1</th><th>Timer 2</th>${hasVid() ? '<th title="Touch time read off the pool camera - a reference only, it never changes a time">Video</th>' : ""}<th>Official time</th><th>Source</th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
   const unseeded = act.filter(e => !e.heat || !e.lane);
   let html = `<div class="row" style="justify-content:flex-end;margin-bottom:6px;font-size:13px"><label>Timers per lane <select id="timersSel" title="How many timers work each lane at this meet"><option value="1" ${TIMERS() === 1 ? "selected" : ""}>1 timer</option><option value="2" ${TIMERS() === 2 ? "selected" : ""}>2 timers</option></select></label></div>
     <div class="row evhead" style="margin-bottom:4px"><h2 style="margin:0">Event ${v.no} &nbsp;${esc(v.label)}</h2><span class="pill ${eventState(v).status}">${eventState(v).label}</span><span class="muted">${act.length} entered${scr.length ? ` · ${scr.length} scratched` : ""}${v.day > 1 ? ` · day ${v.day}` : ""}</span>
@@ -1897,7 +1918,7 @@ function exShow() {
     return `<span class="xt ${cls}"><span class="xl">${n}</span>${t ? fmt(t) : "&ndash;"}</span>`;
   };
   const team = e => e.kind === "R" ? (M.teams[e.team] || {}).abbr : (M.teams[(M.athletes[e.ath] || {}).team] || {}).abbr;
-  $("#exTable").innerHTML = `<table><tr><th>Event / heat / lane</th><th>Swimmer</th><th>Pad</th><th>Button</th><th>Watch 1</th><th>Watch 2</th><th>Official</th><th>Why it's here</th><th></th></tr>` +
+  $("#exTable").innerHTML = `<table><tr><th>Event / heat / lane</th><th>Swimmer</th><th>Pad</th><th>Button</th><th>Watch 1</th><th>Watch 2</th>${hasVid() ? "<th>Video</th>" : ""}<th>Official</th><th>Why it's here</th><th></th></tr>` +
     rows.map(x => {
       const e = x.e, hasW = x.w1 || x.w2, asked = (S.watch_ask || []).includes(e.key);
       const src = usedSource(e);
@@ -1909,7 +1930,7 @@ function exShow() {
         : `<button class="small" data-exack="${e.key}" data-sig="${x.sig}" data-on="1" title="Looked at it and it's fine: take it off the list (it comes back if any of its times change)">&#10003; Checked</button>`;
       return `<tr class="${x.acked ? "acked" : ""}"><td style="white-space:nowrap"><a href="#" data-exgo="${e.event}|${e.heat}" title="Go to this heat" style="font-size:17px;font-weight:700">E${x.v.no} &middot; H${e.heat} &middot; L${e.lane}</a><div class="muted" style="font-size:12px">${esc(x.v.label || "")}</div></td>
         <td><b>${esc(wtWho(e))}</b><div class="muted" style="font-size:12.5px">${esc(team(e) || "")}${+e.seed ? " · seed " + fmt(+e.seed) : ""}</div></td>
-        <td>${cell(x, "PAD", x.pad)}</td><td>${cell(x, x.items[1][0].toUpperCase(), x.back)}</td><td>${cell(x, "WATCH 1", x.w1)}</td><td>${cell(x, "WATCH 2", x.w2)}</td>
+        <td>${cell(x, "PAD", x.pad)}</td><td>${cell(x, x.items[1][0].toUpperCase(), x.back)}</td><td>${cell(x, "WATCH 1", x.w1)}</td><td>${cell(x, "WATCH 2", x.w2)}</td>${hasVid() ? `<td>${(v => v && v.t ? `<span class="xt vd" title="Reference only - read off the pool camera${v.note ? ": " + esc(v.note) : ""}"><span class="xl">VIDEO${v.conf === "rough" ? " (ROUGH)" : ""}</span>${fmt(v.t)}</span>` : `<span class="xt na"><span class="xl">VIDEO</span>&ndash;</span>`)(vidOf(e))}</td>` : ""}
         <td>${cell(x, src ? "OFFICIAL · " + src.toUpperCase() : "OFFICIAL", x.off, true)}</td>
         <td class="why">${x.why.map(esc).join("<br>")}</td>
         <td style="white-space:nowrap;text-align:right">${ack}<div style="margin-top:6px">${sheet}</div></td></tr>`;

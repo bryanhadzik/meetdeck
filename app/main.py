@@ -2372,7 +2372,7 @@ def db_get(mid: str):
         print("records broken:", x)
         broken = []
     return {"exists": True, "started": _meet_started(m), "records_broken": broken, "test": _is_test(_meta(d)), "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
-            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "exc_ack": _meta(d).get("exc_ack") or {}, "time_ok": _meta(d).get("time_ok") or {}, "record_watch": _record_watch(d, m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
+            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "exc_ack": _meta(d).get("exc_ack") or {}, "video": _meta(d).get("video") or {}, "time_ok": _meta(d).get("time_ok") or {}, "record_watch": _record_watch(d, m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
             "scoring_methods": {k: {"name": c["name"], "ind_max": c["ind_max"], "rel_max": c["rel_max"]} for k, c in meetdb.SCORING.items()},
@@ -2893,6 +2893,29 @@ def db_time_ok(mid: str, body: dict):
     _save(d, mt)
     _public_auto(mid)
     return db_get(mid)
+
+
+@app.post("/api/meets/{mid}/db/video")
+def db_video(mid: str, body: dict):
+    """Video verify: touch times read off the pool camera, per lane - a reference only. They are shown beside the
+    other times and never change an official time, a place or a score.
+    body: {"entries": {key: {"t": seconds, "conf": "good"|"rough", "note": text}}, "replace": bool, "source": text}"""
+    d = _dir(mid)
+    mt = _meta(d)
+    cur = {} if body.get("replace") else dict(mt.get("video") or {})
+    for k, v in (body.get("entries") or {}).items():
+        if v is None:
+            cur.pop(str(k), None)
+            continue
+        try:
+            t = round(float(v.get("t") or 0), 2)
+        except (TypeError, ValueError):
+            raise HTTPException(400, f"bad time for {k}")
+        cur[str(k)] = {"t": t, "conf": "good" if v.get("conf") == "good" else "rough",
+                       "note": str(v.get("note") or "")[:300], "src": str(body.get("source") or "")[:80]}
+    mt["video"] = cur
+    _save(d, mt)
+    return {"ok": True, "lanes": len(cur)}
 
 
 @app.post("/api/meets/{mid}/db/exc-ack")

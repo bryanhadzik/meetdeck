@@ -892,9 +892,17 @@ function raceBox(v, h) {
     let top = r.top - b.height - 8; if (top < 6) top = r.bottom + 8;
     box.style.top = top + "px"; box.style.left = Math.max(6, Math.min(innerWidth - b.width - 6, r.left + r.width / 2 - b.width / 2)) + "px";
   };
-  document.addEventListener("mouseover", e => { if (e.target.closest && e.target.closest("[data-tip]")) show(e.target); });
-  document.addEventListener("mouseout", e => { if (e.target.closest && e.target.closest("[data-tip]")) box.style.display = "none"; });
-  document.addEventListener("focusin", e => show(e.target));
+  // data-tipdelay="ms": only after the pointer rests on it that long (explanations for times that look fine)
+  let wait = null;
+  const tipOf = el => el.closest && el.closest("[data-tip]");
+  document.addEventListener("mouseover", e => {
+    const t = tipOf(e.target); if (!t) return;
+    clearTimeout(wait);
+    if (t.dataset.tipdelay) wait = setTimeout(() => { if (t.isConnected && t.matches(":hover")) show(t); }, +t.dataset.tipdelay || 1000);
+    else show(e.target);
+  });
+  document.addEventListener("mouseout", e => { if (tipOf(e.target)) { clearTimeout(wait); box.style.display = "none"; } });
+  document.addEventListener("focusin", e => { const t = tipOf(e.target); if (t && !t.dataset.tipdelay) show(e.target); });
   document.addEventListener("focusout", () => { box.style.display = "none"; });
   window.showTip = show;
 })();
@@ -1069,13 +1077,13 @@ function timerCells(e) {
     const ign = !on && outl(t), miss = !t && (pad || back || hasW);
     const fk = [which === "pad" ? "Pad" : (btn.length > 1 ? "Buttons (avg)" : "Button"), t, which === "pad" ? "pad" : "button"];
     return `<td class="mono${can || on ? " accpick" : ""}" ${can || on ? `data-accept="${e.key}" data-use="${on ? "" : which}"` : ""} style="text-align:right;white-space:nowrap${warn ? ";color:var(--warn);font-weight:600" : ""}${ign ? OUT : ""}${on ? ";color:var(--ok);font-weight:700" : ""}"
-      ${ign || warn || miss ? `data-tip="${esc(whyTip(fk))}"` : ""} title="${ign || warn || miss ? "" : esc(title)}${on ? " - accepted as the official time (click to undo)" : can ? " - click to accept this as the official time" : ""}">${on ? "&#10004; " : ""}${t ? esc(fmt(t)) : '<span class="muted">&ndash;</span>'}</td>`;
+      ${ign || warn || miss ? `data-tip="${esc(whyTip(fk))}"` : t ? `data-tip="${esc(whyTip(fk) + `<div style="margin-top:6px;font-size:12px;opacity:.75">${esc(title)}${on ? " - accepted as the official time (click to undo)" : can ? " - click to accept this as the official time" : ""}</div>`)}" data-tipdelay="1000"` : `title="${esc(title)}"`}>${on ? "&#10004; " : ""}${t ? esc(fmt(t)) : '<span class="muted">&ndash;</span>'}</td>`;
   };
-  const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" ${wOut(+val) || (+val && !acc && far(val, ref)) ? `data-tip="${esc(whyTip(["Timer " + n, +val, "watch"]))}"` : `title="Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)"`} style="width:72px${wOut(+val) ? OUT : !acc && far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
+  const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" ${wOut(+val) || (+val && !acc && far(val, ref)) ? `data-tip="${esc(whyTip(["Timer " + n, +val, "watch"]))}"` : +val ? `data-tip="${esc(whyTip(["Timer " + n, +val, "watch"]))}" data-tipdelay="1000"` : `title="Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)"`} style="width:72px${wOut(+val) ? OUT : !acc && far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
   return ro(pad, "Pad (touchpad) time", odd(pad), "pad") +
     ro(back, btn.length > 1 ? "Backup buttons: " + btn.map(fmt).join(" / ") + " (average)" : "Backup button", odd(back), "backup") +
     w(1, e.watch) + `<td style="white-space:nowrap">${w(2, e.watch2).slice(4, -5)}${e.heat && e.lane ? " " + wAskBtn(e) : ""}</td>` +
-    `<td style="white-space:nowrap"><input class="t" data-time="${e.key}" value="${esc(fmt(e.time))}" placeholder="time" title="Official time - type one in to override"></td><td style="white-space:nowrap">${usedBadge(e)}</td>`;
+    `<td style="white-space:nowrap"><input class="t" data-time="${e.key}" value="${esc(fmt(e.time))}" placeholder="time" ${e.time ? `data-tip="${esc(whyTip(null) + '<div style="margin-top:6px;font-size:12px;opacity:.75">Type a time here to override it.</div>')}" data-tipdelay="1000"` : 'title="Official time - type one in to override"'}></td><td style="white-space:nowrap">${usedBadge(e)}</td>`;
 }
 function renderEvent() {
   const v = evOf(EV); if (!v) { $("#evDetail").innerHTML = "No events."; return; }

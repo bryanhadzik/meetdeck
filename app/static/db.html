@@ -1040,13 +1040,15 @@ document.addEventListener("click", async ev => {
 // Video verify: touch time read off the pool camera - shown for reference, never used for a time
 const hasVid = () => !!(S && S.video && Object.keys(S.video).length);
 const vidOf = e => (S && S.video || {})[e.key];
-function vidTipLine(e, base) {
+function vidRows(e, base, row, grp) {      // the video time as one more row of the pop-up's table
   const v = vidOf(e); if (!v || !v.t) return "";
   const d = base ? v.t - base : 0;
-  return `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #3a4a5e;font-size:12px"><span style="color:#8cc4ff;font-weight:700">Video ${fmt(v.t)}</span>` +
-    (base ? ` <span style="opacity:.8">(${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(2)})</span>` : "") +
-    ` <span style="opacity:.7">- reference only, from the pool camera${v.conf === "rough" ? "; this lane is hard to see from the camera, so treat it as rough" : ""}</span>` +
-    (v.note ? `<div style="margin-top:3px">${esc(v.note)}</div>` : "") + `</div>`;
+  return grp("VIDEO - reference only, never used", false) +
+    row("Video", v.t, `<span style="color:#8cc4ff">${base ? (d >= 0 ? "+" : "\u2212") + Math.abs(d).toFixed(2) + " s" : ""}${v.conf === "rough" ? " · rough: this lane is hard to see from the camera" : ""}</span>`, "#8cc4ff");
+}
+function vidNote(e) {
+  const v = vidOf(e);
+  return v && v.note ? `<div style="margin-top:6px;font-size:12px;color:#8cc4ff">${esc(v.note)}</div>` : "";
 }
 function vidCell(e, tipFn) {
   const v = vidOf(e);
@@ -1090,7 +1092,9 @@ function timerCells(e) {
     if (kind === "button") return d > 0 ? `${a} s slower: the button was pushed late` : `${a} s faster: the button was pushed early`;
     return `${a} s ${d > 0 ? "slower" : "faster"}: a slow ${d > 0 ? "stop" : "start"} on the watch`;
   };
-  const row = (name, t, extra, col) => `<tr><td style="padding:1px 10px 1px 0">${name}</td><td style="text-align:right;font-family:ui-monospace,monospace;padding-right:10px">${fmt(t)}</td><td style="color:${col};font-size:12px">${extra}</td></tr>`;
+  // one table for every group, so the times line up in one column
+  const row = (name, t, extra, col) => `<tr><td style="padding:2px 10px 2px 0;white-space:nowrap;vertical-align:top;width:1%">${name}</td><td style="text-align:right;font-family:ui-monospace,monospace;padding:2px 10px 2px 0;white-space:nowrap;vertical-align:top;width:1%">${fmt(t)}</td><td style="color:${col};font-size:12px;padding:2px 0;vertical-align:top">${extra}</td></tr>`;
+  const grp = (label, first) => `<tr><td colspan="3" style="font-size:11.5px;opacity:.75;padding:${first ? 2 : 8}px 0 2px">${label}</td></tr>`;
   // focus: what the pop-up is about - [name, time (0 = missing), kind] - its own line goes at the bottom
   const whyTip = (focus) => {
     const base = off || pad || back;
@@ -1109,9 +1113,11 @@ function timerCells(e) {
       note = `${focus[0]} agrees with the ${off ? "official time" : "other times"}.`;
     }
     return `<div style="font-weight:700;margin-bottom:4px">${head}</div>` +
-      (good.length ? `<div style="font-size:11.5px;opacity:.75;margin:4px 0 2px">AGREE (within ${tol.toFixed(2)} s)</div><table>${good.map(x => row(x[0], x[1], sd(x), "#8fd9a8")).join("")}</table>` : "") +
-      (bad.length ? `<div style="font-size:11.5px;opacity:.75;margin:6px 0 2px">${off ? "NOT USED" : good.length ? "OFF" : "TIMES"}</div><table>${bad.map(x => row(x[0], x[1], base ? why(...x) : "", "#f5c26b")).join("")}</table>` : "") +
-      (note ? `<div style="margin-top:6px;font-size:12px;opacity:.9">${note}</div>` : "") + vidTipLine(e, base);
+      (good.length || bad.length || vidOf(e) ? `<table style="border-collapse:collapse;width:100%">` +
+        (good.length ? grp(`AGREE (within ${tol.toFixed(2)} s)`, true) + good.map(x => row(x[0], x[1], sd(x), "#8fd9a8")).join("") : "") +
+        (bad.length ? grp(off ? "NOT USED" : good.length ? "OFF" : "TIMES", !good.length) + bad.map(x => row(x[0], x[1], base ? why(...x) : "", "#f5c26b")).join("") : "") +
+        vidRows(e, base, row, grp) + `</table>` : "") +
+      (note ? `<div style="margin-top:6px;font-size:12px;opacity:.9">${note}</div>` : "") + vidNote(e);
   };
 
   // pad / button: click one to accept it as the official time (click again to undo)

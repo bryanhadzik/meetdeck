@@ -28,6 +28,9 @@ section{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 #wtBox.wtPend{background:var(--warn-bg)!important;border:1px solid var(--warn)!important}
 .vidc{color:#2f6fb6;font-style:italic}
 .vidc.rough{opacity:.65}
+#exTable .xt.xpick{cursor:pointer}
+#exTable .xt.xpick:hover{filter:brightness(1.15);box-shadow:0 0 0 2px var(--ink)}
+#exTable .xt.xuse{box-shadow:0 0 0 3px var(--ink)}
 #exTable .xt.vd{color:#2f6fb6;border:2px dashed #7aa7dc;font-style:italic}
 #exBox.exPend{background:var(--warn-bg)!important;border:1px solid var(--warn)!important}
 #exTable table{font-size:16px;border-collapse:separate;border-spacing:0 10px;width:100%}
@@ -1919,9 +1922,12 @@ function exShow() {
   $("#exSub").innerHTML = open.length ? `<b style="color:var(--warn)">${open.length} to check</b>${nAck ? ` · ${nAck} checked` : ""}` : all.length ? `none to check · ${nAck} checked` : "nothing looks off";
   const rows = (showAll ? all : open).sort((a, b) => (a.v.order ? 0 : 0) || (a.v.no - b.v.no) || (a.e.heat - b.e.heat) || (a.e.lane - b.e.lane));
   if (!rows.length) { $("#exTable").innerHTML = `<div class="muted" style="padding:10px 2px;font-size:15px">${all.length ? "Everything here has been checked." : "No lanes look off."}</div>`; return; }
-  const cell = (x, n, t, isOff) => {
+  // click a pad / button / watch box to use it as the official time (click the one in use to go back to the usual rule)
+  const cell = (x, n, t, isOff, use) => {
     const cls = !t ? "na" : isOff ? "xt of" : Math.abs(t - x.base) <= x.tol ? "ag" : "no";
-    return `<span class="xt ${cls}"><span class="xl">${n}</span>${t ? fmt(t) : "&ndash;"}</span>`;
+    const src = usedSource(x.e), inUse = use && t && ({pad: "Pad", backup: "Button", watch: "Timers"}[use] === src);
+    const pick = use && t && !isOff;
+    return `<span class="xt ${cls}${pick ? " xpick" : ""}${inUse ? " xuse" : ""}"${pick ? ` data-exuse="${x.e.key}|${inUse && x.acc ? "" : use}" title="${inUse ? (x.acc ? "In use (picked by hand) - click to go back to the usual rule" : "This is the time in use") : `Use ${use === "watch" ? "the timers' watches" : use === "backup" ? "the backup button" : "the pad"} as the official time`}"` : ""}><span class="xl">${n}${inUse ? " &#10004;" : ""}</span>${t ? fmt(t) : "&ndash;"}</span>`;
   };
   const team = e => e.kind === "R" ? (M.teams[e.team] || {}).abbr : (M.teams[(M.athletes[e.ath] || {}).team] || {}).abbr;
   $("#exTable").innerHTML = `<table><tr><th>Event / heat / lane</th><th>Swimmer</th><th>Pad</th><th>Button</th><th>Watch 1</th><th>Watch 2</th>${hasVid() ? "<th>Video</th>" : ""}<th>Official</th><th>Why it's here</th><th></th></tr>` +
@@ -1936,7 +1942,7 @@ function exShow() {
         : `<button class="small" data-exack="${e.key}" data-sig="${x.sig}" data-on="1" title="Looked at it and it's fine: take it off the list (it comes back if any of its times change)">&#10003; Checked</button>`;
       return `<tr class="${x.acked ? "acked" : ""}"><td style="white-space:nowrap"><a href="#" data-exgo="${e.event}|${e.heat}" title="Go to this heat" style="font-size:17px;font-weight:700">E${x.v.no} &middot; H${e.heat} &middot; L${e.lane}</a><div class="muted" style="font-size:12px">${esc(x.v.label || "")}</div></td>
         <td><b>${esc(wtWho(e))}</b><div class="muted" style="font-size:12.5px">${esc(team(e) || "")}${+e.seed ? " · seed " + fmt(+e.seed) : ""}</div></td>
-        <td>${cell(x, "PAD", x.pad)}</td><td>${cell(x, x.items[1][0].toUpperCase(), x.back)}</td><td>${cell(x, "WATCH 1", x.w1)}</td><td>${cell(x, "WATCH 2", x.w2)}</td>${hasVid() ? `<td>${(v => v && v.t ? `<span class="xt vd" title="Reference only - read off the pool camera${v.note ? ": " + esc(v.note) : ""}"><span class="xl">VIDEO${v.conf === "rough" ? " (ROUGH)" : ""}</span>${fmt(v.t)}</span>` : `<span class="xt na"><span class="xl">VIDEO</span>&ndash;</span>`)(vidOf(e))}</td>` : ""}
+        <td>${cell(x, "PAD", x.pad, false, "pad")}</td><td>${cell(x, x.items[1][0].toUpperCase(), x.back, false, "backup")}</td><td>${cell(x, "WATCH 1", x.w1, false, "watch")}</td><td>${cell(x, "WATCH 2", x.w2, false, "watch")}</td>${hasVid() ? `<td>${(v => v && v.t ? `<span class="xt vd" title="Reference only - read off the pool camera${v.note ? ": " + esc(v.note) : ""}"><span class="xl">VIDEO${v.conf === "rough" ? " (ROUGH)" : ""}</span>${fmt(v.t)}</span>` : `<span class="xt na"><span class="xl">VIDEO</span>&ndash;</span>`)(vidOf(e))}</td>` : ""}
         <td>${cell(x, src ? "OFFICIAL · " + src.toUpperCase() : "OFFICIAL", x.off, true)}</td>
         <td class="why">${x.why.map(esc).join("<br>")}</td>
         <td style="white-space:nowrap;text-align:right">${ack}<div style="margin-top:6px">${sheet}</div></td></tr>`;
@@ -1952,6 +1958,13 @@ document.addEventListener("click", async ev => {
     setTimeout(() => { const el = document.getElementById("heat-" + h); if (!el) return;
       const hd = document.querySelector(".evhead"), offY = hd ? hd.getBoundingClientRect().height + 8 : 60;
       window.scrollTo({top: el.getBoundingClientRect().top + scrollY - offY, behavior: "smooth"}); }, 60);
+    return;
+  }
+  const u = ev.target.closest("[data-exuse]");
+  if (u) {
+    const [key, use] = u.dataset.exuse.split("|");
+    try { S = await api(`${API}/time-ok`, J({key, use: use || null})); toast(use ? (S.log[0]?.msg || "Changed") : "Back to the usual rule"); show(); wtLoad(); }
+    catch (x) { toast(x.message); }
     return;
   }
   const a = ev.target.closest("[data-exack]"); if (!a) return;

@@ -4274,6 +4274,27 @@ def meetboard_send(mid: str):
     return {**got, "summary": meetboard.summary(doc), "via": "server"}
 
 
+_CC = {"at": 0.0, "heats": None, "err": None}
+
+
+@app.get("/api/meets/{mid}/console_check")
+def console_check(mid: str):
+    """Cross-check each heat against what meet-board saw the console show (times and places). Read-only."""
+    d = _dir(mid)
+    url = _settings().get("meetboard_url")
+    if not url:
+        return {"heats": {}, "error": "no meet-board set up"}
+    if time.time() - _CC["at"] > 8:
+        try:
+            _CC.update(heats=meetboard.console_results(url), err=None)
+        except (OSError, RuntimeError) as e:
+            _CC.update(heats=None, err=str(getattr(e, "reason", e)))
+        _CC["at"] = time.time()
+    if _CC["heats"] is None:
+        return {"heats": {}, "error": _CC["err"]}
+    return {"heats": meetboard.console_check(meetdb.load(_dbfile(d)), _CC["heats"])}
+
+
 @app.post("/api/meetboard/test")
 def meetboard_test(body: dict):
     try:

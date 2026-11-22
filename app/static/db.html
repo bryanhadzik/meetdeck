@@ -495,6 +495,23 @@ async function dpSetup() {
 setTimeout(dpSetup, 800);
 // ---- Meet Mobile ----
 let MM = null;
+// Console cross-check: what meet-board saw the console show for each heat (times and places) vs MeetDeck's times
+let CC = {};
+function ccChip(ptr, h) {
+  const c = CC[`${ptr}:${h}`]; if (!c) return "";
+  if (c.ok) return `<span class="pill" style="background:var(--ok-bg);color:var(--ok)" data-tip="${esc("<b>Console cross-check</b><br>The scoreboard times and places match MeetDeck's pad/button times.")}">Console &#10003;</span>`;
+  const tip = "<b>Console cross-check</b> (what the scoreboard showed)<br>" + c.notes.map(esc).join("<br>") +
+    "<br><span style='opacity:.75'>Nothing was changed - check these lanes.</span>";
+  return `<span class="pill" style="background:var(--warn-bg);color:var(--warn)" data-tip="${esc(tip)}">Console: ${c.notes.length} to check</span>`;
+}
+async function ccLoad() {
+  if (!S || !S.started) return;
+  let r; try { r = await api(`/api/meets/${MID}/console_check`); } catch (e) { return; }
+  CC = r.heats || {};
+  document.querySelectorAll("[data-cc]").forEach(x => { const [p, h] = x.dataset.cc.split(":"); x.innerHTML = ccChip(+p, +h); });
+}
+setInterval(() => { if (!document.hidden) ccLoad(); }, 15000);
+setTimeout(ccLoad, 1500);
 async function mmLoad() {
   try { MM = await api(`/api/meets/${MID}/meetmobile`); } catch (e) { return; }
   mmShow();
@@ -1109,7 +1126,7 @@ function renderEvent() {
     }
     const hs = heatState(act.filter(e => e.heat === h));
     const hpill = hs.cls === "done" ? `<span class="pill timed">Timed</span>` : hs.cls === "part" ? `<span class="pill prog">${hs.r} of ${hs.n} lanes</span>` : `<span class="pill none">Waiting</span>`;
-    html += `<div class="heat" id="heat-${h}"><h3>Heat ${h} of ${topHeat} ${hpill} ${raceBox(v, h)} <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button>${ins}</h3>${gotBar(v, h)}<div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1, h)).join("")}
+    html += `<div class="heat" id="heat-${h}"><h3>Heat ${h} of ${topHeat} ${hpill} ${raceBox(v, h)} <span class="cc" data-cc="${v.ptr}:${h}">${ccChip(v.ptr, h)}</span> <button class="ghost small" data-gettimes="${h}" title="Pull this heat's times from the timing console">Get times</button>${ins}</h3>${gotBar(v, h)}<div id="tp-${h}"></div><table>${head}${Array.from({length: lanes}, (_, i) => row(inHeat.find(e => e.lane === i + 1), i + 1, h)).join("")}
       ${inHeat.filter(e => !e.lane || e.lane > lanes).map(e => row(e)).join("")}</table>${finishOrder(inHeat)}</div>`;
   }
   if (MOVING) {   // an empty heat to drag swimmers into

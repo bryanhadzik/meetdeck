@@ -135,3 +135,68 @@ def send(base: str, doc: dict) -> dict:
     if code != 200 or not body.get("ok"):
         raise RuntimeError(body.get("error") or f"meet-board answered {code}")
     return body
+
+
+def console_results(base: str) -> dict:
+    """Each heat's lane times/places as the console showed them ({"event:heat": {"lanes": {...}}})."""
+    code, body = _req(base + "/api/console_results", timeout=4)
+    if code == 404:
+        raise RuntimeError("this meet-board is too old for the console cross-check - update it")
+    if code != 200:
+        raise RuntimeError(body.get("error") or f"meet-board answered {code}")
+    return body.get("heats") or {}
+
+
+def console_check(m: dict, heats: dict) -> dict:
+    """Compare what the console showed with MeetDeck's times. Returns {"ptr:heat": {"ok", "notes": [...]}}
+    for every heat the console recorded that MeetDeck has times for. A cross-check only - nothing is changed.
+    Notes: a lane the console timed but didn't place (usually no pad touch), a console time that isn't the
+    lane's pad (or button) time, a lane timed on one side only, and a finish order that differs."""
+    from meetdb import parse_time, fmt_time
+    no2ptr = {v["no"]: v["ptr"] for v in m["events"]}
+    by = {}
+    for e in m["entries"]:
+        if not e["scr"] and e.get("heat") and e.get("lane"):
+            by.setdefault((e["event"], e["heat"]), {})[e["lane"]] = e
+    out = {}
+    for k, rec in (heats or {}).items():
+        try:
+            evno, h = (int(x) for x in k.split(":"))
+        except ValueError:
+            continue
+        ptr = no2ptr.get(evno)
+        lanes = (rec or {}).get("lanes") or {}
+        if ptr is None or not lanes:
+            continue
+        ents = by.get((ptr, h), {})
+        if not any((e.get("pad") or 0) or (e.get("backup") or 0) for e in ents.values()):
+            continue                    # MeetDeck has no times for this heat yet
+        notes, cons = [], {}
+        for ln, x in lanes.items():
+            t = parse_time(x.get("time") or "")
+            if t:
+                cons[int(ln)] = (t, (x.get("place") or "").strip())
+        for ln in sorted(set(cons) | set(ents)):
+            e, c = ents.get(ln), cons.get(ln)
+            mine = float((e or {}).get("pad") or 0) or float((e or {}).get("backup") or 0)
+            if c and not e:
+                notes.append(f"Lane {ln}: the console timed {fmt_time(c[0])}, but MeetDeck has nobody in this lane")
+            elif c and not mine:
+                notes.append(f"Lane {ln}: the console showed {fmt_time(c[0])}, MeetDeck has no pad or button time")
+            elif e and mine and not c and not (e.get("stat") or "").strip():
+                notes.append(f"Lane {ln}: MeetDeck has {fmt_time(mine)}, the console showed no time")
+            elif c and abs(c[0] - mine) > 0.015:
+                src = "pad" if (e.get("pad") or 0) else "button"
+                notes.append(f"Lane {ln}: the console showed {fmt_time(c[0])}, MeetDeck's {src} time is {fmt_time(mine)}")
+            if c and not c[1]:
+                notes.append(f"Lane {ln}: the console gave {fmt_time(c[0])} but no place - likely no pad touch")
+        # finish order: the console's places vs the order of MeetDeck's official times, same lanes
+        placed = {ln: int(p) for ln, (t, p) in cons.items() if p.isdigit() and ln in ents and (ents[ln].get("time") or 0)}
+        if len(placed) > 1:
+            off = [(ln, placed[ln], 1 + sum(1 for o in placed if ents[o]["time"] < ents[ln]["time"] - 0.001))
+                   for ln in sorted(placed)]
+            off = [x for x in off if x[1] != x[2]]
+            if off:
+                notes.append("Finish order differs: " + ", ".join(f"lane {ln} console {p}, MeetDeck {q}" for ln, p, q in off))
+        out[f"{ptr}:{h}"] = {"ok": not notes, "notes": notes}
+    return out

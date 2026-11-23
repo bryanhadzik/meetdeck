@@ -1046,12 +1046,14 @@ document.addEventListener("click", async ev => {
 });
 // Video verify: touch time read off the pool camera - shown for reference, never used for a time
 const hasVid = () => !!(S && S.video && Object.keys(S.video).length);
+// the video runs a little off on average, so it "agrees" within the usual tolerance plus 0.3 s
+const VID_EXTRA = 0.30, vtol = () => (TOL || 0.30) + VID_EXTRA + 1e-9;
 const vidOf = e => (S && S.video || {})[e.key];
 function vidRows(e, base, row, grp) {      // the video time as one more row of the pop-up's table
   const v = vidOf(e); if (!v || !v.t) return "";
   const d = base ? v.t - base : 0;
-  return grp("VIDEO - reference only, never used", false) +
-    row("Video", v.t, `<span style="color:${base && Math.abs(d) <= (TOL || 0.30) + 1e-9 ? "#8fd9a8" : base ? "#f5a08f" : "#8cc4ff"}">${base ? (d >= 0 ? "+" : "\u2212") + Math.abs(d).toFixed(2) + " s" : ""}${v.conf === "rough" ? " · rough: this lane is hard to see from the camera" : ""}</span>`, "#8cc4ff");
+  return grp(`VIDEO - reference only, never used (agrees within ${vtol().toFixed(2)} s)`, false) +
+    row("Video", v.t, `<span style="color:${base && Math.abs(d) <= vtol() ? "#8fd9a8" : base ? "#f5a08f" : "#8cc4ff"}">${base ? (d >= 0 ? "+" : "\u2212") + Math.abs(d).toFixed(2) + " s" : ""}${v.conf === "rough" ? " · rough: this lane is hard to see from the camera" : ""}</span>`, "#8cc4ff");
 }
 function vidNote(e) {
   const v = vidOf(e);
@@ -1059,7 +1061,7 @@ function vidNote(e) {
 }
 function vidCell(e, tipFn) {
   const v = vidOf(e), base = +e.time || +e.pad || 0;
-  const agr = v && v.t && base ? (Math.abs(v.t - base) <= (TOL || 0.30) + 1e-9 ? " ag" : " no") : "";
+  const agr = v && v.t && base ? (Math.abs(v.t - base) <= vtol() ? " ag" : " no") : "";
   if (!v || !v.t) return `<td class="mono muted" style="text-align:right" title="No video time for this lane">&ndash;</td>`;
   return `<td class="mono vidc${agr}${v.conf === "rough" ? " rough" : ""}" style="text-align:right;white-space:nowrap" data-tip="${esc(tipFn(null))}" data-tipdelay="600">` +
     `${v.note ? "&#9673; " : ""}${esc(fmt(v.t))}</td>`;
@@ -1947,7 +1949,7 @@ function exShow() {
         : `<button class="small" data-exack="${e.key}" data-sig="${x.sig}" data-on="1" title="Looked at it and it's fine: take it off the list (it comes back if any of its times change)">&#10003; Checked</button>`;
       return `<tr class="${x.acked ? "acked" : ""}"><td style="white-space:nowrap"><a href="#" data-exgo="${e.event}|${e.heat}" title="Go to this heat" style="font-size:17px;font-weight:700">E${x.v.no} &middot; H${e.heat} &middot; L${e.lane}</a><div class="muted" style="font-size:12px">${esc(x.v.label || "")}</div></td>
         <td><b>${esc(wtWho(e))}</b><div class="muted" style="font-size:12.5px">${esc(team(e) || "")}${+e.seed ? " · seed " + fmt(+e.seed) : ""}</div></td>
-        <td>${cell(x, "PAD", x.pad, false, "pad")}</td><td>${cell(x, x.items[1][0].toUpperCase(), x.back, false, "backup")}</td><td>${cell(x, "WATCH 1", x.w1, false, "watch")}</td><td>${cell(x, "WATCH 2", x.w2, false, "watch")}</td>${hasVid() ? `<td>${(v => v && v.t ? `<span class="xt vd ${x.base ? (Math.abs(v.t - x.base) <= x.tol ? "ag" : "no") : ""}" title="Reference only - read off the pool camera, never used for a time${v.note ? ": " + esc(v.note) : ""}"><span class="xl">VIDEO${v.conf === "rough" ? " (ROUGH)" : ""}</span>${fmt(v.t)}</span>` : `<span class="xt na"><span class="xl">VIDEO</span>&ndash;</span>`)(vidOf(e))}</td>` : ""}
+        <td>${cell(x, "PAD", x.pad, false, "pad")}</td><td>${cell(x, x.items[1][0].toUpperCase(), x.back, false, "backup")}</td><td>${cell(x, "WATCH 1", x.w1, false, "watch")}</td><td>${cell(x, "WATCH 2", x.w2, false, "watch")}</td>${hasVid() ? `<td>${(v => v && v.t ? `<span class="xt vd ${x.base ? (Math.abs(v.t - x.base) <= vtol() ? "ag" : "no") : ""}" title="Reference only - read off the pool camera, never used for a time${v.note ? ": " + esc(v.note) : ""}"><span class="xl">VIDEO${v.conf === "rough" ? " (ROUGH)" : ""}</span>${fmt(v.t)}</span>` : `<span class="xt na"><span class="xl">VIDEO</span>&ndash;</span>`)(vidOf(e))}</td>` : ""}
         <td>${cell(x, src ? "OFFICIAL · " + src.toUpperCase() : "OFFICIAL", x.off, true)}</td>
         <td class="why">${x.why.map(esc).join("<br>")}</td>
         <td style="white-space:nowrap;text-align:right">${ack}<div style="margin-top:6px">${sheet}</div></td></tr>`;

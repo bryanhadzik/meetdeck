@@ -1053,7 +1053,7 @@ document.addEventListener("click", async ev => {
 // Video verify: touch time read off the pool camera - shown for reference, never used for a time
 const hasVid = () => !!(S && S.video && Object.keys(S.video).length);
 // the video runs a little off on average, so it "agrees" within the usual tolerance plus 0.3 s
-const VID_EXTRA = 0.30, vtol = () => (TOL || 0.30) + VID_EXTRA + 1e-9;
+const vtol = () => 1.0 + 1e-9;   // video agrees when within 1 s of the time it is compared with
 const vidOf = e => (S && S.video || {})[e.key];
 function vidRows(e, base, row, grp) {      // the video time as one more row of the pop-up's table
   const v = vidOf(e); if (!v || !v.t) return "";

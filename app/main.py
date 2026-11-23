@@ -22,6 +22,48 @@ DEFAULT_RULES = {"max_individual": 2, "max_total": 4, "team_cap_per_event": 0, "
 app = FastAPI(title="Swim Meet Entries")
 
 
+# ---- locked meets: once the final results are sent, nothing about the meet changes until it's unlocked ----
+# Changes are refused here, in one place, for every endpoint under /api/meets/{mid} - except the ones that only
+# send, print, publish or keep paperwork (they don't change the meet's results), and the lock itself.
+_LOCK_OK = ("/lock", "/send/", "/docs", "/db/print/", "/db/activity", "/meetboard/", "/backup", "/meetmobile",
+            "/public/", "/db/video", "/db/exc-ack")
+
+
+@app.middleware("http")
+async def _locked_meet_guard(request: Request, call_next):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        m = re.match(r"^/api/meets/([a-z0-9]{8})(/.*)?$", request.url.path)
+        if m:
+            rest = m.group(2) or ""
+            d = DATA / m.group(1)
+            if not any(rest.startswith(p) for p in _LOCK_OK) and (d / "meta.json").exists():
+                try:
+                    lk = json.loads((d / "meta.json").read_text()).get("locked")
+                except ValueError:
+                    lk = None
+                if lk:
+                    from fastapi.responses import JSONResponse
+                    return JSONResponse({"detail": "This meet is locked - the final results were sent. Unlock it on "
+                                                   "Finish the meet to change anything."}, status_code=423)
+    return await call_next(request)
+
+
+@app.post("/api/meets/{mid}/lock")
+def meet_lock(mid: str, body: dict):
+    """Lock ({on: true}) or unlock ({on: false}) a meet. Locked: no changes to entries, seeding, times, DQs,
+    scoring or setup until it's unlocked."""
+    d = _dir(mid)
+    meta = _meta(d)
+    if body.get("on"):
+        meta["locked"] = {"at": time.strftime("%Y-%m-%d %H:%M")}
+    else:
+        if meta.get("locked"):
+            meta.setdefault("lock_log", []).append({"locked": meta["locked"].get("at"), "unlocked": time.strftime("%Y-%m-%d %H:%M")})
+        meta.pop("locked", None)
+    _save(d, meta)
+    return {"locked": meta.get("locked")}
+
+
 def _dir(mid: str) -> Path:
     if not re.fullmatch(r"[a-z0-9]{8}", mid):
         raise HTTPException(404)
@@ -320,7 +362,7 @@ def _state(d: Path) -> dict:
             "strict_lanes": bool(meta.get("strict_lanes")), "seed_why": seed_why, "lane_mode": meta.get("lane_mode", "teams"), "lane_draw": meta.get("lane_draw"),
             "lane_choice": table_has_open(order, POOL_LANES), "changes_done": meta.get("changes_done") or {}, "kinds": MEET_KINDS, "date": meta.get("date", ""), "start_time": meta.get("start_time", ""), "location": meta.get("location", ""), "season": _meet_season(meta), "rules": rules,
             "store": _store(d), "imported_drive": meta.get("imported_drive", []),
-            "run": meta.get("run", {}), "ended": meta.get("ended", ""), "contacts": meta.get("contacts", {}),
+            "run": meta.get("run", {}), "ended": meta.get("ended", ""), "locked": meta.get("locked"), "contacts": meta.get("contacts", {}),
             "coach_emails": _coach_emails(list(teams.values()) + db_teams, files),
             "drive_uploads": meta.get("drive_uploads", []),
             "has_db": (d / "db" / "meet.mdb").exists(),
@@ -2372,7 +2414,7 @@ def db_get(mid: str):
         print("records broken:", x)
         broken = []
     return {"exists": True, "started": _meet_started(m), "records_broken": broken, "test": _is_test(_meta(d)), "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
-            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "exc_ack": _meta(d).get("exc_ack") or {}, "video": _meta(d).get("video") or {}, "time_ok": _meta(d).get("time_ok") or {}, "record_watch": _record_watch(d, m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
+            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "exc_ack": _meta(d).get("exc_ack") or {}, "locked": _meta(d).get("locked"), "meetboard_url": _settings().get("meetboard_url") or "", "video": _meta(d).get("video") or {}, "time_ok": _meta(d).get("time_ok") or {}, "record_watch": _record_watch(d, m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
             "scoring_methods": {k: {"name": c["name"], "ind_max": c["ind_max"], "rel_max": c["rel_max"]} for k, c in meetdb.SCORING.items()},

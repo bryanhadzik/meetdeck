@@ -29,6 +29,9 @@ section{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 .vidc{color:#2f6fb6;font-style:italic}
 .vidc.ag{color:var(--ok)}
 .vidc.no{color:var(--err)}
+.vidc a.vidlink{color:inherit;text-decoration:underline dotted;text-underline-offset:3px}
+body.locked #app input, body.locked #app select{pointer-events:none;opacity:.75}
+#lockChip{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn);border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:700;white-space:nowrap}
 .vidc.rough{opacity:.65}
 #exTable .xt.xpick{cursor:pointer}
 #exTable .xt.xpick:hover{filter:brightness(1.15);box-shadow:0 0 0 2px var(--ink)}
@@ -174,6 +177,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
 <header>
   <a id="backBtn" href="/" class="ghost small hidden" style="text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;white-space:nowrap" title="Back to this meet's setup: entries, rule check, seeding">← Meet setup</a>
   <h1 id="title">Meet database</h1>
+  <span id="lockChip" class="hidden" title="The final results were sent, so nothing can change. Unlock it on Finish the meet.">&#128274; Locked</span>
   <span class="muted" id="src" style="font-size:12.5px"></span>
   <span class="grow"></span>
   <nav id="tabs" class="hidden"><button data-tab="events" class="on">Events</button><button data-tab="swimmers">Swimmers</button><button data-tab="scores">Scores</button>
@@ -434,6 +438,8 @@ function show() {
   }
   if (!S.exists) { $("#start").classList.remove("hidden"); $("#app").classList.add("hidden"); ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn", "#finishBtn"].forEach(s => $(s).classList.add("hidden")); return; }
   M = S.model;
+  document.body.classList.toggle("locked", !!S.locked); $("#lockChip").classList.toggle("hidden", !S.locked);
+  if (S.locked) $("#lockChip").title = `Locked ${S.locked.at} - the final results were sent, so nothing can change. Unlock it on Finish the meet.`;
   $("#start").classList.add("hidden"); $("#app").classList.remove("hidden");
   { const sel = $("#xTeam"), cur = sel.value, o = Object.values(M.teams).sort((a, b) => (a.name || "").localeCompare(b.name || ""))
       .map(t => `<option value="${t.no}">${esc(t.name || t.abbr)}</option>`).join("");
@@ -1063,8 +1069,11 @@ function vidCell(e, tipFn) {
   const v = vidOf(e), base = +e.time || +e.pad || 0;
   const agr = v && v.t && base ? (Math.abs(v.t - base) <= vtol() ? " ag" : " no") : "";
   if (!v || !v.t) return `<td class="mono muted" style="text-align:right" title="No video time for this lane">&ndash;</td>`;
+  const ev = evOf(e.event), url = S.meetboard_url && ev && e.heat
+    ? `${S.meetboard_url.replace(/\/$/, "")}/video?event=${ev.no}&heat=${e.heat}&lane=${e.lane || ""}` : "";
+  const txt = `${v.note ? "&#9673; " : ""}${esc(fmt(v.t))}`;
   return `<td class="mono vidc${agr}${v.conf === "rough" ? " rough" : ""}" style="text-align:right;white-space:nowrap" data-tip="${esc(tipFn(null))}" data-tipdelay="600">` +
-    `${v.note ? "&#9673; " : ""}${esc(fmt(v.t))}</td>`;
+    (url ? `<a href="${esc(url)}" target="_blank" rel="noopener" class="vidlink" title="Open this heat's video in a new tab, at this lane's touch">${txt}</a>` : txt) + `</td>`;
 }
 function timerCells(e) {
   // every time the lane has, each in its own column (blank when there's none yet): pad, backup button, both

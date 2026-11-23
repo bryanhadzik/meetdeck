@@ -1053,7 +1053,7 @@ function vidRows(e, base, row, grp) {      // the video time as one more row of 
   const v = vidOf(e); if (!v || !v.t) return "";
   const d = base ? v.t - base : 0;
   return grp(`VIDEO - reference only, never used (agrees within ${vtol().toFixed(2)} s)`, false) +
-    row("Video", v.t, `<span style="color:${base && Math.abs(d) <= vtol() ? "#8fd9a8" : base ? "#f5a08f" : "#8cc4ff"}">${base ? (d >= 0 ? "+" : "\u2212") + Math.abs(d).toFixed(2) + " s" : ""}${v.conf === "rough" ? " · rough: this lane is hard to see from the camera" : ""}</span>`, "#8cc4ff");
+    row("Video", v.t, `<span style="color:${base && Math.abs(d) <= vtol() ? "#8fd9a8" : base ? "#f5a08f" : "#8cc4ff"}">${base ? (d >= 0 ? "+" : "\u2212") + Math.abs(d).toFixed(2) + " s" : ""}</span>`, "#8cc4ff");
 }
 function vidNote(e) {
   const v = vidOf(e);

@@ -1065,15 +1065,18 @@ function vidNote(e) {
   const v = vidOf(e);
   return v && v.note ? `<div style="margin-top:6px;font-size:12px;color:#8cc4ff">${esc(v.note)}</div>` : "";
 }
+function vidUrl(e) {            // meet-board's video page for this heat, stopped on this lane's touch
+  const ev = evOf(e.event);
+  return S.meetboard_url && ev && e.heat ? `${S.meetboard_url.replace(/\/$/, "")}/video?event=${ev.no}&heat=${e.heat}&lane=${e.lane || ""}` : "";
+}
 function vidCell(e, tipFn) {
   const v = vidOf(e), base = +e.time || +e.pad || 0;
   const agr = v && v.t && base ? (Math.abs(v.t - base) <= vtol() ? " ag" : " no") : "";
   if (!v || !v.t) return `<td class="mono muted" style="text-align:right" title="No video time for this lane">&ndash;</td>`;
-  const ev = evOf(e.event), url = S.meetboard_url && ev && e.heat
-    ? `${S.meetboard_url.replace(/\/$/, "")}/video?event=${ev.no}&heat=${e.heat}&lane=${e.lane || ""}` : "";
+  const url = vidUrl(e);
   const txt = `${v.note ? "&#9673; " : ""}${esc(fmt(v.t))}`;
   return `<td class="mono vidc${agr}${v.conf === "rough" ? " rough" : ""}" style="text-align:right;white-space:nowrap" data-tip="${esc(tipFn(null))}" data-tipdelay="600">` +
-    (url ? `<a href="${esc(url)}" target="_blank" rel="noopener" class="vidlink" title="Open this heat's video in a new tab, at this lane's touch">${txt}</a>` : txt) + `</td>`;
+    (url ? `<a href="${esc(url)}" target="_blank" rel="noopener" class="vidlink" title="Open this heat's video in a new tab, at this lane's touch">${txt} <span style="font-size:11px;opacity:.8">&#8599;</span></a>` : txt) + `</td>`;
 }
 function timerCells(e) {
   // every time the lane has, each in its own column (blank when there's none yet): pad, backup button, both
@@ -1958,7 +1961,7 @@ function exShow() {
         : `<button class="small" data-exack="${e.key}" data-sig="${x.sig}" data-on="1" title="Looked at it and it's fine: take it off the list (it comes back if any of its times change)">&#10003; Checked</button>`;
       return `<tr class="${x.acked ? "acked" : ""}"><td style="white-space:nowrap"><a href="#" data-exgo="${e.event}|${e.heat}" title="Go to this heat" style="font-size:17px;font-weight:700">E${x.v.no} &middot; H${e.heat} &middot; L${e.lane}</a><div class="muted" style="font-size:12px">${esc(x.v.label || "")}</div></td>
         <td><b>${esc(wtWho(e))}</b><div class="muted" style="font-size:12.5px">${esc(team(e) || "")}${+e.seed ? " · seed " + fmt(+e.seed) : ""}</div></td>
-        <td>${cell(x, "PAD", x.pad, false, "pad")}</td><td>${cell(x, x.items[1][0].toUpperCase(), x.back, false, "backup")}</td><td>${cell(x, "WATCH 1", x.w1, false, "watch")}</td><td>${cell(x, "WATCH 2", x.w2, false, "watch")}</td>${hasVid() ? `<td>${(v => v && v.t ? `<span class="xt vd ${x.base ? (Math.abs(v.t - x.base) <= vtol() ? "ag" : "no") : ""}" title="Reference only - read off the pool camera, never used for a time${v.note ? ": " + esc(v.note) : ""}"><span class="xl">VIDEO${v.conf === "rough" ? " (ROUGH)" : ""}</span>${fmt(v.t)}</span>` : `<span class="xt na"><span class="xl">VIDEO</span>&ndash;</span>`)(vidOf(e))}</td>` : ""}
+        <td>${cell(x, "PAD", x.pad, false, "pad")}</td><td>${cell(x, x.items[1][0].toUpperCase(), x.back, false, "backup")}</td><td>${cell(x, "WATCH 1", x.w1, false, "watch")}</td><td>${cell(x, "WATCH 2", x.w2, false, "watch")}</td>${hasVid() ? `<td>${(v => v && v.t ? `<${vidUrl(e) ? `a href="${esc(vidUrl(e))}" target="_blank" rel="noopener" style="text-decoration:none;cursor:pointer"` : "span"} class="xt vd ${x.base ? (Math.abs(v.t - x.base) <= vtol() ? "ag" : "no") : ""}" title="Reference only - read off the pool camera, never used for a time${v.note ? ": " + esc(v.note) : ""}${vidUrl(e) ? ". Click to watch this heat's video in a new tab." : ""}"><span class="xl">VIDEO${v.conf === "rough" ? " (ROUGH)" : ""}${vidUrl(e) ? " &#8599;" : ""}</span>${fmt(v.t)}</${vidUrl(e) ? "a" : "span"}>` : `<span class="xt na"><span class="xl">VIDEO</span>&ndash;</span>`)(vidOf(e))}</td>` : ""}
         <td>${cell(x, src ? "OFFICIAL · " + src.toUpperCase() : "OFFICIAL", x.off, true)}</td>
         <td class="why">${x.why.map(esc).join("<br>")}</td>
         <td style="white-space:nowrap;text-align:right">${ack}<div style="margin-top:6px">${sheet}</div></td></tr>`;

@@ -8,7 +8,7 @@ import time
 import zipfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 
 from hy3 import POOL_LANES, _list, checksum, clean_hy3, combine_plan, lane_plan, table_plan, table_has_open, parse_hy3, read_upload, seed_meet, validate
@@ -4763,6 +4763,211 @@ def bridge_zip():
                    "python emulator.py %P%\r\npause\r\n")
     return Response(buf.getvalue(), media_type="application/zip",
                     headers={"Content-Disposition": 'attachment; filename="timing-bridge.zip"'})
+
+
+# ---- timer phones: each lane's timers type their watch times on a phone (pool wifi) instead of paper ----
+# A phone signs in with the meet's 4-digit timer PIN, picks its lane and which timer it is (1 or 2), and enters
+# each heat's watch time. The time goes into that lane's Timer 1 / Timer 2 box like typing it on the run page -
+# but never over a watch time that's already there (from the paper sheet, or typed): those show as a conflict.
+# Every phone time is kept beside the meet (phone_watches) and logged.
+
+def _timer_pin(d: Path) -> str:
+    meta = _meta(d)
+    if not meta.get("timer_pin"):
+        meta["timer_pin"] = "%04d" % secrets.randbelow(10000)
+        _save(d, meta)
+    return meta["timer_pin"]
+
+
+def _timer_meet(mid: str, pin: str) -> Path:
+    d = _dir(mid)
+    if str(pin or "").strip() != _timer_pin(d):
+        raise HTTPException(403, "Wrong timer PIN - ask the timing table for this meet's PIN")
+    if not _dbfile(d).exists():
+        raise HTTPException(400, "This meet has no meet database yet")
+    return d
+
+
+def _lan_ip() -> str:
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except OSError:
+        return "127.0.0.1"
+
+
+@app.get("/api/timer")
+def timer_meets(meet: str = ""):
+    """The meets a timer phone can pick (newest first, with a meet database, plus `meet` - the one its link names);
+    `current`: that one, else today's, else the newest."""
+    out = []
+    for d in DATA.iterdir():
+        if (d / "meta.json").exists() and _dbfile(d).exists():
+            m = _meta(d)
+            out.append({"id": d.name, "name": m.get("name", ""), "date": m.get("date", ""), "created": m.get("created", 0)})
+    out.sort(key=lambda x: (x["date"], x["created"]), reverse=True)
+    today = time.strftime("%Y-%m-%d")
+    cur = next((x["id"] for x in out if x["date"] == today), out[0]["id"] if out else None)
+    top = out[:12]
+    named = next((x for x in out if x["id"] == meet), None)
+    if named:
+        cur = meet
+        if named not in top:
+            top.insert(0, named)
+    return {"meets": top, "current": cur}
+
+
+@app.get("/api/timer/{mid}/lane/{lane}")
+def timer_lane(mid: str, lane: int, pin: str = ""):
+    """Every heat with a swimmer in `lane`, in swim order, with the times the timers have in, and the heat in the
+    water now (from meet-board)."""
+    d = _timer_meet(mid, pin)
+    m = meetdb.load(_dbfile(d))
+    meta = _meta(d)
+    phone = meta.get("phone_watches") or {}
+    evs = {v["ptr"]: v for v in m["events"]}
+    rows = []
+    for e in m["entries"]:
+        if e.get("lane") != lane or not e.get("heat") or e.get("scr"):
+            continue
+        v = evs.get(e["event"]) or {}
+        rows.append({"key": e["key"], "evno": v.get("no"), "event": meetdb.ev_label(m, e["event"]), "heat": e["heat"],
+                     "who": meetdb.who(m, e), "watch": e.get("watch") or 0, "watch2": e.get("watch2") or 0,
+                     "time": e.get("time") or 0, "stat": (e.get("stat") or "").strip(), "phone": phone.get(e["key"]) or {},
+                     "order": (list(v.get("order") or [99, v.get("no") or 0]), e["heat"])})
+    rows.sort(key=lambda r: r["order"])
+    for r in rows:
+        r.pop("order", None)
+    now = None
+    url = _settings().get("meetboard_url")
+    if url:
+        try:
+            code, body = meetboard._req(url.rstrip("/") + "/api/now", timeout=2)
+            if code == 200:
+                now = body
+        except Exception:
+            pass
+    return {"meet": meta.get("name", ""), "lane": lane, "rows": rows, "now": now, "locked": bool(meta.get("locked"))}
+
+
+@app.post("/api/timer/{mid}/time")
+def timer_time(mid: str, body: dict):
+    """A timer phone's watch time: {pin, key, slot: 1|2, t: "1:05.32" or "" to clear, lane}."""
+    d = _timer_meet(mid, body.get("pin"))
+    meta = _meta(d)
+    if meta.get("locked"):
+        raise HTTPException(423, "This meet is locked - the final results were sent.")
+    key, slot = str(body.get("key") or ""), int(body.get("slot") or 1)
+    if slot not in (1, 2):
+        raise HTTPException(400, "Timer must be 1 or 2")
+    raw = str(body.get("t") or "").strip()
+    try:
+        t = meetdb.parse_time(raw) if raw else 0
+    except ValueError:
+        raise HTTPException(400, f"\"{raw}\" isn't a time")
+    if t and not (5 <= t < 3600):
+        raise HTTPException(400, "That time doesn't look right")
+    m = meetdb.load(_dbfile(d))
+    try:
+        e = meetdb.find(m, key)
+    except KeyError:
+        raise HTTPException(404, "No such swim")
+    pw = meta.setdefault("phone_watches", {}).setdefault(key, {})
+    pw[str(slot)] = {"t": t, "at": time.strftime("%Y-%m-%d %H:%M:%S"), "lane": body.get("lane")}
+    _save(d, meta)
+    have = float(e.get("watch" if slot == 1 else "watch2") or 0)
+    if have and abs(have - t) < 0.005:
+        return {"ok": True, "status": "same", "note": "Matches the time already in."}
+    if have and t:
+        return {"ok": True, "status": "conflict",
+                "note": f"The timing table already has {meetdb.fmt_time(have)} for timer {slot} - they'll check it."}
+    if not t and not have:
+        return {"ok": True, "status": "cleared"}
+    other = float(e.get("watch2" if slot == 1 else "watch") or 0)
+    t1, t2 = (t, other) if slot == 1 else (other, t)
+    st = _settings()
+    args = {"key": key, "t1_s": meetdb.fmt_time(t1) if t1 else "", "t2_s": meetdb.fmt_time(t2) if t2 else "",
+            "tol": float(st.get("time_tolerance") or 0.30)}
+    use = (meta.get("time_ok") or {}).get(key)
+    if use in ("pad", "backup", "watch"):
+        args["use"] = use
+    ops, msg = meetdb.op_watches(m, **args)
+    _snapshot(d, "before: " + msg)
+    meetdb.apply(_dbfile(d), ops)
+    _dblog(d, msg + f" - from timer {slot}'s phone, lane {body.get('lane') or e.get('lane')}")
+    return {"ok": True, "status": "saved"}
+
+
+def _read_watch(img):
+    """Read the time off a photo of a stopwatch. Not trained on the pool's stopwatches yet: returns None (the timer
+    types the time; the photo is kept as the record)."""
+    return None
+
+
+@app.post("/api/timer/{mid}/photo")
+async def timer_photo(mid: str, pin: str = Form(""), key: str = Form(""), slot: int = Form(1), lane: str = Form(""),
+                      file: UploadFile = File(...)):
+    """A timer phone's photo of the stopwatch: kept with the swim (the record, in place of the paper sheet), and
+    read if it can be - the phone shows what was read for the timer to check and save."""
+    d = _timer_meet(mid, pin)
+    if slot not in (1, 2):
+        raise HTTPException(400, "Timer must be 1 or 2")
+    data = await file.read()
+    if len(data) > 25_000_000:
+        raise HTTPException(400, "Photo too big")
+    from PIL import Image, ImageOps
+    try:
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+    except Exception:
+        raise HTTPException(400, "That isn't a photo")
+    img.thumbnail((1600, 1600))
+    pdir = d / "timer_photos"
+    pdir.mkdir(exist_ok=True)
+    name = re.sub(r"[^A-Za-z0-9_-]", "_", key) + f"-t{slot}-{time.strftime('%H%M%S')}.jpg"
+    img.save(pdir / name, "JPEG", quality=82)
+    meta = _meta(d)
+    pw = meta.setdefault("phone_watches", {}).setdefault(key, {}).setdefault(str(slot), {})
+    pw.setdefault("photos", []).append(name)
+    pw["photo_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    _save(d, meta)
+    try:
+        read = _read_watch(img)
+    except Exception:
+        read = None
+    return {"ok": True, "photo": name, "read": meetdb.fmt_time(read) if read else None}
+
+
+@app.get("/api/meets/{mid}/timer_photo/{name}")
+def timer_photo_get(mid: str, name: str):
+    f = _dir(mid) / "timer_photos" / Path(name).name
+    if not f.is_file():
+        raise HTTPException(404)
+    return FileResponse(f, media_type="image/jpeg")
+
+
+@app.get("/api/timer-link")
+def timer_link(request: Request, mid: str = ""):
+    """For the run page: the address timers open on their phones, this meet's PIN, and a QR code (SVG)."""
+    port = request.url.port or 8000
+    url = f"http://{_lan_ip()}:{port}/timer" + (f"?meet={mid}" if mid else "")
+    pin = _timer_pin(_dir(mid)) if mid else ""
+    from reportlab.graphics.barcode.qr import QrCodeWidget
+    from reportlab.graphics.shapes import Drawing
+    from reportlab.graphics import renderSVG
+    w = QrCodeWidget(url)
+    b = w.getBounds()
+    dr = Drawing(220, 220, transform=[220. / (b[2] - b[0]), 0, 0, 220. / (b[3] - b[1]), 0, 0])
+    dr.add(w)
+    return {"url": url, "pin": pin, "qr": renderSVG.drawToString(dr)}
+
+
+@app.get("/timer")
+def timer_page():
+    return FileResponse(STATIC / "timer.html")
 
 
 @app.get("/db")

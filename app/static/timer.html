@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#0b1618">
+<title>Lane timer</title>
+<style>
+  :root { --bg:#0b1618; --card:#132328; --line:#24393e; --ink:#e9f3f5; --mute:#8fa9af; --acc:#2fbf71; --warn:#e0a63a; --err:#e5594a; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.35 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  .wrap { max-width:480px; margin:0 auto; padding:12px 14px 40px; }
+  .top { display:flex; align-items:center; gap:10px; }
+  .top b { font-size:20px; }
+  .top .grow { flex:1; }
+  .muted { color:var(--mute); font-size:14px; }
+  button { font:inherit; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px; }
+  button.pri { background:var(--acc); border-color:var(--acc); color:#04210f; font-weight:700; }
+  button:disabled { opacity:.4; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-top:12px; }
+  .ev { font-size:15px; color:var(--mute); }
+  .who { font-size:22px; font-weight:700; margin-top:2px; }
+  .now { display:inline-block; font-size:12px; font-weight:700; letter-spacing:.06em; padding:3px 8px; border-radius:999px; background:#0a6b7c; margin-left:6px; vertical-align:middle; }
+  .time { font:700 54px/1.1 Consolas, "SF Mono", monospace; text-align:center; margin:14px 0 6px; letter-spacing:.02em; }
+  .time.empty { color:#3d575d; }
+  .keys { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .keys button { font-size:28px; padding:14px 0; border-radius:12px; }
+  .row2 { display:flex; gap:8px; margin-top:10px; }
+  .row2 button { flex:1; padding:14px; font-size:17px; }
+  .msg { min-height:22px; margin-top:8px; text-align:center; font-size:15px; }
+  .ok { color:var(--acc); } .warn { color:var(--warn); } .err { color:var(--err); }
+  .list { margin-top:12px; }
+  .list div { display:flex; gap:8px; padding:9px 4px; border-bottom:1px solid var(--line); font-size:14.5px; }
+  .list div.cur { background:#18333a; border-radius:8px; }
+  .list .t { margin-left:auto; font-family:Consolas, monospace; white-space:nowrap; }
+  .pick { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:8px; }
+  .pick button.on, .seg button.on { background:#0a6b7c; border-color:#2a9fb3; font-weight:700; }
+  .seg { display:flex; gap:8px; margin-top:8px; } .seg button { flex:1; }
+  input, select { font:inherit; color:var(--ink); background:#0f1d21; border:1px solid var(--line); border-radius:10px; padding:10px; width:100%; }
+  label { display:block; margin-top:14px; font-size:14px; color:var(--mute); }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- setup -->
+  <div id="setup" class="hidden">
+    <h2 style="margin:6px 0 2px">Lane timer</h2>
+    <div class="muted">Type your watch time here after each heat instead of on the paper sheet. You need to be on the pool's wifi.</div>
+    <label>Meet</label><select id="sMeet"></select>
+    <label>Timer PIN <span class="muted">(from the timing table)</span></label><input id="sPin" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="4 digits">
+    <label>Your lane</label><div class="pick" id="sLane"></div>
+    <label>You are</label><div class="seg" id="sSlot"><button data-slot="1">Timer 1</button><button data-slot="2">Timer 2</button></div>
+    <div class="row2" style="margin-top:20px"><button class="pri" id="sGo">Start</button></div>
+    <div class="msg err" id="sErr"></div>
+  </div>
+  <!-- timing -->
+  <div id="main" class="hidden">
+    <div class="top"><b id="hdr">Lane</b><span class="grow"></span><button id="chg" style="padding:6px 10px;font-size:14px">Change</button></div>
+    <div class="muted" id="meetName"></div>
+    <div class="card">
+      <div class="ev"><span id="evTxt"></span><span class="now hidden" id="nowTag"></span></div>
+      <div class="who" id="whoTxt"></div>
+      <div class="time empty" id="tDisp">–:––.––</div>
+      <div class="muted" style="text-align:center" id="tNote"></div>
+      <img id="shot" class="hidden" style="width:100%;border-radius:10px;margin:4px 0 10px" alt="">
+      <div class="row2" style="margin:0 0 10px"><button id="cam">&#128247; Photo of my watch</button></div>
+      <input type="file" id="camIn" accept="image/*" capture="environment" class="hidden">
+      <div class="keys" id="keys"></div>
+      <div class="row2"><button id="prev">&larr; Heat</button><button class="pri" id="save">Save time</button><button id="next">Heat &rarr;</button></div>
+      <div class="msg" id="msg"></div>
+    </div>
+    <div class="card">
+      <div class="muted">Your lane's heats - tap one to go to it</div>
+      <div class="list" id="list"></div>
+    </div>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const fmt = t => { if (!t) return ""; const m = Math.floor(t / 60), s = (t - m * 60).toFixed(2); return m ? `${m}:${s.padStart(5, "0")}` : s; };
+const get = k => { try { return localStorage.getItem("lt-" + k); } catch (e) { return null; } };
+const put = (k, v) => { try { localStorage.setItem("lt-" + k, v); } catch (e) {} };
+let C = {meet: get("meet"), pin: get("pin"), lane: +get("lane") || 0, slot: +get("slot") || 1};
+let D = null, idx = -1, digits = "", userMoved = false, lastNow = "";
+async function api(u, b) {
+  const r = await fetch(u, b ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(b)} : {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || "Couldn't reach the timing table");
+  return j;
+}
+// ---- setup ----
+async function showSetup() {
+  $("#main").classList.add("hidden"); $("#setup").classList.remove("hidden");
+  $("#sLane").innerHTML = Array.from({length: 8}, (_, i) => `<button data-lane="${i + 1}" class="${C.lane === i + 1 ? "on" : ""}">${i + 1}</button>`).join("");
+  document.querySelectorAll("#sSlot button").forEach(b => b.classList.toggle("on", +b.dataset.slot === C.slot));
+  $("#sPin").value = C.pin || "";
+  try {
+    const q = new URLSearchParams(location.search).get("meet") || C.meet || "";
+    const j = await api("/api/timer?meet=" + encodeURIComponent(q)), want = j.meets.some(m => m.id === q) ? q : j.current;
+    $("#sMeet").innerHTML = j.meets.map(m => `<option value="${m.id}" ${m.id === want ? "selected" : ""}>${esc(m.name)} ${esc(m.date)}</option>`).join("");
+  } catch (e) { $("#sErr").textContent = e.message; }
+}
+$("#sLane").onclick = e => { const b = e.target.closest("[data-lane]"); if (!b) return; C.lane = +b.dataset.lane;
+  document.querySelectorAll("#sLane button").forEach(x => x.classList.toggle("on", +x.dataset.lane === C.lane)); };
+$("#sSlot").onclick = e => { const b = e.target.closest("[data-slot]"); if (!b) return; C.slot = +b.dataset.slot; document.querySelectorAll("#sSlot button").forEach(x => x.classList.toggle("on", +x.dataset.slot === C.slot)); };
+$("#sGo").onclick = async () => {
+  C.meet = $("#sMeet").value; C.pin = $("#sPin").value.trim();
+  if (!C.meet || !C.lane || !/^\d{4}$/.test(C.pin)) { $("#sErr").textContent = "Pick the meet, your lane, and type the 4-digit PIN."; return; }
+  try { await load(true); } catch (e) { $("#sErr").textContent = e.message; return; }
+  ["meet", "pin", "lane", "slot"].forEach(k => put(k, C[k]));
+  $("#setup").classList.add("hidden"); $("#main").classList.remove("hidden"); show();
+};
+$("#chg").onclick = showSetup;
+// ---- timing ----
+async function load(first) {
+  D = await api(`/api/timer/${C.meet}/lane/${C.lane}?pin=${encodeURIComponent(C.pin)}`);
+  const n = D.now || {}, nowKey = JSON.stringify(n);
+  // follow the pool: open on the heat in the water (or the one just finished) unless the timer moved by hand
+  if (first || (!userMoved && nowKey !== lastNow)) {
+    const want = n.racing ? [n.event, n.heat] : n.done_event ? [n.done_event, n.done_heat] : [n.event, n.heat];
+    let i = D.rows.findIndex(r => String(r.evno) === String(want[0]) && String(r.heat) === String(want[1]));
+    if (i < 0) i = D.rows.findIndex(r => !mine(r));
+    if (i >= 0 && i !== idx) { idx = i; digits = ""; }
+    if (idx < 0) idx = 0;
+  }
+  lastNow = nowKey;
+}
+const mine = r => (r.phone && r.phone[String(C.slot)] && r.phone[String(C.slot)].t) || 0;
+const table = r => C.slot === 1 ? r.watch : r.watch2;
+function show() {
+  if (!D) return;
+  $("#hdr").textContent = `Lane ${C.lane} · Timer ${C.slot}`;
+  $("#meetName").textContent = D.meet + (D.locked ? " - locked, results are final" : "");
+  const r = D.rows[idx], n = D.now || {};
+  if (!r) { $("#evTxt").textContent = ""; $("#whoTxt").textContent = "Nobody swims in this lane."; return; }
+  $("#evTxt").textContent = `Event ${r.evno} · Heat ${r.heat} - ${r.event.replace(/^#\d+\s*/, "")}`;
+  const isNow = String(n.event) === String(r.evno) && String(n.heat) === String(r.heat);
+  const isDone = String(n.done_event) === String(r.evno) && String(n.done_heat) === String(r.heat);
+  $("#nowTag").classList.toggle("hidden", !(isNow || isDone));
+  $("#nowTag").textContent = isNow && n.racing ? "IN THE WATER" : isDone ? "JUST FINISHED" : "ON THE BLOCKS";
+  $("#whoTxt").textContent = r.who;
+  const shown = digits ? fmtDigits(digits) : mine(r) ? fmt(mine(r)) : "";
+  $("#tDisp").textContent = shown || "–:––.––"; $("#tDisp").classList.toggle("empty", !shown);
+  $("#tNote").textContent = digits ? "not saved yet" : mine(r) ? "saved" + (table(r) && Math.abs(table(r) - mine(r)) > .005 ? ` · the table has ${fmt(table(r))}` : "")
+    : table(r) ? `the table has ${fmt(table(r))}` : "";
+  $("#prev").disabled = idx <= 0; $("#next").disabled = idx >= D.rows.length - 1;
+  $("#save").disabled = !digits || D.locked;
+  $("#list").innerHTML = D.rows.map((x, i) => `<div data-i="${i}" class="${i === idx ? "cur" : ""}"><span>E${x.evno} H${x.heat}</span><span class="muted">${esc(x.who)}</span><span class="t">${mine(x) ? fmt(mine(x)) : table(x) ? `<span class="muted">${fmt(table(x))}</span>` : "–"}</span></div>`).join("");
+}
+function fmtDigits(d) {           // typed digits, right to left: hundredths, seconds, minutes
+  d = d.replace(/^0+/, "") || "0";
+  const h = d.slice(-2).padStart(2, "0"), s = d.slice(-4, -2), m = d.slice(0, -4);
+  return m ? `${+m}:${(s || "0").padStart(2, "0")}.${h}` : `${+(s || 0)}.${h}`;
+}
+$("#keys").innerHTML = [1, 2, 3, 4, 5, 6, 7, 8, 9, "C", 0, "⌫"].map(k => `<button data-k="${k}">${k}</button>`).join("");
+$("#keys").onclick = e => {
+  const b = e.target.closest("[data-k]"); if (!b) return;
+  const k = b.dataset.k;
+  if (k === "C") digits = ""; else if (k === "⌫") digits = digits.slice(0, -1); else if (digits.length < 6) digits += k;
+  $("#msg").textContent = ""; show();
+};
+$("#save").onclick = async () => {
+  const r = D.rows[idx]; if (!r || !digits) return;
+  $("#save").disabled = true;
+  try {
+    const j = await api(`/api/timer/${C.meet}/time`, {pin: C.pin, key: r.key, slot: C.slot, t: fmtDigits(digits), lane: C.lane});
+    digits = "";
+    $("#msg").className = "msg " + (j.status === "conflict" ? "warn" : "ok");
+    $("#msg").textContent = j.status === "conflict" ? j.note : "Saved ✓";
+    if (navigator.vibrate) navigator.vibrate(60);
+    await load(); show();
+  } catch (e) { $("#msg").className = "msg err"; $("#msg").textContent = e.message; show(); }
+};
+$("#cam").onclick = () => $("#camIn").click();
+$("#camIn").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; const r = D && D.rows[idx]; if (!f || !r) return;
+  const url = URL.createObjectURL(f); $("#shot").src = url; $("#shot").classList.remove("hidden");
+  $("#msg").className = "msg"; $("#msg").textContent = "Sending the photo…";
+  const fd = new FormData(); fd.append("pin", C.pin); fd.append("key", r.key); fd.append("slot", C.slot); fd.append("lane", C.lane); fd.append("file", f);
+  try {
+    const res = await fetch(`/api/timer/${C.meet}/photo`, {method: "POST", body: fd}), j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.detail || "Couldn't send the photo");
+    if (j.read) { digits = j.read.replace(/\D/g, ""); $("#msg").className = "msg ok"; $("#msg").textContent = "Read from the photo - check it matches your watch, then Save."; }
+    else { $("#msg").className = "msg warn"; $("#msg").textContent = "Photo saved. Type the time from it, then Save."; }
+  } catch (err) { $("#msg").className = "msg err"; $("#msg").textContent = err.message; }
+  show();
+};
+const go = i => { if (i < 0 || !D || i >= D.rows.length) return; idx = i; digits = ""; $("#shot").classList.add("hidden"); userMoved = true; $("#msg").textContent = ""; show();
+  clearTimeout(go.t); go.t = setTimeout(() => { userMoved = false; }, 120000); };
+$("#prev").onclick = () => go(idx - 1);
+$("#next").onclick = () => go(idx + 1);
+$("#list").onclick = e => { const d = e.target.closest("[data-i]"); if (d) { go(+d.dataset.i); window.scrollTo({top: 0, behavior: "smooth"}); } };
+setInterval(async () => { if ($("#main").classList.contains("hidden") || digits) return; try { await load(); show(); } catch (e) {} }, 5000);
+// start
+(async () => {
+  if (C.meet && C.pin && C.lane) {
+    try { await load(true); $("#main").classList.remove("hidden"); show(); return; } catch (e) {}
+  }
+  showSetup();
+})();
+</script>
+</body>
+</html>

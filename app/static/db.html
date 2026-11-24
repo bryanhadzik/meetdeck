@@ -184,6 +184,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
     <div class="menu" id="moreMenu"><button type="button" id="moreBtn">More &#9662;</button>
       <div class="pop hidden" id="morePop" style="min-width:170px;left:0;right:auto"><button data-tab="teams">Teams</button><button data-tab="rules">Rules</button><button data-tab="changes">Changes</button></div></div></nav>
   <a class="hidden" id="finishBtn" href="#" style="text-decoration:none;background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:5px 11px;font-size:13px;white-space:nowrap" title="Send results: emails, files, Meet Manager backup">Finish the meet &rarr;</a>
+  <button class="ghost small hidden" id="tpBtn" title="Timers type (or photograph) their watch times on their phones instead of the paper sheet">Timer phones</button>
   <button class="small hidden" id="scoreBtn" title="Scoring settings (Utah high school / NFHS tables)">Scoring</button>
   <button class="ghost small hidden" id="undoBtn" title="Undo the last change">Undo</button>
   <div class="menu hidden" id="printMenu"><button class="ghost small" id="printBtn">Print ▾</button>
@@ -435,6 +436,27 @@ async function vidSync() {
   } catch (e) {} finally { vidSyncing = false; }
 }
 window.addEventListener("focus", vidSync);
+// timer phones: the address + PIN + QR code to show the lane timers
+$("#tpBtn").onclick = async () => {
+  let box = $("#tpBox");
+  if (!box) {
+    box = document.createElement("div"); box.id = "tpBox";
+    box.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:center;justify-content:center";
+    box.onclick = e => { if (e.target === box) box.remove(); };
+    document.body.appendChild(box);
+  }
+  box.innerHTML = `<div style="background:var(--card,#fff);color:inherit;border-radius:12px;padding:20px 24px;max-width:460px;text-align:center">Loading…</div>`;
+  try {
+    const j = await api(`/api/timer-link?mid=${MID}`);
+    box.firstElementChild.innerHTML = `<h3 style="margin:0 0 6px">Timer phones</h3>
+      <div class="muted" style="font-size:13px">Lane timers join the pool wifi, scan this, pick their lane and timer 1 or 2, and type (or photograph) each heat's watch time.
+      It fills that lane's Timer box here - never over a time that's already in.</div>
+      <div style="margin:12px auto;width:220px;background:#fff;padding:6px;border-radius:8px">${j.qr}</div>
+      <div style="font:600 15px Consolas,monospace">${esc(j.url)}</div>
+      <div style="margin-top:8px;font-size:15px">Timer PIN <b style="font:700 26px Consolas,monospace;letter-spacing:.15em">${esc(j.pin)}</b></div>
+      <div style="margin-top:14px"><button class="small" onclick="document.getElementById('tpBox').remove()">Close</button></div>`;
+  } catch (e) { box.firstElementChild.textContent = e.message; }
+};
 function show() {
   document.title = `Database · ${S.meet_name || S.meet || ""}`;
   $("#backBtn").href = `/?meet=${encodeURIComponent(MID)}`;
@@ -457,7 +479,7 @@ function show() {
   { const sel = $("#xTeam"), cur = sel.value, o = Object.values(M.teams).sort((a, b) => (a.name || "").localeCompare(b.name || ""))
       .map(t => `<option value="${t.no}">${esc(t.name || t.abbr)}</option>`).join("");
     if (sel.dataset.o !== o) { sel.innerHTML = o; sel.dataset.o = o; if (cur) sel.value = cur; } }
-  ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn", "#finishBtn"].forEach(s => $(s).classList.remove("hidden"));
+  ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn", "#finishBtn", "#tpBtn"].forEach(s => $(s).classList.remove("hidden"));
   { const sel = $("#prLane"), cur = sel.value; sel.innerHTML = `<option value="">all lanes</option>` + Array.from({length: M.meet.lanes || 8}, (_, i) => `<option value="${i + 1}">lane ${i + 1}</option>`).join(""); sel.value = cur; }
   $("#src").textContent = `${M.meet.name !== (S.meet_name) ? M.meet.name + " · " : ""}${M.meet.start}${S.info.source ? " · " + S.info.source : ""}`;
   const last = S.log.find(l => l.kind === "change");

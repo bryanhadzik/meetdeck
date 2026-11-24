@@ -1434,7 +1434,7 @@ def watches_needed(m, tol=0.30, keys=None, ask=(), rec=(), ok=()):
         if keys is not None:
             if e["key"] not in keys:
                 continue
-        elif (e.get("watch") or 0) > 0 or (e.get("watch2") or 0) > 0:
+        elif (e.get("watch") or 0) > 0 or (e.get("watch2") or 0) > 0 or (e.get("watch3") or 0) > 0:
             continue
         pad = float(e.get("pad") or 0)
         btn = [float(x) for x in (e.get("backup"), e.get("back2"), e.get("back3")) if x and float(x) > 0]

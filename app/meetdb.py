@@ -220,7 +220,7 @@ def _entry(r, kind, key, **kw):
             "dq2": _s(r.get("Fin_dqcodeSecond")),
             "exh": _s(r.get("Fin_exh")) == "X" or _s(r.get("Pre_exh")) == "X",
             "nonscoring": (r.get("Fin_ptsplace") or 0) == 999, "ptsplace": r.get("Fin_ptsplace") or 0,
-            "backup": r.get("Fin_back1") or 0, "back2": r.get("Fin_back2") or 0, "back3": r.get("Fin_back3") or 0, "pad": r.get("Fin_pad") or 0, "watch": r.get("Fin_watch1") or 0, "watch2": r.get("Sem_watch1") or 0, **kw}
+            "backup": r.get("Fin_back1") or 0, "back2": r.get("Fin_back2") or 0, "back3": r.get("Fin_back3") or 0, "pad": r.get("Fin_pad") or 0, "watch": r.get("Fin_watch1") or 0, "watch2": r.get("Sem_watch1") or 0, "watch3": r.get("Pre_watch1") or 0, **kw}
 
 
 def json_safe(m: dict) -> dict:
@@ -389,12 +389,14 @@ def op_seed(m, key, seed):
         f"Seed time for {who(m, e)} in {ev_label(m, e['event'])} set to {fmt_time(t) or 'NT'}"
 
 
-def timers_time(t1, t2):
-    """NFHS 6-4-1b for hand timing: two valid watch times are averaged with the thousandths dropped
-    (no rounding); one valid time stands on its own."""
-    h = [round(float(t) * 100) for t in (t1, t2) if t]
+def timers_time(t1, t2, t3=0):
+    """NFHS 6-4-1b for hand timing: three valid watch times - the middle one; two - averaged with the thousandths
+    dropped (no rounding); one valid time stands on its own."""
+    h = [round(float(t) * 100) for t in (t1, t2, t3) if t]
     if not h:
         return 0
+    if len(h) == 3:
+        return sorted(h)[1] / 100
     return (sum(h) // len(h)) / 100
 
 
@@ -407,7 +409,7 @@ def op_result(m, key, time_s=None, stat="", dq="", t1_s=None, t2_s=None):
         # leaves unused for timed-final events
         t1 = parse_time(t1_s if t1_s is not None else (fmt_time(e.get("watch")) if e.get("watch") else ""))
         t2 = parse_time(t2_s if t2_s is not None else (fmt_time(e.get("watch2")) if e.get("watch2") else ""))
-        t = timers_time(t1, t2)
+        t = timers_time(t1, t2, e.get("watch3") or 0)
     else:
         t = parse_time(time_s)
     s = {"Fin_Time": t, "Fin_stat": stat or " ", "Fin_dqcode": (dq or "").upper() or None, "Fin_course": "Y"}
@@ -442,12 +444,15 @@ def pick_time(pad, back, watch, tol=0.30):
 PAD_EARLY = 3.0
 
 
-def op_watches(m, key, t1_s="", t2_s="", tol=0.30, use="auto"):
-    """The timers' watch times for one lane (from the Watches needed sheet). Keeps both watches and makes the
-    official time whichever of pad / backup button / watches the rule picks (use= to force one)."""
+def op_watches(m, key, t1_s="", t2_s="", tol=0.30, use="auto", t3_s=None, keep_slots=False):
+    """The timers' watch times for one lane (from the Watches needed sheet, the run page or a timer's phone). Keeps
+    the watches and makes the official time whichever of pad / backup button / watches the rule picks (use= to
+    force one). Timer 3 (t3_s; None = leave it) is kept in Pre_watch1, unused for timed finals. keep_slots: each
+    timer's time stays in its own box (a phone's timer 2 stays timer 2 even before timer 1 is in)."""
     e = find(m, key)
     t1, t2 = parse_time(t1_s or ""), parse_time(t2_s or "")
-    watch = timers_time(t1, t2)
+    t3 = parse_time(t3_s or "") if t3_s is not None else float(e.get("watch3") or 0)
+    watch = timers_time(t1, t2, t3)
     pad = float(e.get("pad") or 0)
     btn = [float(x) for x in (e.get("backup"), e.get("back2"), e.get("back3")) if x and float(x) > 0]
     back = (sum(round(b * 100) for b in btn) // len(btn)) / 100 if btn else 0
@@ -459,9 +464,9 @@ def op_watches(m, key, t1_s="", t2_s="", tol=0.30, use="auto"):
     stat = (e.get("stat") or "").strip()
     if stat == "R" and final:
         stat = ""                       # had no time (no-show) - now it has one
-    s = {"Fin_watch1": t1 or (t2 if not t1 else 0), "Sem_watch1": t2 if t1 else 0, "Fin_Time": final if stat not in ("R", "F") else 0,
-         "Fin_stat": stat or " ", "Fin_course": "Y"}
-    e2 = {**e, "time": s["Fin_Time"], "stat": stat, "watch": s["Fin_watch1"], "watch2": s["Sem_watch1"]}
+    s = {"Fin_watch1": t1 if keep_slots else t1 or (t2 if not t1 else 0), "Sem_watch1": t2 if keep_slots or t1 else 0,
+         "Pre_watch1": t3 or 0, "Fin_Time": final if stat not in ("R", "F") else 0, "Fin_stat": stat or " ", "Fin_course": "Y"}
+    e2 = {**e, "time": s["Fin_Time"], "stat": stat, "watch": s["Fin_watch1"], "watch2": s["Sem_watch1"], "watch3": t3 or 0}
     import results
     s["fin_adjuststat"] = results.time_code({k: v for k, v in e2.items() if k != "adj"}) or " "
     ops = [{"op": "update", "table": _table(e), "match": _match(e), "set": s}]
@@ -469,7 +474,8 @@ def op_watches(m, key, t1_s="", t2_s="", tol=0.30, use="auto"):
     src = {"pad": "pad", "backup": "backup button", "watch": "timers"}[use]
     was = fmt_time(e.get("time")) or "-"
     return ops, (f"Watches for {who(m, e)} in {ev_label(m, e['event'])}: {fmt_time(t1) or '-'} / {fmt_time(t2) or '-'}"
-                 f" - official {fmt_time(s['Fin_Time']) or '-'} ({src})" + (f", was {was}" if abs((e.get('time') or 0) - s['Fin_Time']) > 0.004 else ""))
+                 + (f" / {fmt_time(t3)}" if t3 else "")
+                 + f" - official {fmt_time(s['Fin_Time']) or '-'} ({src})" + (f", was {was}" if abs((e.get('time') or 0) - s['Fin_Time']) > 0.004 else ""))
 
 
 def places_ops(m, ptr, override=None):

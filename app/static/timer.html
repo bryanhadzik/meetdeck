@@ -47,16 +47,13 @@
   <div id="setup" class="hidden">
     <h2 style="margin:6px 0 2px">Lane timer</h2>
     <div class="muted">Type your watch time here after each heat instead of on the paper sheet. You need to be on the pool's wifi.</div>
-    <label>Meet</label><select id="sMeet"></select>
-    <label>Timer PIN <span class="muted">(from the timing table)</span></label><input id="sPin" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="4 digits">
     <label>Your lane</label><div class="pick" id="sLane"></div>
-    <label>You are</label><div class="seg" id="sSlot"><button data-slot="1">Timer 1</button><button data-slot="2">Timer 2</button></div>
-    <div class="row2" style="margin-top:20px"><button class="pri" id="sGo">Start</button></div>
+    <div id="sMore" class="hidden"><label>Meet</label><select id="sMeet"></select></div>
     <div class="msg err" id="sErr"></div>
   </div>
   <!-- timing -->
   <div id="main" class="hidden">
-    <div class="top"><b id="hdr">Lane</b><span class="grow"></span><button id="chg" style="padding:6px 10px;font-size:14px">Change</button></div>
+    <div class="top"><b id="hdr">Lane</b><span class="grow"></span><button id="swap" style="padding:6px 10px;font-size:14px" title="Which timer you are on this lane - tap to switch (1, 2, 3)">Timer 1</button><button id="chg" style="padding:6px 10px;font-size:14px">Lane</button></div>
     <div class="muted" id="meetName"></div>
     <div class="card">
       <div class="ev"><span id="evTxt"></span><span class="now hidden" id="nowTag"></span></div>
@@ -82,7 +79,8 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&": "&amp
 const fmt = t => { if (!t) return ""; const m = Math.floor(t / 60), s = (t - m * 60).toFixed(2); return m ? `${m}:${s.padStart(5, "0")}` : s; };
 const get = k => { try { return localStorage.getItem("lt-" + k); } catch (e) { return null; } };
 const put = (k, v) => { try { localStorage.setItem("lt-" + k, v); } catch (e) {} };
-let C = {meet: get("meet"), pin: get("pin"), lane: +get("lane") || 0, slot: +get("slot") || 1};
+let C = {meet: get("meet"), pin: "", lane: +get("lane") || 0, slot: +get("slot") || 0, dev: get("dev")};
+if (!C.dev) { C.dev = Math.random().toString(36).slice(2, 12); put("dev", C.dev); }
 let D = null, idx = -1, digits = "", userMoved = false, lastNow = "";
 async function api(u, b) {
   const r = await fetch(u, b ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(b)} : {});
@@ -93,29 +91,31 @@ async function api(u, b) {
 // ---- setup ----
 async function showSetup() {
   $("#main").classList.add("hidden"); $("#setup").classList.remove("hidden");
-  $("#sLane").innerHTML = Array.from({length: 8}, (_, i) => `<button data-lane="${i + 1}" class="${C.lane === i + 1 ? "on" : ""}">${i + 1}</button>`).join("");
-  document.querySelectorAll("#sSlot button").forEach(b => b.classList.toggle("on", +b.dataset.slot === C.slot));
-  $("#sPin").value = C.pin || "";
+  $("#sLane").innerHTML = Array.from({length: 8}, (_, i) => `<button data-lane="${i + 1}" class="${C.lane === i + 1 ? "on" : ""}" style="font-size:26px;padding:18px 0">${i + 1}</button>`).join("");
   try {
     const q = new URLSearchParams(location.search).get("meet") || C.meet || "";
     const j = await api("/api/timer?meet=" + encodeURIComponent(q)), want = j.meets.some(m => m.id === q) ? q : j.current;
     $("#sMeet").innerHTML = j.meets.map(m => `<option value="${m.id}" ${m.id === want ? "selected" : ""}>${esc(m.name)} ${esc(m.date)}</option>`).join("");
+    // only ask about the meet when there's a choice to make today
+    const today = new Date().toISOString().slice(0, 10);
+    $("#sMore").classList.toggle("hidden", j.meets.filter(m => m.date === today).length < 2 && !!want);
   } catch (e) { $("#sErr").textContent = e.message; }
 }
-$("#sLane").onclick = e => { const b = e.target.closest("[data-lane]"); if (!b) return; C.lane = +b.dataset.lane;
-  document.querySelectorAll("#sLane button").forEach(x => x.classList.toggle("on", +x.dataset.lane === C.lane)); };
-$("#sSlot").onclick = e => { const b = e.target.closest("[data-slot]"); if (!b) return; C.slot = +b.dataset.slot; document.querySelectorAll("#sSlot button").forEach(x => x.classList.toggle("on", +x.dataset.slot === C.slot)); };
-$("#sGo").onclick = async () => {
-  C.meet = $("#sMeet").value; C.pin = $("#sPin").value.trim();
-  if (!C.meet || !C.lane || !/^\d{4}$/.test(C.pin)) { $("#sErr").textContent = "Pick the meet, your lane, and type the 4-digit PIN."; return; }
-  try { await load(true); } catch (e) { $("#sErr").textContent = e.message; return; }
-  ["meet", "pin", "lane", "slot"].forEach(k => put(k, C[k]));
+$("#sLane").onclick = async e => {
+  const b = e.target.closest("[data-lane]"); if (!b) return;
+  if (C.lane !== +b.dataset.lane) C.slot = 0;          // a new lane: the server says which timer this phone is
+  C.lane = +b.dataset.lane; C.meet = $("#sMeet").value;
+  if (!C.meet) { $("#sErr").textContent = "No meet is set up yet - ask the timing table."; return; }
+  try { await load(true); } catch (err) { $("#sErr").textContent = err.message; return; }
+  ["meet", "lane", "slot"].forEach(k => put(k, C[k]));
   $("#setup").classList.add("hidden"); $("#main").classList.remove("hidden"); show();
 };
+$("#swap").onclick = () => { C.slot = C.slot % 3 + 1; put("slot", C.slot); digits = ""; show(); };
 $("#chg").onclick = showSetup;
 // ---- timing ----
 async function load(first) {
-  D = await api(`/api/timer/${C.meet}/lane/${C.lane}?pin=${encodeURIComponent(C.pin)}`);
+  D = await api(`/api/timer/${C.meet}/lane/${C.lane}?device=${encodeURIComponent(C.dev)}`);
+  if (!C.slot) { C.slot = D.slot || 1; put("slot", C.slot); }
   const n = D.now || {}, nowKey = JSON.stringify(n);
   // follow the pool: open on the heat in the water (or the one just finished) unless the timer moved by hand
   if (first || (!userMoved && nowKey !== lastNow)) {
@@ -128,10 +128,11 @@ async function load(first) {
   lastNow = nowKey;
 }
 const mine = r => (r.phone && r.phone[String(C.slot)] && r.phone[String(C.slot)].t) || 0;
-const table = r => C.slot === 1 ? r.watch : r.watch2;
+const table = r => ({1: r.watch, 2: r.watch2, 3: r.watch3})[C.slot] || 0;
 function show() {
   if (!D) return;
-  $("#hdr").textContent = `Lane ${C.lane} · Timer ${C.slot}`;
+  $("#hdr").textContent = `Lane ${C.lane}`;
+  $("#swap").textContent = `Timer ${C.slot}`;
   $("#meetName").textContent = D.meet + (D.locked ? " - locked, results are final" : "");
   const r = D.rows[idx], n = D.now || {};
   if (!r) { $("#evTxt").textContent = ""; $("#whoTxt").textContent = "Nobody swims in this lane."; return; }
@@ -165,7 +166,7 @@ $("#save").onclick = async () => {
   const r = D.rows[idx]; if (!r || !digits) return;
   $("#save").disabled = true;
   try {
-    const j = await api(`/api/timer/${C.meet}/time`, {pin: C.pin, key: r.key, slot: C.slot, t: fmtDigits(digits), lane: C.lane});
+    const j = await api(`/api/timer/${C.meet}/time`, {key: r.key, slot: C.slot, t: fmtDigits(digits), lane: C.lane});
     digits = "";
     $("#msg").className = "msg " + (j.status === "conflict" ? "warn" : "ok");
     $("#msg").textContent = j.status === "conflict" ? j.note : "Saved ✓";
@@ -178,7 +179,7 @@ $("#camIn").onchange = async e => {
   const f = e.target.files[0]; e.target.value = ""; const r = D && D.rows[idx]; if (!f || !r) return;
   const url = URL.createObjectURL(f); $("#shot").src = url; $("#shot").classList.remove("hidden");
   $("#msg").className = "msg"; $("#msg").textContent = "Sending the photo…";
-  const fd = new FormData(); fd.append("pin", C.pin); fd.append("key", r.key); fd.append("slot", C.slot); fd.append("lane", C.lane); fd.append("file", f);
+  const fd = new FormData(); fd.append("key", r.key); fd.append("slot", C.slot); fd.append("lane", C.lane); fd.append("file", f);
   try {
     const res = await fetch(`/api/timer/${C.meet}/photo`, {method: "POST", body: fd}), j = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(j.detail || "Couldn't send the photo");
@@ -195,7 +196,7 @@ $("#list").onclick = e => { const d = e.target.closest("[data-i]"); if (d) { go(
 setInterval(async () => { if ($("#main").classList.contains("hidden") || digits) return; try { await load(); show(); } catch (e) {} }, 5000);
 // start
 (async () => {
-  if (C.meet && C.pin && C.lane) {
+  if (C.meet && C.lane) {
     try { await load(true); $("#main").classList.remove("hidden"); show(); return; } catch (e) {}
   }
   showSetup();

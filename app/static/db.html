@@ -449,11 +449,11 @@ $("#tpBtn").onclick = async () => {
   try {
     const j = await api(`/api/timer-link?mid=${MID}`);
     box.firstElementChild.innerHTML = `<h3 style="margin:0 0 6px">Timer phones</h3>
-      <div class="muted" style="font-size:13px">Lane timers join the pool wifi, scan this, pick their lane and timer 1 or 2, and type (or photograph) each heat's watch time.
+      <div class="muted" style="font-size:13px">Lane timers join the pool wifi, scan this, pick their lane, and type (or photograph) each heat's watch time.
       It fills that lane's Timer box here - never over a time that's already in.</div>
       <div style="margin:12px auto;width:220px;background:#fff;padding:6px;border-radius:8px">${j.qr}</div>
       <div style="font:600 15px Consolas,monospace">${esc(j.url)}</div>
-      <div style="margin-top:8px;font-size:15px">Timer PIN <b style="font:700 26px Consolas,monospace;letter-spacing:.15em">${esc(j.pin)}</b></div>
+      <div class="muted" style="margin-top:8px;font-size:13px">They just pick their lane. The first phone on a lane is Timer 1, the next Timer 2, then Timer 3 (they can switch).</div>
       <div style="margin-top:14px"><button class="small" onclick="document.getElementById('tpBox').remove()">Close</button></div>`;
   } catch (e) { box.firstElementChild.textContent = e.message; }
 };
@@ -837,7 +837,7 @@ function recordsStrip() {
 function recSaveCtl(r) {
   if (S.test || r.tie) return "";
   const e = M.entries.find(x => x.key === r.key);
-  if (e && !r.saved && !(+e.watch > 0 || +e.watch2 > 0)) return ` <span class="badge" style="background:var(--warn-bg);color:var(--warn)" title="Record swims need the timers' watch times to confirm the time - enter them in Enter watch times (Watches needed)">needs watch times</span>`;
+  if (e && !r.saved && !(+e.watch > 0 || +e.watch2 > 0 || +e.watch3 > 0)) return ` <span class="badge" style="background:var(--warn-bg);color:var(--warn)" title="Record swims need the timers' watch times to confirm the time - enter them in Enter watch times (Watches needed)">needs watch times</span>`;
   const k = `data-reckey="${esc(r.key)}" data-recptr="${r.tag_ptr}"`;
   return r.saved ? ` <span class="badge ok">saved</span> <button class="ghost small" data-recundo ${k}>Undo</button>`
                  : ` <button class="small" data-recsave ${k} title="Write this into the school record lists (the master meet files). Check the time first.">Save to records</button>`;
@@ -1029,7 +1029,7 @@ function usedSource(e) {
   if (!t) return null;
   const btn = [e.backup, e.back2, e.back3].filter(x => +x > 0);
   const avg = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
-  const tm = [e.watch, e.watch2].filter(x => +x > 0);
+  const tm = [e.watch, e.watch2, e.watch3].filter(x => +x > 0);
   const tavg = tm.length ? Math.floor(tm.reduce((a, b) => a + Math.round(b * 100), 0) / tm.length) / 100 : 0;
   if (same(+e.pad, t)) return "Pad";
   if (btn.some(b => same(+b, t)) || (avg && Math.abs(avg - t) < 0.015)) return "Button";
@@ -1038,16 +1038,16 @@ function usedSource(e) {
 }
 function usedBadge(e) {
   let src = usedSource(e);
-  if ((S.time_ok || {})[e.key] === "watch" && !(+e.watch > 0 || +e.watch2 > 0)) src = "Timers";
+  if ((S.time_ok || {})[e.key] === "watch" && !(+e.watch > 0 || +e.watch2 > 0 || +e.watch3 > 0)) src = "Timers";
   if (!src) return e.heat && e.lane && !e.scr ? ` <span class="used" data-usedpick="${e.key}" title="Pick where the time comes from - e.g. the timers, before their watch times are in" style="cursor:pointer;display:inline-block;min-width:44px;font-size:11.5px;color:var(--muted);border:1px dashed currentColor;border-radius:9px;padding:0 6px;text-align:center">from ▾</span>` : "";
-  const parts = [["Pad", e.pad], ["Backup button", [e.backup, e.back2, e.back3].filter(x => +x > 0).map(fmt).join(" / ")], ["Timers", [e.watch, e.watch2].filter(x => +x > 0).map(fmt).join(" / ")]]
+  const parts = [["Pad", e.pad], ["Backup button", [e.backup, e.back2, e.back3].filter(x => +x > 0).map(fmt).join(" / ")], ["Timers", [e.watch, e.watch2, e.watch3].filter(x => +x > 0).map(fmt).join(" / ")]]
     .map(([k, v]) => `${k}: ${typeof v === "number" ? (v ? fmt(v) : "—") : (v || "—")}`).join(" · ");
   const col = {Pad: "var(--ok)", Button: "var(--accent)", Timers: "var(--warn)", Manual: "var(--muted)"}[src];
   return ` <span class="used" data-usedpick="${e.key}" title="${esc(parts)}${src === "Manual" ? " · typed in by hand" : ""} · click to use a different saved time" style="cursor:pointer;display:inline-block;min-width:44px;font-size:11.5px;color:${col};border:1px solid currentColor;border-radius:9px;padding:0 6px;text-align:center">${src} ▾</span>`;
 }
 // every saved time for an entry, to switch the official time later without retyping
 function savedTimes(e) {
-  const btn = [e.backup, e.back2, e.back3].filter(x => +x > 0), tm = [e.watch, e.watch2].filter(x => +x > 0);
+  const btn = [e.backup, e.back2, e.back3].filter(x => +x > 0), tm = [e.watch, e.watch2, e.watch3].filter(x => +x > 0);
   const avg = a => a.length ? Math.floor(a.reduce((x, y) => x + Math.round(y * 100), 0) / a.length) / 100 : 0;
   const out = [];
   if (+e.pad) out.push(["Pad", +e.pad]);
@@ -1065,7 +1065,7 @@ function usedPicker(key, anchor) {
   pop.style.cssText = "position:absolute;z-index:50;background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);padding:4px;font-size:13px";
   pop.innerHTML = `<div class="muted" style="padding:4px 8px;font-size:12px">Official time (now ${esc(fmt(e.time) || "none")})</div>` +
     opts.map(([k, t]) => `<button class="ghost small" data-usedset="${t}" style="display:block;width:100%;text-align:left${Math.abs(t - e.time) < 0.005 ? ";font-weight:700" : ""}">${esc(k)} &nbsp;<b>${esc(fmt(t))}</b></button>`).join("") +
-    (+e.watch > 0 || +e.watch2 > 0 ? "" : `<button class="ghost small" data-useduse="watch" style="display:block;width:100%;text-align:left${chose === "watch" ? ";font-weight:700" : ""}">Timers &nbsp;<span class="muted">(watch times to come - goes on the Watches needed sheet)</span></button>`) +
+    (+e.watch > 0 || +e.watch2 > 0 || +e.watch3 > 0 ? "" : `<button class="ghost small" data-useduse="watch" style="display:block;width:100%;text-align:left${chose === "watch" ? ";font-weight:700" : ""}">Timers &nbsp;<span class="muted">(watch times to come - goes on the Watches needed sheet)</span></button>`) +
     (chose ? `<button class="ghost small" data-useduse="" style="display:block;width:100%;text-align:left">Back to the usual rule</button>` : "");
   const r = anchor.getBoundingClientRect();
   pop.style.left = (r.left + scrollX) + "px"; pop.style.top = (r.bottom + scrollY + 4) + "px";
@@ -1089,6 +1089,8 @@ document.addEventListener("click", async ev => {
 const hasVid = () => !!(S && S.video && Object.keys(S.video).length);
 // the video runs a little off on average, so it "agrees" within the usual tolerance plus 0.3 s
 const vtol = () => 1.0 + 1e-9;   // video agrees when within 1 s of the time it is compared with
+// a third timer's box shows once any lane in the meet has a timer 3 time (from a timer's phone)
+const T3 = () => !!(M && M.entries.some(e => +e.watch3 > 0));
 const vidOf = e => (S && S.video || {})[e.key];
 function vidRows(e, base, row, grp) {      // the video time as one more row of the pop-up's table
   const v = vidOf(e); if (!v || !v.t) return "";
@@ -1123,13 +1125,13 @@ function timerCells(e) {
   // amber = disagrees with the time being used (once there's an official time); before that, pad vs button
   const off = +e.time || 0, ref = off || pad || back;
   const acc0 = (S.time_ok || {})[e.key];               // pad or button accepted by hand: nothing is amber any more
-  const acc = acc0 && (acc0 !== "watch" || +e.watch > 0 || +e.watch2 > 0) ? acc0 : "";
-  const hasW = +e.watch > 0 || +e.watch2 > 0;
+  const acc = acc0 && (acc0 !== "watch" || +e.watch > 0 || +e.watch2 > 0 || +e.watch3 > 0) ? acc0 : "";
+  const hasW = +e.watch > 0 || +e.watch2 > 0 || +e.watch3 > 0;
   // until a watch time is in, pad and button that disagree both stay amber; after that amber = off the official time
   const odd0 = t => !acc && (!hasW ? far(pad, back) : off ? far(t, off) : far(pad, back));
   // the official time is settled when at least two of pad / button / watches agree with it: a time that's off
   // from it then isn't a problem, just not used - shown greyed and struck through instead of amber
-  const srcs = [pad, back, +e.watch || 0, +e.watch2 || 0].filter(t => t > 0);
+  const srcs = [pad, back, +e.watch || 0, +e.watch2 || 0, +e.watch3 || 0].filter(t => t > 0);
   const settled = off > 0 && srcs.filter(t => !far(t, off)).length >= 2;
   const odd = t => odd0(t) && !settled;
   const outl = t => t > 0 && off > 0 && settled && far(t, off);
@@ -1142,7 +1144,7 @@ function timerCells(e) {
   // hover pop-up for a greyed time: every time grouped - the ones that agree with the official time, then the odd
   // one(s) out with how far off and what that usually means
   const srcName = {Pad: "the pad", Button: "the backup button", Timers: "the timers' watches", Manual: "a time typed in"}[usedSource(e)] || "the usual rule";
-  const all = [["Pad", pad, "pad"], [btn.length > 1 ? "Buttons (avg)" : "Button", back, "button"], ["Timer 1", +e.watch || 0, "watch"], ["Timer 2", +e.watch2 || 0, "watch"]].filter(x => x[1] > 0);
+  const all = [["Pad", pad, "pad"], [btn.length > 1 ? "Buttons (avg)" : "Button", back, "button"], ["Timer 1", +e.watch || 0, "watch"], ["Timer 2", +e.watch2 || 0, "watch"], ["Timer 3", +e.watch3 || 0, "watch"]].filter(x => x[1] > 0);
   const why = (name, t, kind) => {
     const d = t - (off || pad || back), a = Math.abs(d).toFixed(2);
     if (kind === "pad") return d > 0 ? `${a} s slower: usually a soft or missed touch on the pad, so it caught a later touch` : `${a} s faster: usually the pad was set off early - a splash, a wave or the swimmer in the next lane`;
@@ -1188,7 +1190,7 @@ function timerCells(e) {
   const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" ${wOut(+val) || (+val && !acc && far(val, ref)) ? `data-tip="${esc(whyTip(["Timer " + n, +val, "watch"]))}"` : +val ? `data-tip="${esc(whyTip(["Timer " + n, +val, "watch"]))}" data-tipdelay="1000"` : `title="Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)"`} style="width:72px${wOut(+val) ? OUT : !acc && far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
   return ro(pad, "Pad (touchpad) time", odd(pad), "pad") +
     ro(back, btn.length > 1 ? "Backup buttons: " + btn.map(fmt).join(" / ") + " (average)" : "Backup button", odd(back), "backup") +
-    w(1, e.watch) + `<td style="white-space:nowrap">${w(2, e.watch2).slice(4, -5)}${e.heat && e.lane ? " " + wAskBtn(e) : ""}</td>` +
+    w(1, e.watch) + (T3() ? w(2, e.watch2) + `<td style="white-space:nowrap">${w(3, e.watch3).slice(4, -5)}` : `<td style="white-space:nowrap">${w(2, e.watch2).slice(4, -5)}`) + `${e.heat && e.lane ? " " + wAskBtn(e) : ""}</td>` +
     (hasVid() ? vidCell(e, whyTip) : "") +
     `<td style="white-space:nowrap"><input class="t" data-time="${e.key}" value="${esc(fmt(e.time))}" placeholder="time" ${e.time ? `data-tip="${esc(whyTip(null) + '<div style="margin-top:6px;font-size:12px;opacity:.75">Type a time here to override it.</div>')}" data-tipdelay="1000"` : 'title="Official time - type one in to override"'}></td><td style="white-space:nowrap">${usedBadge(e)}</td>`;
 }
@@ -1215,7 +1217,7 @@ function renderEvent() {
       <td class="act" style="white-space:nowrap">${e.kind === "R" && !e.scr ? `<button class="ghost small" data-legs="${e.key}" title="Change the relay's swimmers">Legs</button> ` : ""}${e.scr ? `<button class="ghost small" data-scr="${e.key}" data-on="0" data-tip="${TIP.putback}">Put back</button>`
         : S.started ? ""
         : `<button class="ghost small" data-scr="${e.key}" data-on="1" data-tip="${TIP.drop}">Drop</button>`}</td></tr>`;
-  const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th class="seedc">Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>Pad</th><th>Button</th><th>Timer 1</th><th>Timer 2</th>${hasVid() ? '<th title="Touch time read off the pool camera - a reference only, it never changes a time">Video</th>' : ""}<th>Official time</th><th>Source</th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
+  const head = `<tr><th></th><th>${v.ind_rel === "R" ? "Relay" : "Swimmer"}</th><th>Team</th><th class="seedc">Seed</th>${MOVING ? "<th>Heat · lane</th>" : ""}<th>Pad</th><th>Button</th><th>Timer 1</th><th>Timer 2</th>${T3() ? "<th>Timer 3</th>" : ""}${hasVid() ? '<th title="Touch time read off the pool camera - a reference only, it never changes a time">Video</th>' : ""}<th>Official time</th><th>Source</th><th class="plc">Place</th><th>Status</th><th></th></tr>`;
   const unseeded = act.filter(e => !e.heat || !e.lane);
   let html = `<div class="row" style="justify-content:flex-end;margin-bottom:6px;font-size:13px"><label>Timers per lane <select id="timersSel" title="How many timers work each lane at this meet"><option value="1" ${TIMERS() === 1 ? "selected" : ""}>1 timer</option><option value="2" ${TIMERS() === 2 ? "selected" : ""}>2 timers</option></select></label></div>
     <div class="row evhead" style="margin-bottom:4px"><h2 style="margin:0">Event ${v.no} &nbsp;${esc(v.label)}</h2><span class="pill ${eventState(v).status}">${eventState(v).label}</span><span class="muted">${act.length} entered${scr.length ? ` · ${scr.length} scratched` : ""}${v.day > 1 ? ` · day ${v.day}` : ""}</span>
@@ -1619,7 +1621,7 @@ $("#tmSend").onclick = async () => {
 function watchesNeeded() {
   if (!M) return 0;
   return M.entries.filter(e => {
-    if (e.scr || !e.heat || !e.lane || ["R", "F", "D", "Q"].includes((e.stat || "").trim()) || +e.watch > 0 || +e.watch2 > 0) return false;   // DQ'd: no watches needed (same as the printout)
+    if (e.scr || !e.heat || !e.lane || ["R", "F", "D", "Q"].includes((e.stat || "").trim()) || +e.watch > 0 || +e.watch2 > 0 || +e.watch3 > 0) return false;   // DQ'd: no watches needed (same as the printout)
     if ((S.time_ok || {})[e.key] && !(S.watch_ask || []).includes(e.key) && !(S.record_watch || []).includes(e.key)) return false;
     const pad = +e.pad || 0, btn = [e.backup, e.back2, e.back3].filter(x => +x > 0);
     const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
@@ -1920,11 +1922,11 @@ async function getTimes(h, saved) {
 const wAsked = e => (S.watch_ask || []).includes(e.key);
 const wDiffer = e => { const btn = [e.backup, e.back2, e.back3].filter(x => +x > 0), pad = +e.pad || 0;
   const back = btn.length ? Math.floor(btn.reduce((a, b) => a + Math.round(b * 100), 0) / btn.length) / 100 : 0;
-  return !(+e.watch > 0 || +e.watch2 > 0) && !(S.time_ok || {})[e.key] && !["R", "F", "D", "Q"].includes((e.stat || "").trim()) && ((!pad && back) || (pad && back && Math.abs(pad - back) > (TOL || 0.30) + 1e-6)); };
+  return !(+e.watch > 0 || +e.watch2 > 0 || +e.watch3 > 0) && !(S.time_ok || {})[e.key] && !["R", "F", "D", "Q"].includes((e.stat || "").trim()) && ((!pad && back) || (pad && back && Math.abs(pad - back) > (TOL || 0.30) + 1e-6)); };
 // compact: just the stopwatch (what it means is in the tooltip) so the heat table fits the page
 const wAskBtn = e => wDiffer(e) && !wAsked(e)
   ? `<span class="badge" style="background:var(--warn-bg);color:var(--warn)" title="${+e.pad ? "Pad and button disagree" : "No pad touch"} - on the next Watches needed print by itself. Click the Pad or Button time to accept one instead.">&#9201;&#10003;</span>`
-  : (S.record_watch || []).includes(e.key) && !(+e.watch > 0 || +e.watch2 > 0)
+  : (S.record_watch || []).includes(e.key) && !(+e.watch > 0 || +e.watch2 > 0 || +e.watch3 > 0)
   ? `<span class="badge" style="background:var(--warn-bg);color:var(--warn)" title="A record swim - its watch times are always on the next Watches needed print">&#9201; rec</span>`
   : wAsked(e)
   ? `<button class="ghost small" data-wask="${e.key}" data-on="0" title="On the next Watches needed print (and Enter watch times) - click to take it off" style="color:var(--warn);border-color:var(--warn);padding:2px 6px">&#9201;&#10003;</button>`
@@ -2039,7 +2041,7 @@ function wtShow() {
   const rows = WT.keys.map(k => M.entries.find(e => e.key === k)).filter(Boolean);
   box.classList.toggle("hidden", !rows.length);
   if (!rows.length) return;
-  const pend = rows.filter(e => !(+e.watch > 0 || +e.watch2 > 0) && (e.stat || "").trim() !== "R").length;
+  const pend = rows.filter(e => !(+e.watch > 0 || +e.watch2 > 0 || +e.watch3 > 0) && (e.stat || "").trim() !== "R").length;
   box.classList.toggle("wtPend", pend > 0);
   $("#wtSub").innerHTML = `${pend ? `<b style="color:var(--warn)">${pend} waiting for watch times</b> · ` : "all entered · "}${esc(WT.printed && WT.printed !== "-" ? "sheet printed " + WT.printed : "")}${WT.printed && WT.printed !== "-" ? " · " : ""}${rows.length} lane${rows.length > 1 ? "s" : ""}`;
   const ae = document.activeElement, focus = ae && ae.dataset && ae.dataset.wk ? ae.dataset.wk + "|" + ae.dataset.wn : "", typing = focus ? ae.value : null;
@@ -2353,9 +2355,9 @@ document.addEventListener("change", async ev => {
     try { S = await api(`${API}/race`, J({ptr: EV, heat: +d.race, race: ev.target.value.trim()})); toast(S.log[0]?.msg || "Saved"); show(); } catch (x) { toast(x.message); show(); }
   }
   else if (d.wt) {
-    const tr = ev.target.closest("tr"), a = tr.querySelector('[data-wt="1"]'), b = tr.querySelector('[data-wt="2"]');
-    for (const x of [a, b]) { if (x.value.trim() && isNaN(parseTime(x.value))) return toast("That watch time isn't a time"); if (x.value.trim()) x.value = fmt(parseTime(x.value)); }
-    change("watches", {key: d.key, t1_s: a.value.trim(), t2_s: b.value.trim(), tol: TOL, ...(["pad", "backup", "watch"].includes((S.time_ok || {})[d.key]) ? {use: S.time_ok[d.key]} : {})});
+    const tr = ev.target.closest("tr"), a = tr.querySelector('[data-wt="1"]'), b = tr.querySelector('[data-wt="2"]'), c3 = tr.querySelector('[data-wt="3"]');
+    for (const x of [a, b, c3].filter(Boolean)) { if (x.value.trim() && isNaN(parseTime(x.value))) return toast("That watch time isn't a time"); if (x.value.trim()) x.value = fmt(parseTime(x.value)); }
+    change("watches", {key: d.key, t1_s: a.value.trim(), t2_s: b.value.trim(), ...(c3 ? {t3_s: c3.value.trim(), keep_slots: true} : {}), tol: TOL, ...(["pad", "backup", "watch"].includes((S.time_ok || {})[d.key]) ? {use: S.time_ok[d.key]} : {})});
   }
   else if (d.timer) {
     const e = M.entries.find(x => x.key === d.key);

@@ -144,11 +144,10 @@ function show() {
   $("#whoTxt").textContent = r.who;
   const shown = digits ? fmtDigits(digits) : mine(r) ? fmt(mine(r)) : "";
   $("#tDisp").textContent = shown || "–:––.––"; $("#tDisp").classList.toggle("empty", !shown);
-  $("#tNote").textContent = digits ? "not saved yet" : mine(r) ? "saved" + (table(r) && Math.abs(table(r) - mine(r)) > .005 ? ` · the table has ${fmt(table(r))}` : "")
-    : table(r) ? `the table has ${fmt(table(r))}` : "";
+  $("#tNote").textContent = digits ? "not saved yet" : mine(r) ? "saved" : "";
   $("#prev").disabled = idx <= 0; $("#next").disabled = idx >= D.rows.length - 1;
   $("#save").disabled = !digits || D.locked;
-  $("#list").innerHTML = D.rows.map((x, i) => `<div data-i="${i}" class="${i === idx ? "cur" : ""}"><span>E${x.evno} H${x.heat}</span><span class="muted">${esc(x.who)}</span><span class="t">${mine(x) ? fmt(mine(x)) : table(x) ? `<span class="muted">${fmt(table(x))}</span>` : "–"}</span></div>`).join("");
+  $("#list").innerHTML = D.rows.map((x, i) => `<div data-i="${i}" class="${i === idx ? "cur" : ""}"><span>E${x.evno} H${x.heat}</span><span class="muted">${esc(x.who)}</span><span class="t">${mine(x) ? fmt(mine(x)) : "–"}</span></div>`).join("");
 }
 function fmtDigits(d) {           // typed digits, right to left: hundredths, seconds, minutes
   d = d.replace(/^0+/, "") || "0";
@@ -168,8 +167,7 @@ $("#save").onclick = async () => {
   try {
     const j = await api(`/api/timer/${C.meet}/time`, {key: r.key, slot: C.slot, t: fmtDigits(digits), lane: C.lane});
     digits = "";
-    $("#msg").className = "msg " + (j.status === "conflict" ? "warn" : "ok");
-    $("#msg").textContent = j.status === "conflict" ? j.note : "Saved ✓";
+    $("#msg").className = "msg ok"; $("#msg").textContent = "Saved ✓";
     if (navigator.vibrate) navigator.vibrate(60);
     await load(); show();
   } catch (e) { $("#msg").className = "msg err"; $("#msg").textContent = e.message; show(); }

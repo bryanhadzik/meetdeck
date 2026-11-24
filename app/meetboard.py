@@ -200,3 +200,14 @@ def console_check(m: dict, heats: dict) -> dict:
                 notes.append("Finish order differs: " + ", ".join(f"lane {ln} console {p}, MeetDeck {q}" for ln, p, q in off))
         out[f"{ptr}:{h}"] = {"ok": not notes, "notes": notes}
     return out
+
+
+def video_times(base: str, date: str) -> list:
+    """meet-board's video times for every heat recorded on `date`: [{event, heat, start_src, lanes: {lane: {t, src}}}]."""
+    import urllib.parse
+    code, body = _req(base + "/api/video/times?date=" + urllib.parse.quote(date), timeout=6)
+    if code == 404:
+        raise RuntimeError("this meet-board is too old to send video times - update it")
+    if code != 200:
+        raise RuntimeError((body or {}).get("error") if isinstance(body, dict) else f"meet-board answered {code}")
+    return body if isinstance(body, list) else []

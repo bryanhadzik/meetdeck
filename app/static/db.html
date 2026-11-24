@@ -421,7 +421,20 @@ document.addEventListener("click", async e => {
 async function load() {
   S = await api(API);
   show();
+  vidSync();
 }
+// video times follow meet-board: its detected touches, and touches marked by hand there (Set touch here).
+// Pulled when the page opens and whenever you come back to it (e.g. from the video tab).
+let vidSyncing = false;
+async function vidSync() {
+  if (!S || !S.exists || !S.meetboard_url || vidSyncing) return;
+  vidSyncing = true;
+  try {
+    const r = await api(`${API}/video/sync`, {method: "POST"});
+    if (r && r.changed) { S = await api(API); show(); toast(`Video times updated from meet-board (${r.changed} lane${r.changed === 1 ? "" : "s"})`); }
+  } catch (e) {} finally { vidSyncing = false; }
+}
+window.addEventListener("focus", vidSync);
 function show() {
   document.title = `Database · ${S.meet_name || S.meet || ""}`;
   $("#backBtn").href = `/?meet=${encodeURIComponent(MID)}`;

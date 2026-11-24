@@ -2960,6 +2960,51 @@ def db_video(mid: str, body: dict):
     return {"ok": True, "lanes": len(cur)}
 
 
+@app.post("/api/meets/{mid}/db/video/sync")
+def db_video_sync(mid: str):
+    """Pull the video times from meet-board for this meet's date: each lane's detected touch, or the touch marked
+    by hand on meet-board's video page (Set touch here) - the hand mark wins. A reference only, like any video time."""
+    d = _dir(mid)
+    url = _settings().get("meetboard_url")
+    if not url or not _dbfile(d).exists():
+        return {"changed": 0}
+    m = meetdb.load(_dbfile(d))
+    date = (m.get("meet") or {}).get("start") or _meta(d).get("date") or ""
+    try:
+        clips = meetboard.video_times(url, str(date)[:10])
+    except (OSError, RuntimeError) as e:
+        return {"changed": 0, "error": str(getattr(e, "reason", e))}
+    evno = {v["ptr"]: v["no"] for v in m["events"]}
+    keys = {(evno.get(e["event"]), e.get("heat"), e.get("lane")): e["key"] for e in m["entries"]
+            if e.get("heat") and e.get("lane") and not e.get("scr")}
+    latest = {}
+    for c in clips:                                   # a heat recorded twice: the later recording
+        k = (c.get("event"), c.get("heat"))
+        if k not in latest or (c.get("rec_start") or 0) > (latest[k].get("rec_start") or 0):
+            latest[k] = c
+    mt = _meta(d)
+    cur = dict(mt.get("video") or {})
+    changed = 0
+    for (ev, ht), c in latest.items():
+        good_start = c.get("start_src") in ("strobe", "set by hand")
+        for lane, r in (c.get("lanes") or {}).items():
+            key = keys.get((ev, ht, int(lane)))
+            if not key:
+                continue
+            hand = r.get("src") == "mark"
+            v = {"t": round(float(r["t"]), 2), "conf": "good" if hand or good_start else "rough",
+                 "note": "marked by hand on the video page" if hand else ("" if good_start else "start lined up from the lanes (no strobe flash)"),
+                 "src": "meet-board"}
+            if cur.get(key) != v:
+                cur[key] = v
+                changed += 1
+    if changed:
+        mt = _meta(d)
+        mt["video"] = cur
+        _save(d, mt)
+    return {"changed": changed}
+
+
 @app.post("/api/meets/{mid}/db/exc-ack")
 def db_exc_ack(mid: str, body: dict):
     """Exceptions view: mark a lane's odd-looking times as checked (on) or bring it back (off). sig is the lane's

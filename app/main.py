@@ -2414,7 +2414,7 @@ def db_get(mid: str):
         print("records broken:", x)
         broken = []
     return {"exists": True, "started": _meet_started(m), "records_broken": broken, "test": _is_test(_meta(d)), "missing_teams": missing, "championship": _is_champ(_meta(d), _db_teams(m)), "reseed": rs, "session_break": gap, "timeline": tl, "info": {k: v for k, v in info.items() if k not in ("hyb", "scoring", "scoring_stack")}, "meet_name": _meta(d)["name"],
-            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "exc_ack": _meta(d).get("exc_ack") or {}, "locked": _meta(d).get("locked"), "meetboard_url": _settings().get("meetboard_url") or "", "video": _meta(d).get("video") or {}, "time_ok": _meta(d).get("time_ok") or {}, "record_watch": _record_watch(d, m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
+            "model": meetdb.json_safe(m), "watch_ask": _meta(d).get("watch_ask") or [], "exc_ack": _meta(d).get("exc_ack") or {}, "locked": _meta(d).get("locked"), "phone_watches": _meta(d).get("phone_watches") or {}, "meetboard_url": _settings().get("meetboard_url") or "", "video": _meta(d).get("video") or {}, "time_ok": _meta(d).get("time_ok") or {}, "record_watch": _record_watch(d, m), "problems": meetdb.check(m), "date_gap": _date_gap(d, m), "log": log[::-1],
             "races": meetdb.race_numbers(m, info.get("races")), "race_overrides": info.get("races") or {},
             "scoring": scoring, "event_sigs": {str(v["ptr"]): meetdb.event_sig(m, v["ptr"]) for v in m["events"]},
             "scoring_methods": {k: {"name": c["name"], "ind_max": c["ind_max"], "rel_max": c["rel_max"]} for k, c in meetdb.SCORING.items()},
@@ -4859,6 +4859,14 @@ def timer_lane(mid: str, lane: int, pin: str = "", device: str = ""):
             _save(d, meta)
         slot = ln[dev]
     return {"meet": meta.get("name", ""), "lane": lane, "rows": rows, "now": now, "locked": bool(meta.get("locked")), "slot": slot}
+
+
+@app.get("/api/meets/{mid}/phone-stamp")
+def phone_stamp(mid: str):
+    """Changes whenever a timer's phone sends a time - the run page checks this to refresh."""
+    pw = _meta(_dir(mid)).get("phone_watches") or {}
+    last = max((v.get("at", "") for x in pw.values() for v in x.values() if isinstance(v, dict)), default="")
+    return {"stamp": f"{sum(len(x) for x in pw.values())}|{last}"}
 
 
 @app.post("/api/timer/{mid}/time")

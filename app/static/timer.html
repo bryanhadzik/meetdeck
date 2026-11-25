@@ -170,7 +170,7 @@ function show() {
   if (!$("#ns").classList.contains("arm")) $("#ns").textContent = ns ? "Undo no show" : "No show";
   $("#ns").classList.toggle("on", ns);
   if (r.empty || ns) {
-    $("#tDisp").textContent = r.empty ? "Empty lane" : "NO SHOW"; $("#tDisp").classList.add("empty");
+    $("#tDisp").textContent = r.empty ? "No swimmer" : "NO SHOW"; $("#tDisp").classList.add("empty");
     $("#tNote").textContent = r.empty ? "Nothing to time - tap Heat → when it's over" : "Marked no show";
     $("#prev").disabled = idx <= 0; $("#next").disabled = idx >= D.rows.length - 1; $("#save").disabled = true;
     renderList(); return;
@@ -184,7 +184,7 @@ function show() {
   renderList();
 }
 function renderList() {
-  $("#list").innerHTML = D.rows.map((x, i) => `<div data-i="${i}" class="${i === idx ? "cur" : ""}"><span>E${x.evno} H${x.heat}</span>${x.empty ? `<span class="empty">empty lane</span>` : `<span class="muted">${esc(x.who)}</span>`}<span class="t">${x.empty ? "" : x.stat === "R" ? "NS" : mine(x) ? fmt(mine(x)) : "–"}</span></div>`).join("");
+  $("#list").innerHTML = D.rows.map((x, i) => `<div data-i="${i}" class="${i === idx ? "cur" : ""}"><span>E${x.evno} H${x.heat}</span>${x.empty ? `<span class="empty">No swimmer</span>` : `<span class="muted">${esc(x.who)}</span>`}<span class="t">${x.empty ? "" : x.stat === "R" ? "NS" : mine(x) ? fmt(mine(x)) : "–"}</span></div>`).join("");
 }
 $("#ns").onclick = async () => {
   const r = D && D.rows[idx], b = $("#ns"); if (!r || r.empty) return;

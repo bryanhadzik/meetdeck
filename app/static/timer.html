@@ -151,9 +151,9 @@ function show() {
   $("#nowTag").classList.toggle("hidden", !(isNow || isDone));
   $("#nowTag").textContent = isNow && n.racing ? "IN THE WATER" : isDone ? "JUST FINISHED" : "ON THE BLOCKS";
   $("#whoTxt").textContent = r.who;
-  const shown = digits ? fmtDigits(digits) : mine(r) ? fmt(mine(r)) : "";
+  const shown = digits ? fmtDigits(digits) : "";       // every heat starts clear; a saved time shows below
   $("#tDisp").textContent = shown || "–:––.––"; $("#tDisp").classList.toggle("empty", !shown);
-  $("#tNote").textContent = digits ? "not saved yet" : mine(r) ? "saved" : "";
+  $("#tNote").textContent = digits ? "not saved yet" : mine(r) ? `saved ${fmt(mine(r))}` : "";
   $("#prev").disabled = idx <= 0; $("#next").disabled = idx >= D.rows.length - 1;
   $("#save").disabled = !digits || D.locked;
   $("#list").innerHTML = D.rows.map((x, i) => `<div data-i="${i}" class="${i === idx ? "cur" : ""}"><span>E${x.evno} H${x.heat}</span><span class="muted">${esc(x.who)}</span><span class="t">${mine(x) ? fmt(mine(x)) : "–"}</span></div>`).join("");

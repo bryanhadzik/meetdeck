@@ -179,8 +179,9 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
   <h1 id="title">Meet database</h1>
   <span id="lockChip" class="hidden" title="The final results were sent, so nothing can change. Unlock it on Finish the meet.">&#128274; Locked</span>
   <span class="muted" id="src" style="font-size:12.5px"></span>
+  <span class="muted" id="verTag" style="font-size:11.5px;white-space:nowrap" title="MeetDeck version"></span>
   <span class="grow"></span>
-  <nav id="tabs" class="hidden"><button data-tab="events" class="on">Events</button><button data-tab="swimmers">Swimmers</button><button data-tab="scores">Scores</button>
+  <nav id="tabs" class="hidden"><button data-tab="events" class="on">Events</button><button data-tab="swimmers">Swimmers</button><button data-tab="scores">Scores</button><button data-tab="scans">Scans<span id="scanBadge" class="badge hidden" style="margin-left:4px"></span></button>
     <div class="menu" id="moreMenu"><button type="button" id="moreBtn">More &#9662;</button>
       <div class="pop hidden" id="morePop" style="min-width:170px;left:0;right:auto"><button data-tab="teams">Teams</button><button data-tab="rules">Rules</button><button data-tab="changes">Changes</button></div></div></nav>
   <a class="hidden" id="finishBtn" href="#" style="text-decoration:none;background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:5px 11px;font-size:13px;white-space:nowrap" title="Send results: emails, files, Meet Manager backup">Finish the meet &rarr;</a>
@@ -214,7 +215,6 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
       <div class="prow"><span>Team scores</span><button class="small" data-pr="scores">Print</button><button class="ghost small" data-pdf="scores">PDF</button></div>
     </div></div>
   <button class="small hidden" id="watchBadge" type="button" title="Lanes still waiting for the timers' watch times (no pad touch, or pad and backup button apart). Click to go to Enter watch times, or print the Watches needed sheet."></button>
-  <span class="muted" id="verTag" style="font-size:11.5px;white-space:nowrap" title="MeetDeck version"></span>
   <div class="menu hidden" id="exportMenu"><button class="small" id="exportBtn">Download / export ▾</button>
     <div class="pop hidden" id="exportPop">
       <button class="small" data-x="backup" title="The whole meet database as a Meet Manager backup: restore it in Meet Manager, or send it to Utah Top 50">Meet Manager backup (.zip) &mdash; restore in MM, or send to Utah Top 50</button>
@@ -348,6 +348,23 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
       <div class="muted" style="font-size:12px;margin-top:4px">Searches every document on the main page's Rules tab (NFHS, UHSAA). All words on the same page; "quoted phrase"; 6-4-1 or 6.4.1.</div>
       <div id="rhits" style="margin-top:10px"></div>
       <h2 style="margin-top:18px">Utah rules (UHSAA) on top of NFHS</h2><div id="utahRules"></div>
+    </section>
+
+    <section id="tab-scans" class="hidden">
+      <div class="card" style="padding:10px 12px;margin-bottom:12px">
+        <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+          <label style="font-size:13px">Scanner folder <input id="scFolder" placeholder="C:\Users\…\Documents\Scans" style="width:320px" autocomplete="off"></label>
+          <button class="small" id="scFolderSave">Save</button>
+          <span id="scFolderMsg" class="muted" style="font-size:12.5px"></span>
+        </div>
+        <div class="row" style="gap:16px;flex-wrap:wrap;margin-top:6px;font-size:13px">
+          <label><input type="checkbox" id="scRecv"> New scans come to this meet</label>
+          <label><input type="checkbox" id="scAuto"> Read them with Claude right away</label>
+          <label class="ghost small" style="cursor:pointer;text-decoration:underline">Add a scan by hand<input type="file" id="scUp" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff" class="hidden"></label>
+        </div>
+        <div id="scWarn" style="font-size:12.5px;margin-top:6px"></div>
+      </div>
+      <div id="scList"></div>
     </section>
 
     <section id="tab-changes" class="hidden">
@@ -501,7 +518,7 @@ function show() {
     if (sel.dataset.o !== o) { sel.innerHTML = o; sel.dataset.o = o; if (cur) sel.value = cur; } }
   ["#tabs", "#undoBtn", "#exportMenu", "#printMenu", "#scoreBtn", "#finishBtn", "#tpBtn"].forEach(s => $(s).classList.remove("hidden"));
   { const sel = $("#prLane"), cur = sel.value; sel.innerHTML = `<option value="">all lanes</option>` + Array.from({length: M.meet.lanes || 8}, (_, i) => `<option value="${i + 1}">lane ${i + 1}</option>`).join(""); sel.value = cur; }
-  $("#src").textContent = `${M.meet.name !== (S.meet_name) ? M.meet.name + " · " : ""}${M.meet.start}${S.info.source ? " · " + S.info.source : ""}`;
+  $("#src").textContent = `${M.meet.name !== (S.meet_name) ? M.meet.name + " · " : ""}${M.meet.start}`;
   const last = S.log.find(l => l.kind === "change");
   $("#undoBtn").disabled = !S.versions.length;
   $("#undoBtn").title = S.versions.length ? "Undo: " + (S.versions[0].label || "").replace(/^before: /, "") : "Nothing to undo";
@@ -793,7 +810,7 @@ function render() {
   $("#moreBtn").innerHTML = ({teams: "Teams", meet: "Meet info", rules: "Rules", changes: "Changes"}[TAB] || "More") + " &#9662;";
   $("#morePop").classList.add("hidden");
   document.body.classList.toggle("meetPanels", TAB === "events" || TAB === "swimmers");   // board / phone / console panels
-  ["events", "swimmers", "scores", "teams", "meet", "rules", "changes"].forEach(t => $("#tab-" + t).classList.toggle("hidden", t !== TAB));
+  ["events", "swimmers", "scores", "scans", "teams", "meet", "rules", "changes"].forEach(t => $("#tab-" + t).classList.toggle("hidden", t !== TAB));
   if (TAB === "events") renderEvents();
   if (TAB === "swimmers") renderSwimmers();
   if (TAB === "teams") renderTeams();
@@ -801,7 +818,119 @@ function render() {
   if (TAB === "rules") setTimeout(() => $("#rq").focus(), 0);
   if (TAB === "scores") renderScores();
   if (TAB === "changes") renderChanges();
+  if (TAB === "scans") renderScans();
 }
+
+// ---------------- scans: the scanner's folder, read by Claude, checked against the meet ----------------
+let SC = null;
+async function scLoad() { try { SC = await api(`/api/meets/${MID}/scans`); } catch (e) { SC = null; } scBadge(); return SC; }
+function scBadge() {
+  const n = !SC ? 0 : SC.scans.reduce((a, s) => a + s.pages.reduce((b, p) => b + p.heats.reduce((c, h) =>
+    c + (h.dqs || []).filter(q => !q.state && !q.already && q.key).length + (h.finish && h.finish.verdict === "differs" ? 1 : 0), 0), 0), 0);
+  $("#scanBadge").textContent = n; $("#scanBadge").classList.toggle("hidden", !n);
+}
+async function renderScans() {
+  await scLoad();
+  if (TAB !== "scans" || !SC) return;
+  if (document.activeElement !== $("#scFolder")) $("#scFolder").value = SC.folder;
+  $("#scRecv").checked = SC.receiving; $("#scAuto").checked = SC.auto_read !== false;
+  const w = [];
+  if (!SC.key_set) w.push(`<span style="color:var(--warn)">Add the Claude API key on the main page's Setup to read scans.</span>`);
+  if (SC.folder && !SC.folder_ok) w.push(`<span style="color:var(--err)">Can't find the scanner folder on this computer.</span>`);
+  if (SC.folder_ok && SC.receiving) w.push(`<span style="color:var(--ok)">Watching ${esc(SC.folder)} - scans saved there show up here in a few seconds.</span>`);
+  if (SC.other_meet) w.push(`<span class="muted">New scans are going to another meet right now.</span>`);
+  $("#scWarn").innerHTML = w.join(" ");
+  $("#scList").innerHTML = SC.scans.length ? SC.scans.map(scCard).join("") : `<div class="muted">No scans yet.</div>`;
+}
+const scTime = t => t ? fmt(t) : "";
+function scCard(s) {
+  const st = {new: "waiting to be read", reading: "reading…", done: "read", error: "couldn't read"}[s.status] || s.status;
+  const head = `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>${esc(s.name)}</b><span class="muted" style="font-size:12px">${esc(s.received)}</span>
+    <span class="badge">${st}</span><span class="grow"></span>
+    <a class="ghost small" href="/api/meets/${MID}/scans/${s.id}/file" target="_blank" rel="noopener">View scan</a>
+    ${s.status === "reading" ? "" : `<button class="ghost small" data-scread="${s.id}">${s.status === "done" ? "Read again" : "Read"}</button>`}</div>`;
+  const err = s.error ? `<div style="color:var(--err);font-size:13px;margin-top:4px">${esc(s.error)}</div>` : "";
+  const body = s.pages.map(p => {
+    const hs = p.heats.map(scHeat).join("");
+    const pn = `<div class="muted" style="font-size:12px;margin-top:8px">Page ${p.page}${p.kind && p.kind !== "referee" ? ` - ${esc(p.kind)}` : ""}${p.note ? ` - ${esc(p.note)}` : ""}</div>`;
+    return pn + (hs || `<div class="muted" style="font-size:12.5px">Nothing to check on this page.</div>`);
+  }).join("");
+  return `<div class="card" style="padding:10px 12px;margin-bottom:12px">${head}${err}${body}</div>`;
+}
+function scHeat(h) {
+  if (!h.found || h.problem && !h.finish) return `<div style="margin-top:6px;color:var(--warn);font-size:13px">Event ${h.event} heat ${h.heat}: ${esc(h.problem || "not in this meet")}</div>`;
+  const f = h.finish || {}, quiet = f.verdict === "none" && !(h.dqs || []).length;
+  let out = `<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px"><b style="font-size:13.5px">${esc(h.label)} - heat ${h.heat}</b>`;
+  if (h.problem) out += ` <span style="color:var(--warn);font-size:12.5px">${esc(h.problem)}</span>`;
+  if (quiet) return out + ` <span class="muted" style="font-size:12.5px">- nothing written</span></div>`;
+  // finish order
+  if (f.verdict === "agree") out += `<div class="okbox" style="margin:5px 0;font-size:13px;padding:5px 10px">&#10003; Referee's finish order matches the times: lanes ${f.ref.map(r => r.lane).join(", ")}</div>`;
+  else if (f.verdict === "no_times") out += `<div style="font-size:13px;margin:5px 0">Referee's finish order: lanes ${f.ref.map(r => r.lane + (r.unsure ? "?" : "")).join(", ")} <span class="muted">(no times in yet to check)</span></div>`;
+  if (f.verdict === "agree" && (f.untimed || []).length) out += `<div class="muted" style="font-size:12.5px">Lane ${f.untimed.join(", ")} has no time yet.</div>`;
+  else if (f.verdict === "differs") {
+    const n = Math.max(f.ref.length, f.times.length), rows = [];
+    for (let i = 0; i < n; i++) {
+      const r = f.ref[i], t = f.times[i], bad = (f.diffs || []).includes(i), close = (f.close || []).includes(i) || (f.close || []).includes(i - 1);
+      rows.push(`<tr style="${bad ? "background:var(--warn-bg)" : ""}"><td>${i + 1}</td><td><b>${r ? r.lane + (r.unsure ? "?" : "") : ""}</b> <span class="muted">${r ? esc(r.who) : ""}</span></td>
+        <td><b>${t ? t.lane : ""}</b> <span class="muted">${t ? esc(t.who) : ""}</span></td><td style="font-family:Consolas,monospace">${t ? scTime(t.t) : ""}${close && t ? ` <span class="muted" title="Within 0.10 of the next swimmer">close</span>` : ""}</td></tr>`);
+    }
+    out += `<div style="margin:5px 0;font-size:13px;color:var(--warn)"><b>&#9888; Finish order doesn't match the times</b>${(f.empty_lanes || []).length ? ` - the referee wrote lane ${f.empty_lanes.join(", ")}, which has nobody in it` : ""}${(f.untimed || []).length ? ` <span class="muted">(lane ${f.untimed.join(", ")} has no time yet)</span>` : ""}</div>
+      <table class="mini" style="font-size:12.5px;border-collapse:collapse"><tr class="muted"><td>Place</td><td>Referee</td><td>By the times</td><td></td></tr>${rows.join("")}</table>`;
+  }
+  // DQs
+  for (const q of h.dqs || []) {
+    const code = q.code ? `<b>${esc(q.code)}</b>${q.code_ok ? ` <span class="muted">${esc(q.desc || "")}</span>` : ` <span style="color:var(--err)">(not a DQ code)</span>`}` : `<span style="color:var(--warn)">no code written</span>`;
+    const code2 = q.code2 ? ` + <b>${esc(q.code2)}</b>${q.code2_ok ? ` <span class="muted">${esc(q.desc2 || "")}</span>` : ` <span style="color:var(--err)">(not a DQ code)</span>`}` : "";
+    let act = "";
+    if (q.problem) act = `<span style="color:var(--warn)">${esc(q.problem)}</span>`;
+    else if (q.already) act = `<span style="color:var(--ok)">&#10003; already in the meet</span>`;
+    else if (q.state === "applied") act = `<span style="color:var(--ok)">&#10003; DQ applied</span>`;
+    else if (q.state === "dismissed") act = `<span class="muted">dismissed</span> <button class="ghost small" data-scmark="${q.item}" data-st="">Undo</button>`;
+    else act = `${q.meet_dq ? `<span style="color:var(--warn)">meet has DQ ${esc(q.meet_dq)}</span> ` : ""}${q.meet_ns ? `<span class="muted">marked no show</span> ` : ""}
+      ${q.code_ok && q.code2_ok ? `<button class="small danger" data-scdq="${q.item}">Apply DQ</button>` : `<button class="small" data-scfix="${q.key}">Enter DQ…</button>`}
+      <button class="ghost small" data-scmark="${q.item}" data-st="dismissed">Dismiss</button>`;
+    out += `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin:5px 0;font-size:13px;background:var(--err-bg);border-radius:6px;padding:5px 8px">
+      <span>DQ lane <b>${q.lane}</b>${q.who ? ` - ${esc(q.who)}` : ""}</span><span>${code}${code2}</span>
+      ${q.infraction ? `<span>"${esc(q.infraction)}"</span>` : ""}${q.unsure ? `<span class="badge" title="Hard to read - check the scan">check the scan</span>` : ""}
+      <span class="grow"></span>${act}</div>`;
+  }
+  return out + `</div>`;
+}
+function scFind(item) {
+  for (const s of SC.scans) for (const p of s.pages) for (const h of p.heats) for (const q of h.dqs || []) if (q.item === item) return q;
+}
+document.addEventListener("click", async ev => {
+  const b = ev.target.closest("[data-scread],[data-scmark],[data-scdq],[data-scfix]"); if (!b) return;
+  ev.preventDefault();
+  try {
+    if (b.dataset.scread) { SC = await api(`/api/meets/${MID}/scans/${b.dataset.scread}/read`, J({})); renderScans(); }
+    else if (b.dataset.scmark) { SC = await api(`/api/meets/${MID}/scans/mark`, J({item: b.dataset.scmark, state: b.dataset.st})); renderScans(); }
+    else if (b.dataset.scdq) {
+      const q = scFind(b.dataset.scdq); if (!q) return;
+      b.disabled = true;
+      await change("dq", {key: q.key, code: q.code, code2: q.code2 || "", keep_time: !q.no_time});
+      SC = await api(`/api/meets/${MID}/scans/mark`, J({item: q.item, state: "applied"})); renderScans();
+    } else if (b.dataset.scfix) {                          // a code that isn't on the list: enter it on the Events tab
+      const e = M.entries.find(x => x.key === b.dataset.scfix); if (!e) return;
+      TAB = "events"; EV = e.event; render();
+      setTimeout(() => { const d = document.querySelector(`[data-dqedit="${e.key}"]`); if (d) { d.scrollIntoView({block: "center"}); d.click(); } }, 300);
+    }
+  } catch (e) { toast(e.message); }
+});
+$("#scFolderSave").onclick = async () => {
+  try { SC = {...SC, ...await api(`/api/meets/${MID}/scans/setup`, J({folder: $("#scFolder").value, receive: true}))}; $("#scFolderMsg").textContent = "Saved"; renderScans(); }
+  catch (e) { $("#scFolderMsg").textContent = e.message; }
+};
+$("#scRecv").onchange = async () => { try { await api(`/api/meets/${MID}/scans/setup`, J({receive: $("#scRecv").checked})); renderScans(); } catch (e) { toast(e.message); } };
+$("#scAuto").onchange = async () => { try { await api(`/api/meets/${MID}/scans/setup`, J({auto_read: $("#scAuto").checked})); } catch (e) { toast(e.message); } };
+$("#scUp").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  const fd = new FormData(); fd.append("file", f);
+  try { const r = await fetch(`/api/meets/${MID}/scans/upload`, {method: "POST", body: fd}); const j = await r.json(); if (!r.ok) throw new Error(j.detail || "Upload failed"); SC = j; renderScans(); }
+  catch (err) { toast(err.message); }
+};
+let SCN = 0;
+setInterval(() => { if (TAB === "scans") renderScans(); else if (++SCN % 4 === 0) scLoad(); }, 5000);
 
 // ---------------- events ----------------
 function evEntries(ptr) { return M.entries.filter(e => e.event === ptr); }

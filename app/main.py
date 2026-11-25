@@ -26,7 +26,7 @@ app = FastAPI(title="Swim Meet Entries")
 # Changes are refused here, in one place, for every endpoint under /api/meets/{mid} - except the ones that only
 # send, print, publish or keep paperwork (they don't change the meet's results), and the lock itself.
 _LOCK_OK = ("/lock", "/send/", "/docs", "/db/print/", "/db/activity", "/meetboard/", "/backup", "/meetmobile",
-            "/public/", "/db/video", "/db/exc-ack")
+            "/public/", "/db/video", "/db/exc-ack", "/scans")
 
 
 @app.middleware("http")
@@ -5061,6 +5061,152 @@ def _timer_phone_url(d: Path) -> str:
         return f"{TUNNEL['url']}/t/{_timer_token(d)}"
     port = int(os.environ.get("MEETDECK_PORT", "8001"))
     return f"http://{_lan_ip()}:{port}/timer?meet={d.name}"
+
+
+# ---- scanned paper: a folder the scanner saves into, brought into the meet and read by Claude ----
+import scans  # noqa: E402
+
+SCAN_SEEN = DATA.parent / "scan_seen.json"
+
+
+def _scan_state(mid: str) -> dict:
+    st = _settings()
+    return {"folder": st.get("scan_folder") or "", "receiving": st.get("scan_meet") == mid,
+            "other_meet": st.get("scan_meet") if st.get("scan_meet") not in (None, "", mid) else "",
+            "folder_ok": bool(st.get("scan_folder")) and Path(st["scan_folder"]).is_dir(),
+            "key_set": bool(st.get("claude_key")), "auto_read": st.get("scan_auto_read", True)}
+
+
+@app.get("/api/meets/{mid}/scans")
+def scans_list(mid: str):
+    d = _dir(mid)
+    db = _dbfile(d)
+    idx = scans.load(d)
+    m = meetdb.load(db) if db.exists() else {"events": [], "entries": [], "athletes": {}, "teams": {}}
+    return {**_scan_state(mid), "scans": scans.check(m, idx)}
+
+
+@app.post("/api/meets/{mid}/scans/setup")
+def scans_setup(mid: str, body: dict):
+    """{folder?, receive?, auto_read?}: the scanner's folder (on this PC), and whether new scans come to this meet."""
+    _dir(mid)
+    st = _settings()
+    if "folder" in body:
+        f = (body.get("folder") or "").strip().strip('"')
+        if f and not Path(f).is_dir():
+            raise HTTPException(400, f"There's no folder {f} on this computer")
+        if f != st.get("scan_folder"):
+            st["scan_folder"] = f
+            st["scan_since"] = time.time() - 60         # only files saved from now on (and the last minute)
+    if "receive" in body:
+        st["scan_meet"] = mid if body["receive"] else ("" if st.get("scan_meet") == mid else st.get("scan_meet", ""))
+    if "auto_read" in body:
+        st["scan_auto_read"] = bool(body["auto_read"])
+    _write_settings(st)
+    return _scan_state(mid)
+
+
+@app.post("/api/meets/{mid}/scans/upload")
+async def scans_upload(mid: str, file: UploadFile = File(...)):
+    d = _dir(mid)
+    data = await file.read()
+    try:
+        rec = scans.add(d, data, file.filename or "scan.pdf", "upload")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    st = _settings()
+    if st.get("claude_key") and st.get("scan_auto_read", True):
+        scans.read_async(d, rec["id"], st["claude_key"], st.get("claude_model") or "")
+    return scans_list(mid)
+
+
+@app.post("/api/meets/{mid}/scans/{sid}/read")
+def scans_read(mid: str, sid: str):
+    d = _dir(mid)
+    key = _settings().get("claude_key") or ""
+    if not key:
+        raise HTTPException(400, "Add the Claude API key under Setup first")
+    if not any(s["id"] == sid for s in scans.load(d)["scans"]):
+        raise HTTPException(404, "No such scan")
+    scans.update(d, lambda idx: [x.update(status="reading", error="") for x in idx["scans"] if x["id"] == sid])
+    scans.read_async(d, sid, key, _settings().get("claude_model") or "")
+    return scans_list(mid)
+
+
+@app.get("/api/meets/{mid}/scans/{sid}/file")
+def scans_file(mid: str, sid: str):
+    d = _dir(mid)
+    rec = next((s for s in scans.load(d)["scans"] if s["id"] == sid), None)
+    if not rec:
+        raise HTTPException(404)
+    return FileResponse(scans.path_of(d, rec), media_type=scans.EXTS.get(rec["ext"], "application/octet-stream"),
+                        headers={"Content-Disposition": f'inline; filename="{rec["name"]}"'})
+
+
+@app.post("/api/meets/{mid}/scans/mark")
+def scans_mark(mid: str, body: dict):
+    """{item, state: "applied" | "dismissed" | ""}: what the operator did with a DQ the referee wrote."""
+    d = _dir(mid)
+    item, state = str(body.get("item") or ""), str(body.get("state") or "")
+    if state not in ("applied", "dismissed", ""):
+        raise HTTPException(400, "bad state")
+
+    def fn(idx):
+        if state:
+            idx["marks"][item] = state
+        else:
+            idx["marks"].pop(item, None)
+    scans.update(d, fn)
+    if state:
+        _dblog(d, f"Scanned referee DQ {item.split(':', 2)[2]} {state}", "scan")
+    return scans_list(mid)
+
+
+def _scan_watch():
+    """Every few seconds: new files in the scanner's folder go into the meet set to receive them (copied - the
+    scanner's own files are left alone), and are read if the Claude key is set."""
+    import time as _t
+    sizes = {}
+    while True:
+        _t.sleep(4)
+        try:
+            st = _settings()
+            folder, mid = st.get("scan_folder"), st.get("scan_meet")
+            if not folder or not mid or not Path(folder).is_dir():
+                continue
+            try:
+                d = _dir(mid)
+            except HTTPException:
+                continue
+            seen = json.loads(SCAN_SEEN.read_text()) if SCAN_SEEN.exists() else {}
+            since = float(st.get("scan_since") or 0)
+            changed = False
+            for f in sorted(Path(folder).iterdir(), key=lambda p: p.stat().st_mtime):
+                if not f.is_file() or f.suffix.lower() not in scans.EXTS or f.name.startswith("~"):
+                    continue
+                stt = f.stat()
+                sig = f"{stt.st_size}:{int(stt.st_mtime)}"
+                if seen.get(str(f)) == sig or stt.st_mtime < since:
+                    continue
+                if sizes.get(str(f)) != stt.st_size or _t.time() - stt.st_mtime < 3:   # still being written
+                    sizes[str(f)] = stt.st_size
+                    continue
+                try:
+                    rec = scans.add(d, f.read_bytes(), f.name, "folder")
+                    _dblog(d, f"Scan received: {f.name}", "scan")
+                    if st.get("claude_key") and st.get("scan_auto_read", True):
+                        scans.read_async(d, rec["id"], st["claude_key"], st.get("claude_model") or "")
+                except Exception as x:
+                    print("scan import:", f, x)
+                seen[str(f)] = sig
+                changed = True
+            if changed:
+                SCAN_SEEN.write_text(json.dumps(seen))
+        except Exception as x:
+            print("scan watch:", x)
+
+
+threading.Thread(target=_scan_watch, daemon=True).start()
 
 
 @app.get("/api/timer-link")

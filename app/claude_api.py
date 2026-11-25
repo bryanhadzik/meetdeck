@@ -15,15 +15,19 @@ class ClaudeError(Exception):
     pass
 
 
-def call(key: str, content, model: str = "", max_tokens: int = 1024, system: str = "", timeout: int = 60) -> dict:
-    """One message to Claude. content: a string, or a list of content blocks (text / image). Returns
-    {"text", "model", "usage", "ms"}."""
+def call(key: str, content, model: str = "", max_tokens: int = 1024, system: str = "", timeout: int = 60, tool: dict | None = None) -> dict:
+    """One message to Claude. content: a string, or a list of content blocks (text / image / document). tool: a tool
+    definition Claude must answer with (structured output) - its input comes back as "data". Returns
+    {"text", "data", "model", "usage", "ms"}."""
     if not key:
         raise ClaudeError("No Claude API key yet - add it under Setup")
     body = {"model": model or MODEL, "max_tokens": max_tokens,
             "messages": [{"role": "user", "content": content}]}
     if system:
         body["system"] = system
+    if tool:
+        body["tools"] = [tool]
+        body["tool_choice"] = {"type": "tool", "name": tool["name"]}
     req = urllib.request.Request(API, json.dumps(body).encode(), {
         "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
     t0 = time.time()
@@ -47,7 +51,8 @@ def call(key: str, content, model: str = "", max_tokens: int = 1024, system: str
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         raise ClaudeError(f"Couldn't reach the Claude API - is this computer on the internet? ({getattr(e, 'reason', e)})")
     text = "".join(b.get("text", "") for b in j.get("content") or [] if b.get("type") == "text")
-    return {"text": text, "model": j.get("model"), "usage": j.get("usage") or {}, "ms": int((time.time() - t0) * 1000)}
+    data = next((b.get("input") for b in j.get("content") or [] if b.get("type") == "tool_use"), None)
+    return {"text": text, "data": data, "model": j.get("model"), "usage": j.get("usage") or {}, "ms": int((time.time() - t0) * 1000)}
 
 
 def test(key: str, model: str = "") -> dict:

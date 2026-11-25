@@ -4836,6 +4836,20 @@ def timer_lane(mid: str, lane: int, pin: str = "", device: str = ""):
                      "who": meetdb.who(m, e), "watch": e.get("watch") or 0, "watch2": e.get("watch2") or 0, "watch3": e.get("watch3") or 0,
                      "time": e.get("time") or 0, "stat": (e.get("stat") or "").strip(), "phone": phone.get(e["key"]) or {},
                      "order": (list(v.get("order") or [99, v.get("no") or 0]), e["heat"])})
+    # heats with nobody in this lane still show, so the timer can follow along heat by heat
+    have = {(r["evno"], r["heat"]) for r in rows}
+    seen = set()
+    for e in m["entries"]:
+        if not e.get("heat") or e.get("scr"):
+            continue
+        v = evs.get(e["event"]) or {}
+        k = (v.get("no"), e["heat"])
+        if k in have or k in seen:
+            continue
+        seen.add(k)
+        rows.append({"key": "", "empty": True, "evno": v.get("no"), "event": meetdb.ev_label(m, e["event"]), "heat": e["heat"],
+                     "who": "", "watch": 0, "watch2": 0, "watch3": 0, "time": 0, "stat": "", "phone": {},
+                     "order": (list(v.get("order") or [99, v.get("no") or 0]), e["heat"])})
     rows.sort(key=lambda r: r["order"])
     for r in rows:
         r.pop("order", None)
@@ -4911,6 +4925,41 @@ def timer_time(mid: str, body: dict):
     _snapshot(d, "before: " + msg)
     meetdb.apply(_dbfile(d), ops)
     _dblog(d, msg + f" - from timer {slot}'s phone, lane {body.get('lane') or e.get('lane')}")
+    return {"ok": True, "status": "saved"}
+
+
+@app.post("/api/timer/{mid}/noshow")
+def timer_noshow(mid: str, body: dict):
+    """A timer marks their lane's swimmer as a no show (or takes it back): {key, on, slot, lane}."""
+    d = _timer_meet(mid, body.get("pin"))
+    meta = _meta(d)
+    if meta.get("locked"):
+        raise HTTPException(423, "This meet is locked - the final results were sent.")
+    key, on = str(body.get("key") or ""), bool(body.get("on"))
+    m = meetdb.load(_dbfile(d))
+    try:
+        e = meetdb.find(m, key)
+    except KeyError:
+        raise HTTPException(404, "No such swim")
+    stat = (e.get("stat") or "").strip()
+    src = f" - from timer {body.get('slot') or '?'}'s phone, lane {body.get('lane') or e.get('lane')}"
+    if on:
+        if stat == "R":
+            return {"ok": True, "status": "same"}
+        if e.get("time") or stat:
+            raise HTTPException(409, "The table already has a result for this swim - tell the timing table.")
+        ops, msg = meetdb.op_result(m, key, time_s="", stat="R")
+    else:
+        if stat != "R":
+            return {"ok": True, "status": "same"}
+        ops, msg = meetdb.op_result(m, key, time_s="", stat="")
+        msg = f"No show taken back for {meetdb.who(m, e)} in {meetdb.ev_label(m, e['event'])}"
+    meta.setdefault("phone_watches", {}).setdefault(key, {})["ns"] = {"on": on, "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                                                     "slot": body.get("slot")}
+    _save(d, meta)                      # bumps the phone stamp so the run page refreshes
+    _snapshot(d, "before: " + msg)
+    meetdb.apply(_dbfile(d), ops)
+    _dblog(d, msg + src)
     return {"ok": True, "status": "saved"}
 
 
@@ -5025,6 +5074,11 @@ def pub_lane(tok: str, lane: int, device: str = ""):
 @pub.post("/t/{tok}/time")
 def pub_time(tok: str, body: dict):
     return timer_time(_token_meet(tok), body)
+
+
+@pub.post("/t/{tok}/noshow")
+def pub_noshow(tok: str, body: dict):
+    return timer_noshow(_token_meet(tok), body)
 
 
 @pub.post("/t/{tok}/photo")

@@ -20,6 +20,10 @@
   .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-top:12px; }
   .ev { font-size:15px; color:var(--mute); }
   .who { font-size:22px; font-weight:700; margin-top:2px; }
+  .who.none { font-size:18px; font-weight:600; color:var(--muted); }
+  button#ns.arm { background:#7a3b12; border-color:#d9822b; font-weight:700; }
+  button#ns.on { border-color:#d9822b; color:#ffb067; }
+  .list .empty { color:var(--muted); font-style:italic; }
   .now { display:inline-block; font-size:12px; font-weight:700; letter-spacing:.06em; padding:3px 8px; border-radius:999px; background:#0a6b7c; margin-left:6px; vertical-align:middle; }
   .time { font:700 54px/1.1 Consolas, "SF Mono", monospace; text-align:center; margin:14px 0 6px; letter-spacing:.02em; }
   .time.empty { color:#3d575d; }
@@ -61,7 +65,7 @@
       <div class="time empty" id="tDisp">–:––.––</div>
       <div class="muted" style="text-align:center" id="tNote"></div>
       <img id="shot" class="hidden" style="width:100%;border-radius:10px;margin:4px 0 10px" alt="">
-      <div class="row2" style="margin:0 0 10px"><button id="cam">&#128247; Photo of my watch</button></div>
+      <div class="row2" style="margin:0 0 10px"><button id="cam">&#128247; Photo of my watch</button><button id="ns" style="flex:0 0 36%">No show</button></div>
       <input type="file" id="camIn" accept="image/*" capture="environment" class="hidden">
       <div class="keys" id="keys"></div>
       <div class="row2"><button id="prev">&larr; Heat</button><button class="pri" id="save">Save time</button><button id="next">Heat &rarr;</button></div>
@@ -86,10 +90,11 @@ const U = {
   lane: () => PUB ? `${PUB}/lane/${C.lane}?device=${encodeURIComponent(C.dev)}` : `/api/timer/${C.meet}/lane/${C.lane}?device=${encodeURIComponent(C.dev)}`,
   time: () => PUB ? `${PUB}/time` : `/api/timer/${C.meet}/time`,
   photo: () => PUB ? `${PUB}/photo` : `/api/timer/${C.meet}/photo`,
+  noshow: () => PUB ? `${PUB}/noshow` : `/api/timer/${C.meet}/noshow`,
 };
 let C = {meet: PUB ? "pub" : get("meet"), pin: "", lane: +get("lane") || 0, slot: +get("slot") || 0, dev: get("dev")};
 if (!C.dev) { C.dev = Math.random().toString(36).slice(2, 12); put("dev", C.dev); }
-let D = null, idx = -1, digits = "", userMoved = false, lastNow = "";
+let D = null, idx = -1, digits = "", justSaved = "", userMoved = false, lastNow = "";
 async function api(u, b) {
   const r = await fetch(u, b ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(b)} : {});
   const j = await r.json().catch(() => ({}));
@@ -119,7 +124,7 @@ $("#sLane").onclick = async e => {
   ["meet", "lane", "slot"].forEach(k => put(k, C[k]));
   $("#setup").classList.add("hidden"); $("#main").classList.remove("hidden"); show();
 };
-$("#swap").onclick = () => { C.slot = C.slot % 3 + 1; put("slot", C.slot); digits = ""; show(); };
+$("#swap").onclick = () => { C.slot = C.slot % 3 + 1; put("slot", C.slot); digits = ""; justSaved = ""; show(); };
 $("#chg").onclick = showSetup;
 // ---- timing ----
 async function load(first) {
@@ -130,8 +135,8 @@ async function load(first) {
   if (first || (!userMoved && nowKey !== lastNow)) {
     const want = n.racing ? [n.event, n.heat] : n.done_event ? [n.done_event, n.done_heat] : [n.event, n.heat];
     let i = D.rows.findIndex(r => String(r.evno) === String(want[0]) && String(r.heat) === String(want[1]));
-    if (i < 0) i = D.rows.findIndex(r => !mine(r));
-    if (i >= 0 && i !== idx) { idx = i; digits = ""; }
+    if (i < 0) i = D.rows.findIndex(r => !r.empty && !mine(r) && r.stat !== "R");
+    if (i >= 0 && i !== idx) { idx = i; digits = ""; justSaved = ""; }
     if (idx < 0) idx = 0;
   }
   lastNow = nowKey;
@@ -150,14 +155,47 @@ function show() {
   const isDone = String(n.done_event) === String(r.evno) && String(n.done_heat) === String(r.heat);
   $("#nowTag").classList.toggle("hidden", !(isNow || isDone));
   $("#nowTag").textContent = isNow && n.racing ? "IN THE WATER" : isDone ? "JUST FINISHED" : "ON THE BLOCKS";
-  $("#whoTxt").textContent = r.who;
-  const shown = digits ? fmtDigits(digits) : "";       // every heat starts clear; a saved time shows below
+  const ns = r.stat === "R", off = r.empty || ns || D.locked;
+  $("#whoTxt").textContent = r.empty ? `No swimmer in lane ${C.lane} this heat` : r.who;
+  $("#whoTxt").classList.toggle("none", !!r.empty);
+  $("#keys").querySelectorAll("button").forEach(b => b.disabled = r.empty || ns);
+  $("#cam").disabled = r.empty || ns;
+  $("#ns").classList.toggle("hidden", !!r.empty); $("#ns").disabled = D.locked || (!ns && !!r.time);
+  if (!$("#ns").classList.contains("arm")) $("#ns").textContent = ns ? "Undo no show" : "No show";
+  $("#ns").classList.toggle("on", ns);
+  if (r.empty || ns) {
+    $("#tDisp").textContent = r.empty ? "Empty lane" : "NO SHOW"; $("#tDisp").classList.add("empty");
+    $("#tNote").textContent = r.empty ? "Nothing to time - tap Heat → when it's over" : "Marked no show";
+    $("#prev").disabled = idx <= 0; $("#next").disabled = idx >= D.rows.length - 1; $("#save").disabled = true;
+    renderList(); return;
+  }
+  const keep = !digits && justSaved === r.key && mine(r);   // just saved here: keep it up until the heat changes
+  const shown = digits ? fmtDigits(digits) : keep ? fmt(mine(r)) : "";   // every new heat starts clear
   $("#tDisp").textContent = shown || "–:––.––"; $("#tDisp").classList.toggle("empty", !shown);
-  $("#tNote").textContent = digits ? "not saved yet" : mine(r) ? `saved ${fmt(mine(r))}` : "";
+  $("#tNote").textContent = digits ? "not saved yet" : keep ? "" : mine(r) ? `saved ${fmt(mine(r))}` : "";
   $("#prev").disabled = idx <= 0; $("#next").disabled = idx >= D.rows.length - 1;
-  $("#save").disabled = !digits || D.locked;
-  $("#list").innerHTML = D.rows.map((x, i) => `<div data-i="${i}" class="${i === idx ? "cur" : ""}"><span>E${x.evno} H${x.heat}</span><span class="muted">${esc(x.who)}</span><span class="t">${mine(x) ? fmt(mine(x)) : "–"}</span></div>`).join("");
+  $("#save").disabled = !digits || off;
+  renderList();
 }
+function renderList() {
+  $("#list").innerHTML = D.rows.map((x, i) => `<div data-i="${i}" class="${i === idx ? "cur" : ""}"><span>E${x.evno} H${x.heat}</span>${x.empty ? `<span class="empty">empty lane</span>` : `<span class="muted">${esc(x.who)}</span>`}<span class="t">${x.empty ? "" : x.stat === "R" ? "NS" : mine(x) ? fmt(mine(x)) : "–"}</span></div>`).join("");
+}
+$("#ns").onclick = async () => {
+  const r = D && D.rows[idx], b = $("#ns"); if (!r || r.empty) return;
+  const on = r.stat !== "R";
+  if (on && !b.classList.contains("arm")) {          // two taps, so a stray tap doesn't mark a swimmer out
+    b.classList.add("arm"); b.textContent = "Tap again: no show";
+    clearTimeout(b.t); b.t = setTimeout(() => { b.classList.remove("arm"); show(); }, 4000); return;
+  }
+  clearTimeout(b.t); b.classList.remove("arm"); b.disabled = true;
+  try {
+    await api(U.noshow(), {key: r.key, on, slot: C.slot, lane: C.lane});
+    digits = ""; justSaved = "";
+    $("#msg").className = "msg ok"; $("#msg").textContent = on ? "Marked no show ✓" : "No show taken back";
+    if (navigator.vibrate) navigator.vibrate(60);
+    await load(); show();
+  } catch (e) { $("#msg").className = "msg err"; $("#msg").textContent = e.message; show(); }
+};
 function fmtDigits(d) {           // typed digits, right to left: hundredths, seconds, minutes
   d = d.replace(/^0+/, "") || "0";
   const h = d.slice(-2).padStart(2, "0"), s = d.slice(-4, -2), m = d.slice(0, -4);
@@ -167,7 +205,7 @@ $("#keys").innerHTML = [1, 2, 3, 4, 5, 6, 7, 8, 9, "C", 0, "⌫"].map(k => `<but
 $("#keys").onclick = e => {
   const b = e.target.closest("[data-k]"); if (!b) return;
   const k = b.dataset.k;
-  if (k === "C") digits = ""; else if (k === "⌫") digits = digits.slice(0, -1); else if (digits.length < 6) digits += k;
+  if (k === "C") { digits = ""; justSaved = ""; } else if (k === "⌫") digits = digits.slice(0, -1); else if (digits.length < 6) digits += k;
   $("#msg").textContent = ""; show();
 };
 $("#save").onclick = async () => {
@@ -175,7 +213,7 @@ $("#save").onclick = async () => {
   $("#save").disabled = true;
   try {
     const j = await api(U.time(), {key: r.key, slot: C.slot, t: fmtDigits(digits), lane: C.lane});
-    digits = "";
+    digits = ""; justSaved = r.key;
     $("#msg").className = "msg ok"; $("#msg").textContent = "Saved ✓";
     if (navigator.vibrate) navigator.vibrate(60);
     await load(); show();
@@ -195,7 +233,7 @@ $("#camIn").onchange = async e => {
   } catch (err) { $("#msg").className = "msg err"; $("#msg").textContent = err.message; }
   show();
 };
-const go = i => { if (i < 0 || !D || i >= D.rows.length) return; idx = i; digits = ""; $("#shot").classList.add("hidden"); userMoved = true; $("#msg").textContent = ""; show();
+const go = i => { if (i < 0 || !D || i >= D.rows.length) return; idx = i; digits = ""; justSaved = ""; $("#shot").classList.add("hidden"); userMoved = true; $("#msg").textContent = ""; show();
   clearTimeout(go.t); go.t = setTimeout(() => { userMoved = false; }, 120000); };
 $("#prev").onclick = () => go(idx - 1);
 $("#next").onclick = () => go(idx + 1);

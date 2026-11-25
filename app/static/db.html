@@ -447,14 +447,19 @@ $("#tpBtn").onclick = async () => {
   }
   box.innerHTML = `<div style="background:var(--card,#fff);color:inherit;border-radius:12px;padding:20px 24px;max-width:460px;text-align:center">Loading…</div>`;
   try {
-    const j = await api(`/api/timer-link?mid=${MID}`);
+    const j = await api(`/api/timer-link?mid=${MID}`), T = j.tunnel || {};
     box.firstElementChild.innerHTML = `<h3 style="margin:0 0 6px">Timer phones</h3>
-      <div class="muted" style="font-size:13px">Lane timers join the pool wifi, scan this, pick their lane, and type (or photograph) each heat's watch time.
+      <div class="muted" style="font-size:13px">Lane timers scan this, pick their lane, and type (or photograph) each heat's watch time.
       It fills that lane's Timer box here - never over a time that's already in.</div>
+      <label style="display:block;margin:10px 0 4px;font-size:13.5px"><input type="checkbox" id="tpPub" ${T.on ? "checked" : ""}> Over the internet - timers use their own data, not the pool wifi</label>
+      <div class="muted" style="font-size:12px">${T.on ? (j.public ? "Only this secret link reaches the timer page; nothing else of MeetDeck. The address changes each time MeetDeck starts - the code here is always current."
+        : T.error ? "Couldn't start the link: " + esc(T.error) : "Starting the link…") : "Off: phones have to be on the pool wifi."}</div>
       <div style="margin:12px auto;width:220px;background:#fff;padding:6px;border-radius:8px">${j.qr}</div>
-      <div style="font:600 15px Consolas,monospace">${esc(j.url)}</div>
-      <div class="muted" style="margin-top:8px;font-size:13px">They just pick their lane. The first phone on a lane is Timer 1, the next Timer 2, then Timer 3 (they can switch).</div>
-      <div style="margin-top:14px"><button class="small" onclick="document.getElementById('tpBox').remove()">Close</button></div>`;
+      <div style="font:600 13px Consolas,monospace;word-break:break-all">${esc(j.url)}</div>
+      <div style="margin-top:14px">${j.public ? `<button class="ghost small" id="tpNew" title="Make a new secret link - phones on the old one stop working">New link</button> ` : ""}<button class="small" onclick="document.getElementById('tpBox').remove()">Close</button></div>`;
+    $("#tpPub").onchange = async e => { await api("/api/timer-public", J({on: e.target.checked})); $("#tpBtn").click(); if (e.target.checked) setTimeout(() => $("#tpBox") && $("#tpBtn").click(), 6000); };
+    if ($("#tpNew")) $("#tpNew").onclick = async () => { if (!confirm("Make a new link? Timers on the old one will need to scan again.")) return; await api("/api/timer-public", J({new_link: MID})); $("#tpBtn").click(); };
+    if (T.on && !j.public && !T.error) setTimeout(() => $("#tpBox") && $("#tpBtn").click(), 3000);
   } catch (e) { box.firstElementChild.textContent = e.message; }
 };
 function show() {

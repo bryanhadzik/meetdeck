@@ -77,9 +77,17 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const fmt = t => { if (!t) return ""; const m = Math.floor(t / 60), s = (t - m * 60).toFixed(2); return m ? `${m}:${s.padStart(5, "0")}` : s; };
-const get = k => { try { return localStorage.getItem("lt-" + k); } catch (e) { return null; } };
-const put = (k, v) => { try { localStorage.setItem("lt-" + k, v); } catch (e) {} };
-let C = {meet: get("meet"), pin: "", lane: +get("lane") || 0, slot: +get("slot") || 0, dev: get("dev")};
+const NS = "lt-" + (location.pathname.match(/^\/t\/([A-Za-z0-9_-]+)/) || ["", ""])[1].slice(0, 6) + "-";
+const get = k => { try { return localStorage.getItem((k === "dev" ? "lt-" : NS) + k); } catch (e) { return null; } };
+const put = (k, v) => { try { localStorage.setItem((k === "dev" ? "lt-" : NS) + k, v); } catch (e) {} };
+// public link (/t/<secret>): one meet, reached over the internet through the tunnel; otherwise the pool wifi
+const PUB = /^\/t\/[A-Za-z0-9_-]+/.test(location.pathname) ? location.pathname.match(/^\/t\/[A-Za-z0-9_-]+/)[0] : "";
+const U = {
+  lane: () => PUB ? `${PUB}/lane/${C.lane}?device=${encodeURIComponent(C.dev)}` : `/api/timer/${C.meet}/lane/${C.lane}?device=${encodeURIComponent(C.dev)}`,
+  time: () => PUB ? `${PUB}/time` : `/api/timer/${C.meet}/time`,
+  photo: () => PUB ? `${PUB}/photo` : `/api/timer/${C.meet}/photo`,
+};
+let C = {meet: PUB ? "pub" : get("meet"), pin: "", lane: +get("lane") || 0, slot: +get("slot") || 0, dev: get("dev")};
 if (!C.dev) { C.dev = Math.random().toString(36).slice(2, 12); put("dev", C.dev); }
 let D = null, idx = -1, digits = "", userMoved = false, lastNow = "";
 async function api(u, b) {
@@ -93,6 +101,7 @@ async function showSetup() {
   $("#main").classList.add("hidden"); $("#setup").classList.remove("hidden");
   $("#sLane").innerHTML = Array.from({length: 8}, (_, i) => `<button data-lane="${i + 1}" class="${C.lane === i + 1 ? "on" : ""}" style="font-size:26px;padding:18px 0">${i + 1}</button>`).join("");
   try {
+    if (PUB) { $("#sMeet").innerHTML = `<option value="pub" selected>this meet</option>`; $("#sMore").classList.add("hidden"); return; }
     const q = new URLSearchParams(location.search).get("meet") || C.meet || "";
     const j = await api("/api/timer?meet=" + encodeURIComponent(q)), want = j.meets.some(m => m.id === q) ? q : j.current;
     $("#sMeet").innerHTML = j.meets.map(m => `<option value="${m.id}" ${m.id === want ? "selected" : ""}>${esc(m.name)} ${esc(m.date)}</option>`).join("");
@@ -114,7 +123,7 @@ $("#swap").onclick = () => { C.slot = C.slot % 3 + 1; put("slot", C.slot); digit
 $("#chg").onclick = showSetup;
 // ---- timing ----
 async function load(first) {
-  D = await api(`/api/timer/${C.meet}/lane/${C.lane}?device=${encodeURIComponent(C.dev)}`);
+  D = await api(U.lane());
   if (!C.slot) { C.slot = D.slot || 1; put("slot", C.slot); }
   const n = D.now || {}, nowKey = JSON.stringify(n);
   // follow the pool: open on the heat in the water (or the one just finished) unless the timer moved by hand
@@ -165,7 +174,7 @@ $("#save").onclick = async () => {
   const r = D.rows[idx]; if (!r || !digits) return;
   $("#save").disabled = true;
   try {
-    const j = await api(`/api/timer/${C.meet}/time`, {key: r.key, slot: C.slot, t: fmtDigits(digits), lane: C.lane});
+    const j = await api(U.time(), {key: r.key, slot: C.slot, t: fmtDigits(digits), lane: C.lane});
     digits = "";
     $("#msg").className = "msg ok"; $("#msg").textContent = "Saved ✓";
     if (navigator.vibrate) navigator.vibrate(60);
@@ -179,7 +188,7 @@ $("#camIn").onchange = async e => {
   $("#msg").className = "msg"; $("#msg").textContent = "Sending the photo…";
   const fd = new FormData(); fd.append("key", r.key); fd.append("slot", C.slot); fd.append("lane", C.lane); fd.append("file", f);
   try {
-    const res = await fetch(`/api/timer/${C.meet}/photo`, {method: "POST", body: fd}), j = await res.json().catch(() => ({}));
+    const res = await fetch(U.photo(), {method: "POST", body: fd}), j = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(j.detail || "Couldn't send the photo");
     if (j.read) { digits = j.read.replace(/\D/g, ""); $("#msg").className = "msg ok"; $("#msg").textContent = "Read from the photo - check it matches your watch, then Save."; }
     else { $("#msg").className = "msg warn"; $("#msg").textContent = "Photo saved. Type the time from it, then Save."; }

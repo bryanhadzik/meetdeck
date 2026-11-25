@@ -4961,7 +4961,9 @@ def timer_photo_get(mid: str, name: str):
 def timer_link(request: Request, mid: str = ""):
     """For the run page: the address timers open on their phones, this meet's PIN, and a QR code (SVG)."""
     port = request.url.port or 8000
-    url = f"http://{_lan_ip()}:{port}/timer" + (f"?meet={mid}" if mid else "")
+    lan = f"http://{_lan_ip()}:{port}/timer" + (f"?meet={mid}" if mid else "")
+    public = f"{TUNNEL['url']}/t/{_timer_token(_dir(mid))}" if TUNNEL["url"] and mid else ""
+    url = public or lan
     pin = ""
     from reportlab.graphics.barcode.qr import QrCodeWidget
     from reportlab.graphics.shapes import Drawing
@@ -4970,7 +4972,148 @@ def timer_link(request: Request, mid: str = ""):
     b = w.getBounds()
     dr = Drawing(220, 220, transform=[220. / (b[2] - b[0]), 0, 0, 220. / (b[3] - b[1]), 0, 0])
     dr.add(w)
-    return {"url": url, "pin": pin, "qr": renderSVG.drawToString(dr)}
+    return {"url": url, "lan": lan, "public": public, "pin": pin, "qr": renderSVG.drawToString(dr),
+            "tunnel": {"on": bool(_settings().get("timer_public")), "starting": TUNNEL["starting"], "error": TUNNEL["error"]}}
+
+
+# ---- timer phones over the internet: a secret link per meet, through a Cloudflare tunnel ----
+# Only the timer page and its three calls are reachable that way - a separate little web server on
+# 127.0.0.1:8011 that the tunnel points at; the rest of MeetDeck never leaves the pool PC. The pool PC dials out to
+# Cloudflare (nothing opened at the pool), and Cloudflare hands out a random https://….trycloudflare.com address
+# each time the tunnel starts; the QR code on the run page always shows the current one.
+from fastapi import FastAPI as _FastAPI
+PUB_PORT = 8011
+pub = _FastAPI(title="MeetDeck timer link", docs_url=None, redoc_url=None, openapi_url=None)
+TUNNEL = {"proc": None, "url": "", "error": "", "starting": False}
+
+
+def _timer_token(d: Path, new: bool = False) -> str:
+    meta = _meta(d)
+    if new or not meta.get("timer_token"):
+        meta["timer_token"] = secrets.token_urlsafe(12)
+        _save(d, meta)
+    return meta["timer_token"]
+
+
+def _token_meet(tok: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,40}", tok or ""):
+        raise HTTPException(404)
+    for d in DATA.iterdir():
+        try:
+            if (d / "meta.json").exists() and _meta(d).get("timer_token") == tok:
+                return d.name
+        except ValueError:
+            continue
+    raise HTTPException(404, "This timer link has expired - scan the code at the timing table again")
+
+
+@pub.get("/t/{tok}")
+def pub_page(tok: str):
+    _token_meet(tok)
+    return FileResponse(STATIC / "timer.html", headers={"Cache-Control": "no-store"})
+
+
+@pub.get("/t/{tok}/lane/{lane}")
+def pub_lane(tok: str, lane: int, device: str = ""):
+    return timer_lane(_token_meet(tok), lane, device=device)
+
+
+@pub.post("/t/{tok}/time")
+def pub_time(tok: str, body: dict):
+    return timer_time(_token_meet(tok), body)
+
+
+@pub.post("/t/{tok}/photo")
+async def pub_photo(tok: str, key: str = Form(""), slot: int = Form(1), lane: str = Form(""), file: UploadFile = File(...)):
+    return await timer_photo(_token_meet(tok), "", key, slot, lane, file)
+
+
+def _pub_server():
+    import uvicorn
+    try:
+        uvicorn.Server(uvicorn.Config(pub, host="127.0.0.1", port=PUB_PORT, log_level="warning")).run()
+    except Exception as e:
+        print("timer link server:", e)
+
+
+def _cloudflared() -> Path | None:
+    """cloudflared, downloaded once into MeetDeck's data folder (from Cloudflare's GitHub releases)."""
+    import platform, urllib.request
+    name = "cloudflared.exe" if os.name == "nt" else "cloudflared"
+    f = DATA_ROOT / "bin" / name
+    if f.exists():
+        return f
+    w = shutil.which("cloudflared")
+    if w:
+        return Path(w)
+    asset = "cloudflared-windows-amd64.exe" if os.name == "nt" else (
+        "cloudflared-linux-arm64" if platform.machine() in ("aarch64", "arm64") else "cloudflared-linux-amd64")
+    f.parent.mkdir(parents=True, exist_ok=True)
+    tmp = f.with_suffix(".part")
+    with urllib.request.urlopen("https://github.com/cloudflare/cloudflared/releases/latest/download/" + asset, timeout=60) as r, open(tmp, "wb") as o:
+        shutil.copyfileobj(r, o)
+    os.replace(tmp, f)
+    if os.name != "nt":
+        f.chmod(0o755)
+    return f
+
+
+def _tunnel_run():
+    """Keep the tunnel up while it's switched on; note its address."""
+    import subprocess
+    while _settings().get("timer_public"):
+        TUNNEL.update(starting=True, error="")
+        try:
+            exe = _cloudflared()
+            p = subprocess.Popen([str(exe), "tunnel", "--no-autoupdate", "--url", f"http://127.0.0.1:{PUB_PORT}"],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True,
+                                 creationflags=0x08000000 if os.name == "nt" else 0)
+            TUNNEL["proc"] = p
+            for line in p.stderr:
+                m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
+                if m and not TUNNEL["url"]:
+                    TUNNEL.update(url=m.group(0), starting=False)
+                if not _settings().get("timer_public"):
+                    break
+            p.kill()
+        except Exception as e:
+            TUNNEL["error"] = str(e)
+        TUNNEL.update(proc=None, url="", starting=False)
+        time.sleep(5)
+
+
+def _tunnel_on():
+    if TUNNEL.get("thread") and TUNNEL["thread"].is_alive():
+        return
+    TUNNEL["thread"] = threading.Thread(target=_tunnel_run, daemon=True)
+    TUNNEL["thread"].start()
+
+
+@app.on_event("startup")
+def _timer_link_start():
+    threading.Thread(target=_pub_server, daemon=True).start()
+    if _settings().get("timer_public"):
+        _tunnel_on()
+
+
+@app.post("/api/timer-public")
+def timer_public(body: dict):
+    """Switch the internet timer link on or off ({on}); {new_link: mid} makes a new secret link for a meet
+    (the old one stops working)."""
+    if "on" in body:
+        st = _settings()
+        st["timer_public"] = bool(body["on"])
+        _write_settings(st)
+        if st["timer_public"]:
+            _tunnel_on()
+        elif TUNNEL.get("proc"):
+            try:
+                TUNNEL["proc"].kill()
+            except Exception:
+                pass
+    if body.get("new_link"):
+        _timer_token(_dir(body["new_link"]), new=True)
+    return {"on": bool(_settings().get("timer_public")), "url": TUNNEL["url"], "starting": TUNNEL["starting"], "error": TUNNEL["error"]}
 
 
 @app.get("/timer")

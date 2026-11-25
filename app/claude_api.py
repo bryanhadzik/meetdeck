@@ -27,7 +27,7 @@ def call(key: str, content, model: str = "", max_tokens: int = 1024, system: str
         body["system"] = system
     if tool:
         body["tools"] = [tool]
-        body["tool_choice"] = {"type": "tool", "name": tool["name"]}
+        body["tool_choice"] = {"type": "auto"}      # newer models don't take a forced tool; the prompt asks for it
     req = urllib.request.Request(API, json.dumps(body).encode(), {
         "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
     t0 = time.time()
@@ -52,6 +52,15 @@ def call(key: str, content, model: str = "", max_tokens: int = 1024, system: str
         raise ClaudeError(f"Couldn't reach the Claude API - is this computer on the internet? ({getattr(e, 'reason', e)})")
     text = "".join(b.get("text", "") for b in j.get("content") or [] if b.get("type") == "text")
     data = next((b.get("input") for b in j.get("content") or [] if b.get("type") == "tool_use"), None)
+    if tool and data is None and text:          # answered in text instead: take the JSON out of it
+        a_, b_ = text.find("{"), text.rfind("}")
+        if a_ >= 0 and b_ > a_:
+            try:
+                data = json.loads(text[a_:b_ + 1])
+            except ValueError:
+                pass
+    if tool and data is None:
+        raise ClaudeError("Claude didn't return the reading in the expected form - try Read again")
     return {"text": text, "data": data, "model": j.get("model"), "usage": j.get("usage") or {}, "ms": int((time.time() - t0) * 1000)}
 
 

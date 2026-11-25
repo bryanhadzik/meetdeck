@@ -84,7 +84,9 @@ is written, and the order of finish as the lane numbers written in the place box
 in place order). Copy handwriting as written - never invent a DQ or a lane. When a mark, letter or digit is hard to read,
 give your best reading and set unsure. List every heat on the page even when nothing is written (empty dqs and finish),
 so it's clear the page was read. A page that isn't a referee program (a timer sheet, a note, a blank page) gets the
-matching kind and a short note."""
+matching kind and a short note.
+
+Give your answer only by calling the report_pages tool, once, with every page."""
 
 TOOL = {
     "name": "report_pages",
@@ -168,7 +170,7 @@ def read(d: Path, sid: str, key: str, model: str = ""):
     mark(status="reading", error="")
     try:
         content = _content(path_of(d, rec), rec["ext"]) + [{"type": "text", "text": _codes_hint() + "\n\nReport every page of this scan."}]
-        r = claude_api.call(key, content, model=model, max_tokens=8000, system=SYSTEM, timeout=180, tool=TOOL)
+        r = claude_api.call(key, content, model=model, max_tokens=16000, system=SYSTEM, timeout=240, tool=TOOL)
         pages = (r.get("data") or {}).get("pages") or []
         mark(status="done", pages=pages, model=r.get("model"), read_at=time.strftime("%Y-%m-%d %H:%M:%S"),
              usage=r.get("usage"), ms=r.get("ms"))

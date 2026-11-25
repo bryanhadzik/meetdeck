@@ -160,7 +160,7 @@ function show() {
   $("#whoTxt").classList.toggle("none", !!r.empty);
   $("#keys").querySelectorAll("button").forEach(b => b.disabled = r.empty || ns);
   $("#cam").disabled = r.empty || ns;
-  $("#ns").classList.toggle("hidden", !!r.empty); $("#ns").disabled = D.locked || (!ns && !!r.time);
+  $("#ns").classList.toggle("hidden", !!r.empty); $("#ns").disabled = D.locked;
   if (!$("#ns").classList.contains("arm")) $("#ns").textContent = ns ? "Undo no show" : "No show";
   $("#ns").classList.toggle("on", ns);
   if (r.empty || ns) {
@@ -183,6 +183,11 @@ function renderList() {
 $("#ns").onclick = async () => {
   const r = D && D.rows[idx], b = $("#ns"); if (!r || r.empty) return;
   const on = r.stat !== "R";
+  if (on && r.time) {          // the pad already has a time: they swam, so the table has to decide
+    $("#msg").className = "msg warn";
+    $("#msg").textContent = `The table already has a time for this swim (${fmt(r.time)}). If they didn't swim, tell the timing table.`;
+    return;
+  }
   if (on && !b.classList.contains("arm")) {          // two taps, so a stray tap doesn't mark a swimmer out
     b.classList.add("arm"); b.textContent = "Tap again: no show";
     clearTimeout(b.t); b.t = setTimeout(() => { b.classList.remove("arm"); show(); }, 4000); return;

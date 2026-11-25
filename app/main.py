@@ -4181,6 +4181,10 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
         pdf, label = heatsheet.qr_sign_pdf(m, url, stream=bool(_pool(st) and st.get("stream_url"))), "results sign"
     elif kind == "referee2":
         pdf, label = heatsheet.referee2_pdf(m, licensee), "referee program"
+    elif kind in ("referee3a", "referee3b", "referee3c"):
+        import referee3
+        v = kind[-1].upper()
+        pdf, label = referee3.referee3_pdf(m, licensee, v), f"referee program {v} - {referee3.VARIANTS[v][5]}"
     elif kind in ("results", "results-splits"):
         try:
             m["records_broken"] = _records_broken(d, m)

@@ -713,7 +713,7 @@ const OPS = [
   {id: "op_timers", t: "Timers per lane set (1 or 2)", db: true,
    st: o => o.timers ? [1, `${o.timers} timer${o.timers > 1 ? "s" : ""} per lane`] : [0, "Not set (the meet database uses 1)"]},
   {id: "print", t: "Heat sheets, referee program, timer sheets and timeline printed", print: true,
-   st: o => { const a = o.activity || {}, got = [["heatsheet", "heat sheet"], ["referee", "referee program"], ["timer", "timer sheets"], ["timeline", "timeline"]].filter(([k]) => a["print_" + k] || (k === "referee" && a.print_referee2));
+   st: o => { const a = o.activity || {}, got = [["heatsheet", "heat sheet"], ["referee", "referee program"], ["timer", "timer sheets"], ["timeline", "timeline"]].filter(([k]) => a["print_" + k] || (k === "referee" && (a.print_referee2 || a.print_referee3a || a.print_referee3b || a.print_referee3c)));
      return a.print_heatsheet && a.print_timer ? [1, got.map(([k, l]) => `${l} ${a["print_" + k].slice(11)}`).join(" · ")] : got.length ? [-1, "Printed: " + got.map(x => x[1]).join(", ")] : [0, "Nothing printed yet"]; }},
   {id: "console", ao: "setup", t: "Timing console connected and events sent to it", db: true,
    st: o => (o.activity || {}).console ? [1, "Events sent " + o.activity.console] : [0, "Events not sent from MeetDeck yet"]},

@@ -402,13 +402,25 @@ def get_settings():
     cur = season_of()
     y = int(cur[:4])
     seasons = {f"{y + i}-{(y + i + 1) % 100:02d}" for i in (-1, 0, 1)} | {m["season"] for m in list_meets()} | {st["season"]}
-    pub = {k: v for k, v in st.items() if k not in ("drive_token", "public_token")}
+    pub = {k: v for k, v in st.items() if k not in ("drive_token", "public_token", "claude_key", "meetmobile_token")}
+    ck = st.get("claude_key") or ""
+    pub["claude_key_set"], pub["claude_key_end"] = bool(ck), ck[-4:] if ck else ""
     pub["public_repo"] = _pub_repo(st)
     pub["public_token_set"] = bool(st.get("public_token"))
     pub["public_domain"] = _pub_domain(st)
     pub["public_url"] = _pub_url(st)
     pub["pool_features"] = _pool(st)
     return {**pub, "current": cur, "seasons": sorted(seasons, reverse=True), "drive_write": bool(st.get("drive_url"))}
+
+
+@app.post("/api/claude/test")
+def claude_test():
+    """Check the saved Claude API key with a tiny request."""
+    import claude_api
+    try:
+        return claude_api.test(_settings().get("claude_key") or "")
+    except claude_api.ClaudeError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.put("/api/settings")
@@ -445,6 +457,14 @@ def put_settings(body: dict):
         if r and not re.fullmatch(r"[\w.-]+/[\w.-]+", r):
             raise HTTPException(400, "The repository looks like owner/name, e.g. bryanhadzik/swim-results")
         st["public_repo"] = r
+    if "claude_key" in body:                # typed in on this computer; never sent back to the page
+        k = (body["claude_key"] or "").strip()
+        if k and not re.fullmatch(r"sk-ant-[A-Za-z0-9_-]{20,}", k):
+            raise HTTPException(400, "That doesn't look like a Claude API key (they start with sk-ant-)")
+        if k:
+            st["claude_key"] = k
+        elif body.get("claude_key_clear"):
+            st.pop("claude_key", None)
     if "public_token" in body and body["public_token"] != "":
         st["public_token"] = (body["public_token"] or "").strip()
     if "public_domain" in body:

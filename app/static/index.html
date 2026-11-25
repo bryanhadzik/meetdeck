@@ -414,6 +414,16 @@ a{color:var(--accent)}a:visited{color:var(--accent)}mark{background:#ffe066;colo
     <label class="row" style="margin-top:6px;font-size:13.5px"><input type="checkbox" id="sMbAuto"> Send again automatically after scratches, lane moves, relay swimmer and name changes</label>
   </section>
   <section>
+    <h2>Claude API</h2>
+    <div class="muted" style="font-size:13px">Lets MeetDeck read handwriting on scanned sheets (the referee's DQ boxes). Each page is a small paid request
+      on your Claude account; whatever it reads is shown for you to accept - nothing changes in the meet by itself.</div>
+    <div class="row" style="margin-top:8px"><label>API key <input id="sClKey" type="password" placeholder="sk-ant-…" style="width:300px" autocomplete="off"></label>
+      <button class="small" id="sClSave">Save</button><button class="small ghost" id="sClTest">Test</button><button class="small ghost" id="sClDel">Remove</button>
+      <span class="muted" id="sClMsg" style="font-size:13px"></span></div>
+    <div class="muted" style="font-size:12.5px;margin-top:4px">Key: console.anthropic.com &rarr; Settings &rarr; API Keys. It stays on this computer (MeetDeck's settings file) -
+      it's never shown again, never in a meet backup and never sent anywhere but Anthropic. Set a monthly spend limit under Billing.</div>
+  </section>
+  <section>
     <h2>Phone results</h2>
     <div class="muted" style="font-size:13px">A public, phone-friendly results page for spectators (no login, works on cellular). MeetDeck publishes it to
       a GitHub Pages site after each scored race; phones see it about a minute later. Put the address on the board.</div>
@@ -666,7 +676,7 @@ async function loadSetup() {
   $("#sMbAuto").checked = !!SET.meetboard_auto;
   $("#sPubRepo").value = SET.public_repo || "";
   $("#sPubDom").value = SET.public_domain || "";
-  $("#sPubTok").value = ""; $("#sPubTok").placeholder = SET.public_token_set ? "saved (type to replace)" : "github_pat_…";
+  $("#sPubTok").value = ""; $("#sPubTok").placeholder = SET.public_token_set ? "saved (type to replace)" : "github_pat_…"; clShow();
   $("#sPubAuto").checked = !!SET.public_auto;
   $("#sDbg").checked = !!SET.debug_tools;
   $("#sGc").value = SET.goatcounter || "";
@@ -978,6 +988,21 @@ $("#sGcSave").onclick = async () => {
   try { SET = await api("/api/settings", J("PUT", {goatcounter: $("#sGc").value})); $("#sGcMsg").textContent = " Saved - phones count from the next publish";
     $("#sGcLink").textContent = SET.goatcounter ? " open stats" : ""; $("#sGcLink").href = SET.goatcounter ? `https://${SET.goatcounter}.goatcounter.com` : "#"; }
   catch (e) { $("#sGcMsg").textContent = e.message; }
+};
+function clShow() { $("#sClKey").value = ""; $("#sClKey").placeholder = SET.claude_key_set ? `saved, ends in …${SET.claude_key_end} (type to replace)` : "sk-ant-…"; }
+$("#sClSave").onclick = async () => {
+  const k = $("#sClKey").value.trim(); if (!k) { $("#sClMsg").textContent = "Paste the key first"; return; }
+  try { SET = await api("/api/settings", J("PUT", {claude_key: k})); clShow(); $("#sClMsg").textContent = "Saved - testing…"; $("#sClTest").click(); }
+  catch (e) { $("#sClMsg").textContent = e.message; }
+};
+$("#sClTest").onclick = async () => {
+  $("#sClMsg").textContent = "Testing…";
+  try { const r = await api("/api/claude/test", J("POST", {})); $("#sClMsg").textContent = `Works (${r.model}, ${(r.ms / 1000).toFixed(1)} s)`; }
+  catch (e) { $("#sClMsg").textContent = e.message; }
+};
+$("#sClDel").onclick = async () => {
+  try { SET = await api("/api/settings", J("PUT", {claude_key: "", claude_key_clear: true})); clShow(); $("#sClMsg").textContent = "Removed"; }
+  catch (e) { $("#sClMsg").textContent = e.message; }
 };
 $("#sPubSave").onclick = async () => {
   const body = {public_repo: $("#sPubRepo").value, public_domain: $("#sPubDom").value};

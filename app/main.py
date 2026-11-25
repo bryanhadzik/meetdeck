@@ -4818,8 +4818,11 @@ def timer_meets(meet: str = ""):
     return {"meets": top, "current": cur}
 
 
+_TIMER_SEEN = {}            # (meet, lane) -> {device: (timer slot, last seen)}: spots two phones on one lane as the same timer
+
+
 @app.get("/api/timer/{mid}/lane/{lane}")
-def timer_lane(mid: str, lane: int, pin: str = "", device: str = ""):
+def timer_lane(mid: str, lane: int, pin: str = "", device: str = "", slot: int = 0):
     """Every heat with a swimmer in `lane`, in swim order, with the times the timers have in, and the heat in the
     water now (from meet-board)."""
     d = _timer_meet(mid, pin)
@@ -4862,16 +4865,23 @@ def timer_lane(mid: str, lane: int, pin: str = "", device: str = ""):
                 now = body
         except Exception:
             pass
-    slot = None
+    given, slot, clash = slot if slot in (1, 2, 3) else 0, None, None
     if device:                          # the first phone on a lane is its Timer 1, the second Timer 2
         dev = re.sub(r"[^A-Za-z0-9]", "", device)[:40]
         ln = meta.setdefault("timer_devices", {}).setdefault(str(lane), {})
         if dev not in ln:
             taken = set(ln.values())
-            ln[dev] = next((k for k in (1, 2, 3) if k not in taken), 1)
+            ln[dev] = given or next((k for k in (1, 2, 3) if k not in taken), 1)
             _save(d, meta)
-        slot = ln[dev]
-    return {"meet": meta.get("name", ""), "lane": lane, "rows": rows, "now": now, "locked": bool(meta.get("locked")), "slot": slot}
+        slot = given or ln[dev]
+        seen = _TIMER_SEEN.setdefault((d.name, lane), {})
+        nowt = time.time()
+        seen[dev] = (slot, nowt)
+        # another phone on this lane, active in the last 3 minutes, set to the same timer
+        if any(o != dev and s2 == slot and nowt - t2 < 180 for o, (s2, t2) in seen.items()):
+            clash = slot
+    return {"meet": meta.get("name", ""), "lane": lane, "rows": rows, "now": now, "locked": bool(meta.get("locked")), "slot": slot,
+            "clash": clash}
 
 
 @app.get("/api/meets/{mid}/phone-stamp")
@@ -4905,7 +4915,13 @@ def timer_time(mid: str, body: dict):
     except KeyError:
         raise HTTPException(404, "No such swim")
     pw = meta.setdefault("phone_watches", {}).setdefault(key, {})
-    pw[str(slot)] = {"t": t, "at": time.strftime("%Y-%m-%d %H:%M:%S"), "lane": body.get("lane")}
+    dev = re.sub(r"[^A-Za-z0-9]", "", str(body.get("device") or ""))[:40]
+    old = pw.get(str(slot)) or {}
+    if dev and old.get("t") and old.get("dev") and old["dev"] != dev and not body.get("force") and abs(old["t"] - t) >= 0.005:
+        raise HTTPException(409, f"Another phone already saved Timer {slot}'s time for this swim ({meetdb.fmt_time(old['t'])}). "
+                                 f"If you're a different timer, tap Timer {slot} at the top to switch, then save. "
+                                 f"Tap Save again to replace it anyway.")
+    pw[str(slot)] = {"t": t, "at": time.strftime("%Y-%m-%d %H:%M:%S"), "lane": body.get("lane"), "dev": dev}
     _save(d, meta)
     field = {1: "watch", 2: "watch2", 3: "watch3"}[slot]
     have = float(e.get(field) or 0)
@@ -5067,8 +5083,8 @@ def pub_page(tok: str):
 
 
 @pub.get("/t/{tok}/lane/{lane}")
-def pub_lane(tok: str, lane: int, device: str = ""):
-    return timer_lane(_token_meet(tok), lane, device=device)
+def pub_lane(tok: str, lane: int, device: str = "", slot: int = 0):
+    return timer_lane(_token_meet(tok), lane, device=device, slot=slot)
 
 
 @pub.post("/t/{tok}/time")

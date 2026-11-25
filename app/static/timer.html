@@ -19,6 +19,7 @@
   button:disabled { opacity:.4; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-top:12px; }
   .ev { font-size:15px; color:var(--mute); }
+  .clash { background:#7a1d1d; border:1px solid #e0564f; color:#ffd9d6; border-radius:10px; padding:10px 12px; margin:0 0 10px; font-weight:700; font-size:16px; }
   .who { font-size:22px; font-weight:700; margin-top:2px; }
   .who.none { font-size:18px; font-weight:600; color:var(--muted); }
   button#ns.arm { background:#7a3b12; border-color:#d9822b; font-weight:700; }
@@ -59,6 +60,7 @@
   <div id="main" class="hidden">
     <div class="top"><b id="hdr">Lane</b><span class="grow"></span><button id="swap" style="padding:6px 10px;font-size:14px" title="Which timer you are on this lane - tap to switch (1, 2, 3)">Timer 1</button><button id="chg" style="padding:6px 10px;font-size:14px">Lane</button></div>
     <div class="muted" id="meetName"></div>
+    <div class="clash hidden" id="clash"></div>
     <div class="card">
       <div class="ev"><span id="evTxt"></span><span class="now hidden" id="nowTag"></span></div>
       <div class="who" id="whoTxt"></div>
@@ -87,18 +89,19 @@ const put = (k, v) => { try { localStorage.setItem((k === "dev" ? "lt-" : NS) + 
 // public link (/t/<secret>): one meet, reached over the internet through the tunnel; otherwise the pool wifi
 const PUB = /^\/t\/[A-Za-z0-9_-]+/.test(location.pathname) ? location.pathname.match(/^\/t\/[A-Za-z0-9_-]+/)[0] : "";
 const U = {
-  lane: () => PUB ? `${PUB}/lane/${C.lane}?device=${encodeURIComponent(C.dev)}` : `/api/timer/${C.meet}/lane/${C.lane}?device=${encodeURIComponent(C.dev)}`,
+  lane: () => (PUB ? `${PUB}/lane/${C.lane}` : `/api/timer/${C.meet}/lane/${C.lane}`) + `?device=${encodeURIComponent(C.dev)}&slot=${C.slot || 0}`,
   time: () => PUB ? `${PUB}/time` : `/api/timer/${C.meet}/time`,
   photo: () => PUB ? `${PUB}/photo` : `/api/timer/${C.meet}/photo`,
   noshow: () => PUB ? `${PUB}/noshow` : `/api/timer/${C.meet}/noshow`,
 };
 let C = {meet: PUB ? "pub" : get("meet"), pin: "", lane: +get("lane") || 0, slot: +get("slot") || 0, dev: get("dev")};
 if (!C.dev) { C.dev = Math.random().toString(36).slice(2, 12); put("dev", C.dev); }
+let force = 0;
 let D = null, idx = -1, digits = "", justSaved = "", userMoved = false, lastNow = "";
 async function api(u, b) {
   const r = await fetch(u, b ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(b)} : {});
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.detail || "Couldn't reach the timing table");
+  if (!r.ok) { const e = new Error(j.detail || "Couldn't reach the timing table"); e.status = r.status; throw e; }
   return j;
 }
 // ---- setup ----
@@ -124,7 +127,8 @@ $("#sLane").onclick = async e => {
   ["meet", "lane", "slot"].forEach(k => put(k, C[k]));
   $("#setup").classList.add("hidden"); $("#main").classList.remove("hidden"); show();
 };
-$("#swap").onclick = () => { C.slot = C.slot % 3 + 1; put("slot", C.slot); digits = ""; justSaved = ""; show(); };
+$("#swap").onclick = async () => { C.slot = C.slot % 3 + 1; put("slot", C.slot); digits = ""; justSaved = ""; force = 0; show();
+  try { await load(); show(); } catch (e) {} };          // tell the table right away, so a clash warning clears or shows
 $("#chg").onclick = showSetup;
 // ---- timing ----
 async function load(first) {
@@ -147,6 +151,8 @@ function show() {
   if (!D) return;
   $("#hdr").textContent = `Lane ${C.lane}`;
   $("#swap").textContent = `Timer ${C.slot}`;
+  $("#clash").classList.toggle("hidden", !D.clash);
+  $("#clash").textContent = D.clash ? `Another phone on lane ${C.lane} is also Timer ${D.clash}. One of you tap Timer ${D.clash} (top right) to switch.` : "";
   $("#meetName").textContent = D.meet + (D.locked ? " - locked, results are final" : "");
   const r = D.rows[idx], n = D.now || {};
   if (!r) { $("#evTxt").textContent = ""; $("#whoTxt").textContent = "Nobody swims in this lane."; return; }
@@ -174,7 +180,7 @@ function show() {
   $("#tDisp").textContent = shown || "–:––.––"; $("#tDisp").classList.toggle("empty", !shown);
   $("#tNote").textContent = digits ? "not saved yet" : keep ? "" : mine(r) ? `saved ${fmt(mine(r))}` : "";
   $("#prev").disabled = idx <= 0; $("#next").disabled = idx >= D.rows.length - 1;
-  $("#save").disabled = !digits || off;
+  $("#save").disabled = !digits || off; $("#save").textContent = "Save time";
   renderList();
 }
 function renderList() {
@@ -217,12 +223,17 @@ $("#save").onclick = async () => {
   const r = D.rows[idx]; if (!r || !digits) return;
   $("#save").disabled = true;
   try {
-    const j = await api(U.time(), {key: r.key, slot: C.slot, t: fmtDigits(digits), lane: C.lane});
+    const f = force && Date.now() - force < 15000; force = 0;
+    const j = await api(U.time(), {key: r.key, slot: C.slot, t: fmtDigits(digits), lane: C.lane, device: C.dev, force: f});
     digits = ""; justSaved = r.key;
     $("#msg").className = "msg ok"; $("#msg").textContent = "Saved ✓";
     if (navigator.vibrate) navigator.vibrate(60);
     await load(); show();
-  } catch (e) { $("#msg").className = "msg err"; $("#msg").textContent = e.message; show(); }
+  } catch (e) {
+    if (e.status === 409) force = Date.now();          // another phone saved this timer's time: a second tap replaces it
+    $("#msg").className = "msg err"; $("#msg").textContent = e.message; show();
+    if (force) { $("#save").disabled = false; $("#save").textContent = "Save anyway"; }
+  }
 };
 $("#cam").onclick = () => $("#camIn").click();
 $("#camIn").onchange = async e => {

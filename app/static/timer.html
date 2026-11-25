@@ -257,6 +257,12 @@ $("#list").onclick = e => { const d = e.target.closest("[data-i]"); if (d) { go(
 setInterval(async () => { if ($("#main").classList.contains("hidden") || digits) return; try { await load(); show(); } catch (e) {} }, 5000);
 // start
 (async () => {
+  const q = new URLSearchParams(location.search), ql = +q.get("lane");
+  if (ql >= 1 && ql <= 10) {                 // scanned from a lane's timer sheet: straight to that lane
+    if (ql !== C.lane) { C.slot = 0; put("slot", 0); }
+    C.lane = ql; put("lane", ql);
+    if (!PUB && q.get("meet")) { C.meet = q.get("meet"); put("meet", C.meet); }
+  }
   if (C.meet && C.lane) {
     try { await load(true); $("#main").classList.remove("hidden"); show(); return; } catch (e) {}
   }

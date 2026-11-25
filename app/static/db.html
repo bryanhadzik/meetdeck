@@ -204,6 +204,7 @@ body:not(.meetPanels) #mbBox, body:not(.meetPanels) #pubBox, body:not(.meetPanel
       <div class="prow"><span>Timeline <span class="muted" style="font-size:11px">(session report)</span></span><button class="small" data-pr="timeline">Print</button><button class="ghost small" data-pdf="timeline">PDF</button></div>
       <div class="pgrp">Timers</div>
       <div class="prow"><span>Timer sheets <select id="prLane" title="All lanes, or just one lane's sheets"><option value="">all lanes</option></select></span><button class="small" data-pr="timer">Print</button><button class="ghost small" data-pdf="timer">PDF</button></div>
+      <div class="prow"><span title="The timer sheets with a small QR code on each lane's pages - scanning opens the phone time entry straight to that lane. Uses the internet link while it's on; that address changes when MeetDeck restarts, so print these after it's running for the meet.">Timer sheets + phone QR <span class="muted">(lane above)</span></span><button class="small" data-pr="timerqr">Print</button><button class="ghost small" data-pdf="timerqr">PDF</button></div>
       <div class="prow"><span>Watches needed <span class="muted" style="font-size:11px" id="watchCount">(lanes to get watch times for)</span></span><button class="small" data-pr="watches">Print</button><button class="ghost small" data-pdf="watches">PDF</button></div>
       <div class="prow"><span>Soft touch backup times <span class="muted" style="font-size:11px">(blank log)</span></span><button class="small" data-pr="softtouch">Print</button><button class="ghost small" data-pdf="softtouch">PDF</button></div>
       <div class="pgrp">Results</div>
@@ -2342,7 +2343,7 @@ document.addEventListener("click", async ev => {
   if (ev.target.id === "finishBtn") { ev.preventDefault(); try { localStorage.setItem("meet", MID); } catch (x) {} location.href = "/?meet=" + encodeURIComponent(MID) + "#send"; return; }
   if (ev.target.id === "printBtn") { $("#printPop").classList.toggle("hidden"); $("#exportPop").classList.add("hidden"); return; }
   if (d.dp) {
-    const kind = d.dp, lane = kind === "timer" && $("#prLane").value ? +$("#prLane").value : 0;
+    const kind = d.dp, lane = (kind === "timer" || kind === "timerqr") && $("#prLane").value ? +$("#prLane").value : 0;
     const copies = Math.max(1, Math.min(50, +$("#dpCopies").value || 1)), printer = $("#dpPrinter").value;
     $("#printPop").classList.add("hidden");
     toast(`Printing ${copies > 1 ? copies + " copies" : ""}…`);
@@ -2353,7 +2354,7 @@ document.addEventListener("click", async ev => {
     return;
   }
   if (d.pr || d.pdf) {
-    const kind = d.pr || d.pdf, lane = kind === "timer" && $("#prLane").value ? `?lane=${$("#prLane").value}` : "";
+    const kind = d.pr || d.pdf, lane = (kind === "timer" || kind === "timerqr") && $("#prLane").value ? `?lane=${$("#prLane").value}` : "";
     const url = `${API}/report/${kind}.pdf${lane}`;
     $("#printPop").classList.add("hidden");
     if (d.pdf) { window.open(url, "_blank"); return; }

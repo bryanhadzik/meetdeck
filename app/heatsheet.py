@@ -651,15 +651,32 @@ def qr_sign_pdf(m, url: str, stream: bool = True, licensee="") -> bytes:
 class _Timer(_Sheet):
     LAST_ROW = 740.0
 
-    def __init__(self, m, licensee, printed):
+    def __init__(self, m, licensee, printed, qr=None):
         super().__init__(m, licensee, printed)
         self.first_on_page = True
+        self.qr, self.lane = qr, None       # qr: lane -> phone link, drawn small in the top corner of each lane's pages
+
+    def draw_qr(self):
+        from reportlab.graphics.barcode.qr import QrCodeWidget
+        from reportlab.graphics.shapes import Drawing
+        from reportlab.graphics import renderPDF
+        url, sz = self.qr(self.lane), 50.0
+        w = QrCodeWidget(url, barLevel="L")
+        b = w.getBounds()
+        dr = Drawing(sz, sz, transform=[sz / (b[2] - b[0]), 0, 0, sz / (b[3] - b[1]), 0, 0])
+        dr.add(w)
+        renderPDF.draw(dr, self.c, 30.0, PAGE_H - 62.0)
+        self.text(84.0, 30.0, f"Lane {self.lane} timers:", bold=True, size=8.0)
+        self.text(84.0, 40.0, "scan to enter your", size=8.0)
+        self.text(84.0, 50.0, "watch time by phone", size=8.0)
 
     def new_page(self):
         if self.page:
             self.c.showPage()
         self.page += 1
         self.first_on_page = True
+        if self.qr and self.lane:
+            self.draw_qr()
         mt = self.m["meet"]
         try:
             d = dt.date.fromisoformat(mt["start"])
@@ -731,6 +748,7 @@ class _Timer(_Sheet):
         blocks = _blocks(self.m)
         lanes = int(self.m["meet"].get("lanes") or 8)
         for lane in range(1, lanes + 1):
+            self.lane = lane
             self.new_page()
             for v, heats in blocks:
                 self.lane_event(lane, v, heats)
@@ -741,11 +759,13 @@ class _Timer(_Sheet):
         return self.buf.getvalue()
 
 
-def timer_pdf(m, licensee="", printed=None, lane=None) -> bytes:
-    t = _Timer(m, licensee, printed or dt.datetime.now())
+def timer_pdf(m, licensee="", printed=None, lane=None, qr=None) -> bytes:
+    """Timer sheets, one lane per page set. qr: lane -> the phone link for that lane (a small QR on each page)."""
+    t = _Timer(m, licensee, printed or dt.datetime.now(), qr=qr)
     t.c.setTitle(f"{m['meet']['name']} - Timer Sheets")
     if lane:
         t.m = {**m, "meet": {**m["meet"]}}
+        t.lane = int(lane)
         blocks = _blocks(m)
         t.new_page()
         for v, heats in blocks:

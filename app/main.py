@@ -4200,6 +4200,10 @@ def db_report(mid: str, kind: str, download: int = 0, lane: int = 0):
             _save(d, mt)
     elif kind == "timer":
         pdf, label = heatsheet.timer_pdf(m, licensee, lane=lane or None), "timer sheets" + (f" lane {lane}" if lane else "")
+    elif kind == "timerqr":
+        base = _timer_phone_url(d)
+        qr = lambda ln: base + ("&" if "?" in base else "?") + f"lane={ln}"
+        pdf, label = heatsheet.timer_pdf(m, licensee, lane=lane or None, qr=qr), "timer sheets with QR" + (f" lane {lane}" if lane else "")
     elif kind == "lanes":
         pdf, label = heatsheet.lanes_pdf(_lanes_info(d)), "lane assignments"
     else:
@@ -5024,6 +5028,15 @@ def timer_photo_get(mid: str, name: str):
     if not f.is_file():
         raise HTTPException(404)
     return FileResponse(f, media_type="image/jpeg")
+
+
+def _timer_phone_url(d: Path) -> str:
+    """The link a timer's phone opens: the internet link while it's on (the trycloudflare address changes whenever
+    MeetDeck restarts), otherwise the pool wifi address."""
+    if TUNNEL["url"]:
+        return f"{TUNNEL['url']}/t/{_timer_token(d)}"
+    port = int(os.environ.get("MEETDECK_PORT", "8001"))
+    return f"http://{_lan_ip()}:{port}/timer?meet={d.name}"
 
 
 @app.get("/api/timer-link")

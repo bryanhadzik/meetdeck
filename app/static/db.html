@@ -29,7 +29,6 @@ section{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 .vidc{color:#2f6fb6;font-style:italic}
 .vidc.ag{color:var(--ok)}
 .vidc.no{color:var(--err)}
-.phonet{display:inline-block;margin-top:2px;font-size:12px;color:var(--warn);text-decoration:none;white-space:nowrap}
 .vidc a.vidlink{color:inherit;text-decoration:underline dotted;text-underline-offset:3px}
 body.locked #app input, body.locked #app select{pointer-events:none;opacity:.75}
 #lockChip{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn);border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:700;white-space:nowrap}
@@ -449,16 +448,6 @@ setInterval(async () => {
     phStamp = j.stamp;
   } catch (e) {}
 }, 8000);
-// use a timer's phone time in place of the one in the box
-document.addEventListener("click", e => {
-  const a = e.target.closest("[data-phuse]"); if (!a) return;
-  e.preventDefault();
-  const en = M.entries.find(x => x.key === a.dataset.phuse); if (!en) return;
-  const w = {1: +en.watch || 0, 2: +en.watch2 || 0, 3: +en.watch3 || 0};
-  w[+a.dataset.phn] = +a.dataset.pht;
-  change("watches", {key: en.key, t1_s: w[1] ? fmt(w[1]) : "", t2_s: w[2] ? fmt(w[2]) : "", t3_s: w[3] ? fmt(w[3]) : "", keep_slots: true, tol: TOL,
-    ...(["pad", "backup", "watch"].includes((S.time_ok || {})[en.key]) ? {use: S.time_ok[en.key]} : {})});
-});
 // timer phones: the address + PIN + QR code to show the lane timers
 $("#tpBtn").onclick = async () => {
   let box = $("#tpBox");
@@ -1215,11 +1204,7 @@ function timerCells(e) {
     return `<td class="mono${can || on ? " accpick" : ""}" ${can || on ? `data-accept="${e.key}" data-use="${on ? "" : which}"` : ""} style="text-align:right;white-space:nowrap${warn ? ";color:var(--warn);font-weight:600" : ""}${ign ? OUT : ""}${on ? ";color:var(--ok);font-weight:700" : ""}"
       ${ign || warn || miss ? `data-tip="${esc(whyTip(fk))}"` : t ? `data-tip="${esc(whyTip(fk) + `<div style="margin-top:6px;font-size:12px;opacity:.75">${esc(title)}${on ? " - accepted as the official time (click to undo)" : can ? " - click to accept this as the official time" : ""}</div>`)}" data-tipdelay="1000"` : `title="${esc(title)}"`}>${on ? "&#10004; " : ""}${t ? esc(fmt(t)) : '<span class="muted">&ndash;</span>'}</td>`;
   };
-  // a timer's phone sent a different time than the one in the box (the box had one already): offer it
-  const ph = n => { const p = ((S.phone_watches || {})[e.key] || {})[String(n)];
-    return p && p.t && Math.abs(p.t - (+({1: e.watch, 2: e.watch2, 3: e.watch3})[n] || 0)) > .005
-      ? `<div><a href="#" class="phonet" data-phuse="${esc(e.key)}" data-phn="${n}" data-pht="${p.t}" title="Timer ${n}'s phone sent ${fmt(p.t)} at ${esc((p.at || "").slice(11, 16))} - click to use it">&#128241; ${fmt(p.t)}</a></div>` : ""; };
-  const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" ${wOut(+val) || (+val && !acc && far(val, ref)) ? `data-tip="${esc(whyTip(["Timer " + n, +val, "watch"]))}"` : +val ? `data-tip="${esc(whyTip(["Timer " + n, +val, "watch"]))}" data-tipdelay="1000"` : `title="Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)"`} style="width:72px${wOut(+val) ? OUT : !acc && far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}">${ph(n)}</td>`;
+  const w = (n, val) => `<td><input class="t" data-wt="${n}" data-key="${e.key}" value="${esc(fmt(val))}" placeholder="timer ${n}" ${wOut(+val) || (+val && !acc && far(val, ref)) ? `data-tip="${esc(whyTip(["Timer " + n, +val, "watch"]))}"` : +val ? `data-tip="${esc(whyTip(["Timer " + n, +val, "watch"]))}" data-tipdelay="1000"` : `title="Timer ${n}'s watch time - the official time then follows the usual rule (the pad unless the watches side with the button)"`} style="width:72px${wOut(+val) ? OUT : !acc && far(val, ref) ? ";background:var(--warn-bg);border-color:var(--warn)" : ""}"></td>`;
   return ro(pad, "Pad (touchpad) time", odd(pad), "pad") +
     ro(back, btn.length > 1 ? "Backup buttons: " + btn.map(fmt).join(" / ") + " (average)" : "Backup button", odd(back), "backup") +
     w(1, e.watch) + (T3() ? w(2, e.watch2) + `<td style="white-space:nowrap">${w(3, e.watch3).slice(4, -5)}` : `<td style="white-space:nowrap">${w(2, e.watch2).slice(4, -5)}`) + `${e.heat && e.lane ? " " + wAskBtn(e) : ""}</td>` +

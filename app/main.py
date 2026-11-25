@@ -4766,9 +4766,8 @@ def bridge_zip():
 
 
 # ---- timer phones: each lane's timers type their watch times on a phone (pool wifi) instead of paper ----
-# A phone signs in with the meet's 4-digit timer PIN, picks its lane and which timer it is (1 or 2), and enters
-# each heat's watch time. The time goes into that lane's Timer 1 / Timer 2 box like typing it on the run page -
-# but never over a watch time that's already there (from the paper sheet, or typed): those show as a conflict.
+# A phone picks its lane (and is Timer 1, 2 or 3 on it) and enters each heat's watch time. The time goes straight
+# into that lane's Timer box like typing it on the run page - the phone's latest time wins.
 # Every phone time is kept beside the meet (phone_watches) and logged.
 
 def _timer_pin(d: Path) -> str:
@@ -4898,9 +4897,6 @@ def timer_time(mid: str, body: dict):
     have = float(e.get(field) or 0)
     if have and abs(have - t) < 0.005:
         return {"ok": True, "status": "same", "note": "Matches the time already in."}
-    if have and t:
-        return {"ok": True, "status": "conflict",
-                "note": f"The timing table already has {meetdb.fmt_time(have)} for timer {slot} - they'll check it."}
     if not t and not have:
         return {"ok": True, "status": "cleared"}
     w = {1: float(e.get("watch") or 0), 2: float(e.get("watch2") or 0), 3: float(e.get("watch3") or 0)}
